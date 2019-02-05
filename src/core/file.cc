@@ -85,6 +85,7 @@ posix_file_impl::~posix_file_impl() {
     delete _refcount;
     if (_fd != -1) {
         // Note: close() can be a blocking operation on NFS
+        seastar_logger.warn("File destructed while open.\nBacktrace:\n{}", current_backtrace());
         ::close(_fd);
     }
 }
