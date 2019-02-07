@@ -95,6 +95,9 @@ public:
         throw_system_error_on(r == -1, "close");
         _fd = -1;
     }
+    bool is_closed() const {
+        return _fd == -1;
+    }
     int get() const { return _fd; }
     static file_desc open(sstring name, int flags, mode_t mode = 0) {
         int fd = ::open(name.c_str(), flags, mode);
