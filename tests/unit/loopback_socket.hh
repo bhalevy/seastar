@@ -89,9 +89,8 @@ public:
     }
 };
 
-class loopback_data_sink_impl : public data_sink_impl {
+class loopback_data_sink_impl : public simple_close_data_sink_impl {
     foreign_ptr<lw_shared_ptr<loopback_buffer>>& _buffer;
-    bool _closed = false;
 public:
     explicit loopback_data_sink_impl(foreign_ptr<lw_shared_ptr<loopback_buffer>>& buffer)
             : _buffer(buffer) {
@@ -106,9 +105,6 @@ public:
         });
     }
     future<> close() override {
-        if (_closed) {
-            return make_exception_future<>(std::runtime_error("loopback_data_sink_impl already closed"));
-        }
         return smp::submit_to(_buffer.get_owner_shard(), [this] {
             return _buffer->push({}).handle_exception_type([] (std::system_error& err) {
                 if (err.code().value() != EPIPE) {
@@ -116,11 +112,8 @@ public:
                 }
             });
         }).then([this] {
-            _closed = true;
+            simple_close_data_sink_impl::close();
         });
-    }
-    bool is_closed() const override {
-        return _closed;
     }
 };
 

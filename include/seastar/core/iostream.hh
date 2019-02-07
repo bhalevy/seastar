@@ -103,6 +103,21 @@ public:
     }
 };
 
+class simple_close_data_sink_impl : public data_sink_impl {
+    bool _closed = false;
+public:
+    virtual future<> close() override {
+        if (_closed) {
+            return make_exception_future<>(std::runtime_error("already closed"));
+        }
+        _closed = true;
+        return make_ready_future<>();
+    }
+    virtual bool is_closed() const override {
+        return _closed;
+    }
+};
+
 class data_sink {
     std::unique_ptr<data_sink_impl> _dsi;
 public:

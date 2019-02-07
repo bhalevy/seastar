@@ -219,7 +219,7 @@ SEASTAR_TEST_CASE(test_json_path) {
 /*!
  * \brief a helper data sink that stores everything it gets in a stringstream
  */
-class memory_data_sink_impl : public no_close_data_sink_impl {
+class memory_data_sink_impl : public simple_close_data_sink_impl {
     std::stringstream& _ss;
 public:
     memory_data_sink_impl(std::stringstream& ss) : _ss(ss) {
