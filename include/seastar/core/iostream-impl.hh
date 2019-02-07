@@ -491,6 +491,12 @@ output_stream<CharType>::close() {
 }
 
 template <typename CharType>
+bool
+output_stream<CharType>::is_closed() const {
+    return _fd.is_closed();
+}
+
+template <typename CharType>
 data_sink
 output_stream<CharType>::detach() && {
     if (_buf) {

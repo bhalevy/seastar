@@ -182,6 +182,9 @@ public:
         _conn->close_write();
         return make_ready_future<>();
     }
+    bool is_closed() const override {
+        return _conn->is_closed();
+    }
 };
 
 template <typename Protocol>

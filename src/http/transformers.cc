@@ -187,6 +187,10 @@ public:
         }
         return _out.flush();
     }
+
+    bool is_closed() const override {
+        return false;
+    }
 };
 
 class content_replace_data_sink : public data_sink {

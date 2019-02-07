@@ -986,6 +986,9 @@ public:
             });
         }
     }
+    bool is_closed() const {
+        return _in.is_closed() && _out.is_closed();
+    }
     // helper for sink
     future<> flush() {
         return _out.flush();
@@ -1111,6 +1114,9 @@ private:
     future<> close() override {
         _session->close();
         return make_ready_future<>();
+    }
+    bool is_closed() const override {
+        return _session->is_closed();
     }
 };
 

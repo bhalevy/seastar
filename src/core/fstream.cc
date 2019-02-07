@@ -433,6 +433,9 @@ public:
             return _file.close();
         });
     }
+    virtual bool is_closed() const override {
+        return _file.is_closed();
+    }
 };
 
 data_sink make_file_data_sink(file f, file_output_stream_options options) {

@@ -370,6 +370,11 @@ posix_data_sink_impl::close() {
     return make_ready_future<>();
 }
 
+bool
+posix_data_sink_impl::is_closed() const {
+    return _fd->is_closed();
+}
+
 server_socket
 posix_network_stack::listen(socket_address sa, listen_options opt) {
     using server_socket = seastar::api_v2::server_socket;
