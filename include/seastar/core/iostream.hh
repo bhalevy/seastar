@@ -50,6 +50,7 @@ public:
     virtual future<temporary_buffer<char>> get() = 0;
     virtual future<temporary_buffer<char>> skip(uint64_t n);
     virtual future<> close() { return make_ready_future<>(); }
+    virtual bool is_closed() const { return false; }
 };
 
 class data_source {
@@ -64,6 +65,7 @@ public:
     future<temporary_buffer<char>> get() { return _dsi->get(); }
     future<temporary_buffer<char>> skip(uint64_t n) { return _dsi->skip(n); }
     future<> close() { return _dsi->close(); }
+    bool is_closed() const { return _dsi->is_closed(); }
 };
 
 class data_sink_impl {
@@ -238,6 +240,9 @@ public:
     ///         needs the data source.
     future<> close() {
         return _fd.close();
+    }
+    bool is_closed() const {
+        return _fd.is_closed();
     }
     /// Ignores n next bytes from the stream.
     future<> skip(uint64_t n);
