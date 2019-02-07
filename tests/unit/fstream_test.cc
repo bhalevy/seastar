@@ -73,7 +73,9 @@ SEASTAR_TEST_CASE(test_fstream) {
                 buf[8191] = ']';
                 return w->out.write(buf, 8192).then([buf, w] {
                     ::free(buf);
-                    return w->out.close().then([w] {});
+                    return w->out.close().then([w] {
+                        BOOST_REQUIRE(w->out.is_closed());
+                    });
                 });
             }).then([] {
                 return open_file_dma("testfile.tmp", open_flags::ro);
@@ -120,6 +122,7 @@ SEASTAR_TEST_CASE(test_consume_skip_bytes) {
         write_block('a', 8192);
         write_block('b', 8192);
         w->out.close().get();
+        BOOST_REQUIRE(w->out.is_closed());
         /*  file content after running the above:
          * 00000000  61 61 61 61 61 61 61 61  61 61 61 61 61 61 61 61  |aaaaaaaaaaaaaaaa|
          * *
@@ -191,7 +194,9 @@ SEASTAR_TEST_CASE(test_fstream_unaligned) {
         buf[39] = ']';
         return w->out.write(buf, 40).then([buf, w] {
             ::free(buf);
-            return w->out.close().then([w] {});
+            return w->out.close().then([w] {
+                BOOST_REQUIRE(w->out.is_closed());
+            });
         }).then([] {
             return open_file_dma("testfile.tmp", open_flags::ro);
         }).then([] (file f) {
@@ -338,6 +343,7 @@ SEASTAR_TEST_CASE(test_input_stream_esp_around_eof) {
             }
             BOOST_REQUIRE(std::equal(readback.begin(), readback.end(), data.begin() + std::min(start, flen)));
         }
+        BOOST_REQUIRE(!f.is_closed());
         f.close().get();
         BOOST_REQUIRE(f.is_closed());
     });
@@ -365,6 +371,7 @@ SEASTAR_TEST_CASE(file_handle_test) {
             });
         }).get();
         BOOST_REQUIRE(!boost::algorithm::any_of_equal(bad, 1u));
+        BOOST_REQUIRE(!f.is_closed());
         f.close().get();
         BOOST_REQUIRE(f.is_closed());
     });
@@ -550,15 +557,20 @@ SEASTAR_TEST_CASE(test_file_input_stream_close) {
         auto del = defer([&] { ::free(buf); });
         memset(buf, 0, size);
         out_file.dma_write(0, buf, size).get();
+        BOOST_REQUIRE(!out_file.is_closed());
         out_file.close().get();
+        BOOST_REQUIRE(out_file.is_closed());
 
         // Open a file, make an input_stream with an implicit copy of the file
         // and close the input stream.  The file should remain open.
         auto in_file0 = open_file_dma("testfile.tmp", open_flags::ro).get0();
-        BOOST_CHECK_EQUAL(in_file0.is_closed(), false);
+        BOOST_REQUIRE(!in_file0.is_closed());
         input_stream<char> in0 = make_file_input_stream(in_file0, 0, size);
+        BOOST_REQUIRE(!in0.is_closed());
+        BOOST_REQUIRE(!in_file0.is_closed());
         in0.close().get();
-        BOOST_CHECK_EQUAL(in_file0.is_closed(), false);
+        BOOST_REQUIRE(!in0.is_closed());
+        BOOST_REQUIRE(!in_file0.is_closed());
 
         // Attempt reading from f
         // Return the number of bytes read on success,
@@ -583,13 +595,15 @@ SEASTAR_TEST_CASE(test_file_input_stream_close) {
         // Test that in_file0 was not automatically closed by attempting read
         BOOST_CHECK_EQUAL(safe_read(in_file0, size).get0(), size);
         in_file0.close().get();
+        BOOST_REQUIRE(in_file0.is_closed());
+        BOOST_REQUIRE(in0.is_closed());
 
         // Open a file, make an input_stream while std::move'ing the file to it
         // and close the input stream.  The file should be closed.
         auto in_file1 = open_file_dma("testfile.tmp", open_flags::ro).get0();
-        BOOST_CHECK_EQUAL(in_file1.is_closed(), false);
+        BOOST_REQUIRE(!in_file1.is_closed());
         input_stream<char> in1 = make_file_input_stream(std::move(in_file1), 0, size);
         in1.close().get();
-        BOOST_CHECK_EQUAL(in1.is_closed(), true);
+        BOOST_REQUIRE(in1.is_closed());
     });
 }
