@@ -253,6 +253,9 @@ future<> test_transformer_stream(std::stringstream& ss, content_replace& cr, std
             return os.write(p);
         }).then([&os] {
             return os.close();
+        }).then([&os] {
+            BOOST_REQUIRE(os.is_closed());
+            return make_ready_future<>();
         });
     });
 }
@@ -263,6 +266,9 @@ SEASTAR_TEST_CASE(test_transformer) {
                 [] (output_stream<char>& os) {
             return os.write(sstring("hello-{{Protocol}}-xyz-{{Host}}")).then([&os] {
                 return os.close();
+            }).then([&os] {
+                BOOST_REQUIRE(os.is_closed());
+                return make_ready_future<>();
             });
         }).then([&ss, &cr] () {
             BOOST_REQUIRE_EQUAL(ss.str(), "hello-{{Protocol}}-xyz-{{Host}}");
@@ -411,6 +417,7 @@ public:
                     }
                     if (input.eof()) {
                         input.close().get();
+                        BOOST_REQUIRE(input.is_closed());
                     }
                 });
 
