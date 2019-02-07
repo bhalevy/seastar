@@ -3469,7 +3469,7 @@ posix_file_impl::size() {
 future<>
 posix_file_impl::close() noexcept {
     if (_fd == -1) {
-        seastar_logger.warn("double close() detected, contact support");
+        seastar_logger.warn("Double close() detected.\nBacktrace:\n{}", current_backtrace());
         return make_ready_future<>();
     }
     auto fd = _fd;
