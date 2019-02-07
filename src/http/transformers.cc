@@ -181,15 +181,15 @@ public:
         if (_br.is_consuming()) {
             return do_with(temporary_buffer<char>(_br.get_remaining()), [this](temporary_buffer<char>& buf) {
                 return _out.write(buf.get(), buf.size()).then([this] {
-                    return _out.flush();
+                    return _out.close();
                 });
             });
         }
-        return _out.flush();
+        return _out.close();
     }
 
     bool is_closed() const override {
-        return false;
+        return _out.is_closed();
     }
 };
 
