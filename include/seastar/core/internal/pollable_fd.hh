@@ -51,6 +51,7 @@ public:
     pollable_fd_state(const pollable_fd_state&) = delete;
     void operator=(const pollable_fd_state&) = delete;
     void speculate_epoll(int events) { events_known |= events; }
+    bool is_closed() const { return fd.is_closed(); }
     file_desc fd;
     bool events_rw = false;   // single consumer for both read and write (accept())
     bool no_more_recv = false; // For udp, there is no shutdown indication from the kernel
@@ -91,6 +92,7 @@ public:
     file_desc& get_file_desc() const { return _s->fd; }
     void shutdown(int how) { _s->fd.shutdown(how); }
     void close() { _s.reset(); }
+    bool is_closed() const { return _s->is_closed(); }
 protected:
     int get_fd() const { return _s->fd.get(); }
     void maybe_no_more_recv();
