@@ -35,6 +35,7 @@
 #include <seastar/core/file.hh>
 #include <seastar/core/report_exception.hh>
 #include <seastar/core/linux-aio.hh>
+#include <seastar/util/backtrace.hh>
 #include "core/file-impl.hh"
 #include "core/syscall_result.hh"
 #include "core/thread_pool.hh"
@@ -192,7 +193,7 @@ posix_file_impl::size() {
 future<>
 posix_file_impl::close() noexcept {
     if (_fd == -1) {
-        seastar_logger.warn("double close() detected, contact support");
+        seastar_logger.warn("Double close() detected.\nBacktrace:\n{}", current_backtrace());
         return make_ready_future<>();
     }
     auto fd = _fd;
