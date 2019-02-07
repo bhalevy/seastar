@@ -411,6 +411,19 @@ public:
         return _file_impl->is_closed();
     }
 
+    /// Closes a shared file when the caller holds the last reference on it.
+    ///
+    /// \note
+    /// to ensure file data reaches stable storage, you must call \ref flush()
+    /// before calling \c close().
+    future<> close_if_last() {
+        if (_file_impl.use_count() > 1) {
+            _file_impl->defer_close();
+            return make_ready_future<>();
+        }
+        return close();
+    }
+
     /// Returns a directory listing, given that this file object is a directory.
     subscription<directory_entry> list_directory(std::function<future<> (directory_entry de)> next) {
         return _file_impl->list_directory(std::move(next));
