@@ -199,7 +199,9 @@ SEASTAR_TEST_CASE(test_fstream_unaligned) {
                     return make_ready_future<>();
                 }).then([f] () mutable {
                     return f.close();
-                }).finally([f] {});
+                }).finally([f] {
+                    BOOST_REQUIRE(f.is_closed());
+                });
             });
         }).then([] {
             return open_file_dma("testfile.tmp", open_flags::ro);
