@@ -54,11 +54,13 @@ SEASTAR_TEST_CASE(udp_packet_test) {
     return f1.then([cc = std::move(cc), sc = std::move(sc)]() mutable {
         auto src = cc.local_address();
         cc.close();
+        BOOST_REQUIRE(cc.is_closed());
         auto f2 = sc.receive();
 
         return f2.then([sc = std::move(sc), src](auto pkt) mutable {
             auto a = sc.local_address();
             sc.close();
+            BOOST_REQUIRE(sc.is_closed());
             BOOST_REQUIRE_EQUAL(src, pkt.get_src());
             auto dst = pkt.get_dst();
             // Don't always get a dst address.
