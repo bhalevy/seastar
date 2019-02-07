@@ -99,7 +99,7 @@ sstring reply::response_line() {
     return "HTTP/" + _version + status_strings::to_string(_status);
 }
 
-class http_chunked_data_sink_impl : public data_sink_impl {
+class http_chunked_data_sink_impl : public no_close_data_sink_impl {
     output_stream<char>& _out;
 
     future<> write_size(size_t s) {
@@ -123,9 +123,6 @@ public:
         }).then([this] () mutable {
             return _out.write("\r\n", 2);
         });
-    }
-    virtual future<> close() override {
-        return  make_ready_future<>();
     }
 };
 

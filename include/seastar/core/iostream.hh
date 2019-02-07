@@ -92,6 +92,13 @@ public:
     virtual future<> close() = 0;
 };
 
+class no_close_data_sink_impl : public data_sink_impl {
+public:
+    virtual future<> close() override {
+        return make_ready_future<>();
+    }
+};
+
 class data_sink {
     std::unique_ptr<data_sink_impl> _dsi;
 public:

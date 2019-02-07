@@ -25,7 +25,7 @@
 
 namespace seastar {
 
-class vector_data_sink final : public data_sink_impl {
+class vector_data_sink final : public no_close_data_sink_impl {
 public:
     using vector_type = std::vector<net::packet>;
 private:
@@ -38,10 +38,7 @@ public:
         return make_ready_future<>();
     }
 
-    virtual future<> close() override {
-        // TODO: close on local side
-        return make_ready_future<>();
-    }
+    // TODO: close on local side
 };
 
 }
