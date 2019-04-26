@@ -134,7 +134,7 @@ class append_challenged_posix_file_impl : public posix_file_impl, public enable_
         opcode type;
         uint64_t pos;
         size_t len;
-        std::function<future<> ()> run;
+        noncopyable_function<future<> ()> run;
     };
     // Queue of pending operations; processed from front to end to avoid
     // starvation, but can issue concurrent operations.

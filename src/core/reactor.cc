@@ -972,7 +972,7 @@ reactor::signals::~signals() {
     ::pthread_sigmask(SIG_BLOCK, &mask, NULL);
 }
 
-reactor::signals::signal_handler::signal_handler(int signo, std::function<void ()>&& handler)
+reactor::signals::signal_handler::signal_handler(int signo, noncopyable_function<void ()> handler)
         : _handler(std::move(handler)) {
     engine()._backend->handle_signal(signo);
 }
@@ -990,13 +990,13 @@ void reactor_backend_epoll::handle_signal(int signo) {
 }
 
 void
-reactor::signals::handle_signal(int signo, std::function<void ()>&& handler) {
+reactor::signals::handle_signal(int signo, noncopyable_function<void ()> handler) {
     _signal_handlers.emplace(std::piecewise_construct,
         std::make_tuple(signo), std::make_tuple(signo, std::move(handler)));
 }
 
 void
-reactor::signals::handle_signal_once(int signo, std::function<void ()>&& handler) {
+reactor::signals::handle_signal_once(int signo, noncopyable_function<void ()> handler) {
     return handle_signal(signo, [fired = false, handler = std::move(handler)] () mutable {
         if (!fired) {
             fired = true;
@@ -1034,7 +1034,7 @@ void reactor::signals::failed_to_handle(int signo) {
     seastar_logger.error("Failed to handle signal {} on thread {} ({}): engine not ready", signo, tid, tname);
 }
 
-void reactor::handle_signal(int signo, std::function<void ()>&& handler) {
+void reactor::handle_signal(int signo, noncopyable_function<void ()> handler) {
     _signals.handle_signal(signo, std::move(handler));
 }
 
@@ -3516,7 +3516,7 @@ void reactor::del_timer(timer<manual_clock>* tmr) {
     }
 }
 
-void reactor::at_exit(std::function<future<> ()> func) {
+void reactor::at_exit(noncopyable_function<future<> ()> func) {
     assert(!_stopping);
     _exit_funcs.push_back(std::move(func));
 }
