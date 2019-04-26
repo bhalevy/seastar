@@ -249,14 +249,14 @@ int main(int ac, char** av) {
         } else {
             std::cout << "server on port " << port << std::endl;
             myrpc.register_handler(7, [](long a, long b) mutable {
-                auto p = make_lw_shared<promise<>>();
+                promise<> p;
                 auto t = make_lw_shared<timer<>>();
                 fmt::print("test7 got {:d} {:d}\n", a, b);
-                auto f = p->get_future().then([a, b, t] {
+                auto f = p.get_future().then([a, b, t] {
                     fmt::print("test7 calc res\n");
                     return a - b;
                 });
-                t->set_callback([p = std::move(p)] () mutable { p->set_value(); });
+                t->set_callback([p = std::move(p)] () mutable { p.set_value(); });
                 t->arm(1s);
                 return f;
             });

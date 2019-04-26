@@ -113,10 +113,10 @@ app_template::configuration() {
 int
 app_template::run(int ac, char ** av, std::function<future<int> ()>&& func) {
     return run_deprecated(ac, av, [func = std::move(func)] () mutable {
-        auto func_done = make_lw_shared<promise<>>();
-        engine().at_exit([func_done] { return func_done->get_future(); });
-        futurize_apply(func).finally([func_done] {
-            func_done->set_value();
+        promise<> func_done;
+        engine().at_exit([ret = func_done.get_future()] () mutable { return std::move(ret); });
+        futurize_apply(func).finally([func_done = std::move(func_done)] () mutable  {
+            func_done.set_value();
         }).then([] (int exit_code) {
             return engine().exit(exit_code);
         }).or_terminate();

@@ -2571,20 +2571,21 @@ append_challenged_posix_file_impl::read_dma(uint64_t pos, void* buffer, size_t l
         });
     }
     len = std::min(pos + len, align_up<uint64_t>(_logical_size, _disk_read_dma_alignment)) - pos;
-    auto pr = make_lw_shared(promise<size_t>());
+    promise<size_t> pr;
+    auto fut = pr.get_future();
     enqueue({
         opcode::read,
         pos,
         len,
-        [this, pr, pos, buffer, len, &pc] {
+        [this, pr = std::move(pr), pos, buffer, len, &pc] () mutable {
             return futurize_apply([this, pos, buffer, len, &pc] () mutable {
                 return posix_file_impl::read_dma(pos, buffer, len, pc);
-            }).then_wrapped([pr] (future<size_t> f) {
-                f.forward_to(std::move(*pr));
+            }).then_wrapped([pr = std::move(pr)] (future<size_t> f) mutable {
+                f.forward_to(std::move(pr));
             });
         }
     });
-    return pr->get_future();
+    return fut;
 }
 
 future<size_t>
@@ -2608,71 +2609,74 @@ append_challenged_posix_file_impl::read_dma(uint64_t pos, std::vector<iovec> iov
         }
         iov.erase(i, iov.end());
     }
-    auto pr = make_lw_shared(promise<size_t>());
+    promise<size_t> pr;
+    auto fut = pr.get_future();
     enqueue({
         opcode::read,
         pos,
         len,
-        [this, pr, pos, iov = std::move(iov), &pc] () mutable {
+        [this, pr = std::move(pr), pos, iov = std::move(iov), &pc] () mutable {
             return futurize_apply([this, pos, iov = std::move(iov), &pc] () mutable {
                 return posix_file_impl::read_dma(pos, std::move(iov), pc);
-            }).then_wrapped([pr] (future<size_t> f) {
-                f.forward_to(std::move(*pr));
+            }).then_wrapped([pr = std::move(pr)] (future<size_t> f) mutable {
+                f.forward_to(std::move(pr));
             });
         }
     });
-    return pr->get_future();
+    return fut;
 }
 
 future<size_t>
 append_challenged_posix_file_impl::write_dma(uint64_t pos, const void* buffer, size_t len, const io_priority_class& pc) {
-    auto pr = make_lw_shared(promise<size_t>());
+    promise<size_t> pr;
+    auto fut = pr.get_future();
     enqueue({
         opcode::write,
         pos,
         len,
-        [this, pr, pos, buffer, len, &pc] {
+        [this, pr = std::move(pr), pos, buffer, len, &pc] () mutable {
             return futurize_apply([this, pos, buffer, len, &pc] () mutable {
                 return posix_file_impl::write_dma(pos, buffer, len, pc);
-            }).then_wrapped([this, pos, pr] (future<size_t> f) {
+            }).then_wrapped([this, pos, pr = std::move(pr)] (future<size_t> f) mutable {
                 if (!f.failed()) {
                     auto ret = f.get0();
                     commit_size(pos + ret);
                     // Can't use forward_to(), because future::get0() invalidates the future.
-                    pr->set_value(ret);
+                    pr.set_value(ret);
                 } else {
-                    f.forward_to(std::move(*pr));
+                    f.forward_to(std::move(pr));
                 }
             });
         }
     });
-    return pr->get_future();
+    return fut;
 }
 
 future<size_t>
 append_challenged_posix_file_impl::write_dma(uint64_t pos, std::vector<iovec> iov, const io_priority_class& pc) {
-    auto pr = make_lw_shared(promise<size_t>());
+    promise<size_t> pr;
+    auto fut = pr.get_future();
     auto len = boost::accumulate(iov | boost::adaptors::transformed(std::mem_fn(&iovec::iov_len)), size_t(0));
     enqueue({
         opcode::write,
         pos,
         len,
-        [this, pr, pos, iov = std::move(iov), &pc] () mutable {
+        [this, pr = std::move(pr), pos, iov = std::move(iov), &pc] () mutable {
             return futurize_apply([this, pos, iov = std::move(iov), &pc] () mutable {
                 return posix_file_impl::write_dma(pos, std::move(iov), pc);
-            }).then_wrapped([this, pos, pr] (future<size_t> f) {
+            }).then_wrapped([this, pos, pr = std::move(pr)] (future<size_t> f) mutable {
                 if (!f.failed()) {
                     auto ret = f.get0();
                     commit_size(pos + ret);
                     // Can't use forward_to(), because future::get0() invalidates the future.
-                    pr->set_value(ret);
+                    pr.set_value(ret);
                 } else {
-                    f.forward_to(std::move(*pr));
+                    f.forward_to(std::move(pr));
                 }
             });
         }
     });
-    return pr->get_future();
+    return fut;
 }
 
 future<>
@@ -2681,12 +2685,13 @@ append_challenged_posix_file_impl::flush() {
         // FIXME: determine if flush can block concurrent reads or writes
         return posix_file_impl::flush();
     } else {
-        auto pr = make_lw_shared(promise<>());
+        promise<> pr;
+        auto ret = pr.get_future();
         enqueue({
             opcode::flush,
             0,
             0,
-            [this, pr] () {
+            [this, pr = std::move(pr)] () mutable {
                 return futurize_apply([this] {
                     if (_logical_size != _committed_size) {
                         // We're all alone, so can truncate in reactor thread
@@ -2695,12 +2700,12 @@ append_challenged_posix_file_impl::flush() {
                         _committed_size = _logical_size;
                     }
                     return posix_file_impl::flush();
-                }).then_wrapped([pr] (future<> f) {
-                    f.forward_to(std::move(*pr));
+                }).then_wrapped([pr = std::move(pr)] (future<> f) mutable {
+                    f.forward_to(std::move(pr));
                 });
             }
         });
-        return pr->get_future();
+        return ret;
     }
 }
 
@@ -2715,23 +2720,24 @@ append_challenged_posix_file_impl::stat() {
 
 future<>
 append_challenged_posix_file_impl::truncate(uint64_t length) {
-    auto pr = make_lw_shared(promise<>());
+    promise<> pr;
+    auto fut = pr.get_future();
     enqueue({
         opcode::truncate,
         length,
         0,
-        [this, pr, length] () mutable {
+        [this, pr = std::move(pr), length] () mutable {
             return futurize_apply([this, length] {
                 return posix_file_impl::truncate(length);
-            }).then_wrapped([this, pr, length] (future<> f) {
+            }).then_wrapped([this, pr = std::move(pr), length] (future<> f) mutable {
                 if (!f.failed()) {
                     _committed_size = _logical_size = length;
                 }
-                f.forward_to(std::move(*pr));
+                f.forward_to(std::move(pr));
             });
         }
     });
-    return pr->get_future();
+    return fut;
 }
 
 future<uint64_t>
