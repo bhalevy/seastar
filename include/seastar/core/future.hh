@@ -312,10 +312,8 @@ struct future_state :  public future_state_base, private internal::uninitialized
         }
     }
     future_state& operator=(future_state&& x) noexcept {
-        if (this != &x) {
-            this->~future_state();
-            new (this) future_state(std::move(x));
-        }
+        this->~future_state();
+        new (this) future_state(std::move(x));
         return *this;
     }
     void set(const std::tuple<T...>& value) noexcept {
