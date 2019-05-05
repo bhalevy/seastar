@@ -1264,9 +1264,9 @@ promise<T...>::promise(promise&& __restrict__ x) noexcept : _future(x._future), 
         _local_state = std::move(x._local_state);
     }
     x._state = nullptr;
-    if (_future) {
-        _future->detach_promise();
-        _future->_promise = this;
+    if (auto *fut = _future) {
+        fut->detach_promise();
+        fut->_promise = this;
     }
 }
 
