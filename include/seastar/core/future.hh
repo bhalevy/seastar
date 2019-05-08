@@ -445,10 +445,8 @@ public:
     promise(const promise&) = delete;
     ~promise() noexcept;
     promise& operator=(promise&& x) noexcept {
-        if (this != &x) {
-            this->~promise();
-            new (this) promise(std::move(x));
-        }
+        this->~promise();
+        new (this) promise(std::move(x));
         return *this;
     }
     void operator=(const promise&) = delete;
