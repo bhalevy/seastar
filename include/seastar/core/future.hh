@@ -818,10 +818,8 @@ public:
     }
     future(const future&) = delete;
     future& operator=(future&& x) noexcept {
-        if (this != &x) {
-            this->~future();
-            new (this) future(std::move(x));
-        }
+        this->~future();
+        new (this) future(std::move(x));
         return *this;
     }
     void operator=(const future&) = delete;
