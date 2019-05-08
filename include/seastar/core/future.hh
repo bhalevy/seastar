@@ -1258,7 +1258,7 @@ void promise<T...>::make_ready() noexcept {
 
 template <typename... T>
 inline
-promise<T...>::promise(promise&& x) noexcept : _future(x._future), _state(x._state), _task(std::move(x._task)) {
+promise<T...>::promise(promise&& __restrict__ x) noexcept : _future(x._future), _state(x._state), _task(std::move(x._task)) {
     if (_state == &x._local_state) {
         _state = &_local_state;
         _local_state = std::move(x._local_state);
