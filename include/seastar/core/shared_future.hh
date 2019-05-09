@@ -116,7 +116,7 @@ private:
             _future_state = f.get_available_state();
             if (_future_state.failed()) {
                 while (_peers) {
-                    _peers.front().set_exception(_future_state.get_exception());
+                    _peers.front().set_exception(_future_state.get_std_exception());
                     _peers.pop_front();
                 }
             } else {
@@ -139,7 +139,7 @@ private:
                 _peers.push_back(std::move(p), timeout);
                 return f;
             } else if (_future_state.failed()) {
-                return future_type(exception_future_marker(), _future_state.get_exception());
+                return future_type(exception_future_marker(), _future_state.get_std_exception());
             } else {
                 try {
                     return future_type(ready_future_marker(), _future_state.get_value());

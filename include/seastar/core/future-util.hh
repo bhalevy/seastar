@@ -695,7 +695,7 @@ public:
     virtual void run_and_dispose() noexcept override {
         using futurator = futurize<Future>;
         if (__builtin_expect(this->_state.failed(), false)) {
-            *_final_resting_place = futurator::make_exception_future(std::move(this->_state).get_exception());
+            *_final_resting_place = futurator::make_exception_future(std::move(this->_state).get_std_exception());
         } else {
             *_final_resting_place = futurator::from_tuple(std::move(this->_state).get_value());
         }

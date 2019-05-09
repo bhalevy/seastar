@@ -220,6 +220,32 @@ static_assert(std::is_empty<uninitialized_wrapper<std::tuple<>>>::value, "This s
 // moved around.
 //
 
+class exception_ptr {
+    union {
+        std::exception_ptr ex;
+    };
+
+  public:
+    exception_ptr(std::exception_ptr e) : ex(std::move(e)) {}
+    exception_ptr(exception_ptr&& e) : ex(std::move(e.ex)) {}
+    ~exception_ptr() {
+        // Unfortunately in libstdc++ ~exception_ptr is defined out of line. We know that it does nothing for
+        // moved out values, so we omit calling it. This is critical for the code quality produced for this
+        // function. Without the out of line call, gcc can figure out that both sides of the if produce
+        // identical code and merges them.if
+        // We don't make any assumptions about other c++ libraries.
+        // There is request with gcc to define it inline: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90295
+#ifdef __GLIBCXX__
+        if (!ex) {
+            return;
+        }
+#endif
+        ex.~exception_ptr();
+    }
+    std::exception_ptr take_std_exception() && { return std::move(ex); }
+    const std::exception_ptr& get_std_exception() const& { return ex; }
+};
+
 // non templated base class to reduce code duplication
 struct future_state_base {
     static_assert(std::is_nothrow_copy_constructible<std::exception_ptr>::value,
@@ -236,30 +262,19 @@ struct future_state_base {
     union any {
         any() { st = state::future; }
         ~any() {}
-        std::exception_ptr take_exception() {
-            std::exception_ptr ret(std::move(ex));
-            // Unfortunately in libstdc++ ~exception_ptr is defined out of line. We know that it does nothing for
-            // moved out values, so we omit calling it. This is critical for the code quality produced for this
-            // function. Without the out of line call, gcc can figure out that both sides of the if produce
-            // identical code and merges them.if
-            // We don't make any assumptions about other c++ libraries.
-            // There is request with gcc to define it inline: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90295
-#ifndef __GLIBCXX__
-            ex.~exception_ptr();
-#endif
-            st = state::invalid;
-            return ret;
+        exception_ptr take_exception() {
+            return std::move(ex);
         }
         any(any&& x) {
             if (x.st < state::exception_min) {
                 st = x.st;
             } else {
-                new (&ex) std::exception_ptr(x.take_exception());
+                new (&ex) exception_ptr(x.take_exception());
             }
             x.st = state::invalid;
         }
         state st;
-        std::exception_ptr ex;
+        exception_ptr ex;
     } _u;
 
     future_state_base() noexcept { }
@@ -271,19 +286,22 @@ struct future_state_base {
 
     void set_to_broken_promise() noexcept;
 
-    void set_exception(std::exception_ptr ex) noexcept {
+    void set_exception(exception_ptr ex) noexcept {
         assert(_u.st == state::future);
-        new (&_u.ex) std::exception_ptr(std::move(ex));
+        new (&_u.ex) exception_ptr(std::move(ex));
         assert(_u.st >= state::exception_min);
     }
-    std::exception_ptr get_exception() && noexcept {
+    exception_ptr get_exception() && noexcept {
         assert(_u.st >= state::exception_min);
         // Move ex out so future::~future() knows we've handled it
         return _u.take_exception();
     }
-    const std::exception_ptr& get_exception() const& noexcept {
+    std::exception_ptr get_std_exception() && noexcept {
+        return std::move(*this).get_exception().take_std_exception();
+    }
+    const std::exception_ptr& get_std_exception() const& noexcept {
         assert(_u.st >= state::exception_min);
-        return _u.ex;
+        return _u.ex.get_std_exception();
     }
 };
 
@@ -345,14 +363,14 @@ struct future_state :  public future_state_base, private internal::uninitialized
         assert(_u.st != state::future);
         if (_u.st >= state::exception_min) {
             // Move ex out so future::~future() knows we've handled it
-            std::rethrow_exception(std::move(*this).get_exception());
+            std::rethrow_exception(std::move(*this).get_std_exception());
         }
         return std::move(this->uninitialized_get());
     }
     std::tuple<T...> get() const& {
         assert(_u.st != state::future);
         if (_u.st >= state::exception_min) {
-            std::rethrow_exception(_u.ex);
+            std::rethrow_exception(_u.ex.get_std_exception());
         }
         return this->uninitialized_get();
     }
@@ -491,8 +509,12 @@ public:
     ///
     /// Forwards the exception argument to the future and makes it
     /// available.  May be called either before or after \c get_future().
-    void set_exception(std::exception_ptr ex) noexcept {
+    void set_exception(exception_ptr ex) noexcept {
         do_set_exception<urgent::no>(std::move(ex));
+    }
+
+    void set_exception(std::exception_ptr ex) noexcept {
+        set_exception(exception_ptr(std::move(ex)));
     }
 
     /// \brief Marks the promise as failed
@@ -528,14 +550,14 @@ private:
     }
 
     template<urgent Urgent>
-    void do_set_exception(std::exception_ptr ex) noexcept {
+    void do_set_exception(exception_ptr ex) noexcept {
         if (_state) {
             _state->set_exception(std::move(ex));
             make_ready<Urgent>();
         }
     }
 
-    void set_urgent_exception(std::exception_ptr ex) noexcept {
+    void set_urgent_exception(exception_ptr ex) noexcept {
         do_set_exception<urgent::yes>(std::move(ex));
     }
 private:
@@ -823,7 +845,7 @@ public:
     __attribute__((always_inline))
     ~future() {
         if (failed()) {
-            report_failed_future(_state.get_exception());
+            report_failed_future(_state.get_std_exception());
         }
         if (_promise) {
             detach_promise();
@@ -847,8 +869,8 @@ public:
     }
 
     [[gnu::always_inline]]
-     std::exception_ptr get_exception() {
-        return get_available_state().get_exception();
+    std::exception_ptr get_exception() {
+        return get_available_state().get_std_exception();
     }
 
     /// Gets the value returned by the computation.
@@ -954,7 +976,7 @@ private:
         using futurator = futurize<std::result_of_t<Func(T&&...)>>;
         if (available() && !need_preempt()) {
             if (failed()) {
-                return futurator::make_exception_future(get_available_state().get_exception());
+                return futurator::make_exception_future(get_available_state().get_std_exception());
             } else {
                 return futurator::apply(std::forward<Func>(func), get_available_state().get_value());
             }
@@ -1278,7 +1300,7 @@ promise<T...>::~promise() noexcept {
         assert(_state->available() || !_task);
         _future->detach_promise();
     } else if (_state && _state->failed()) {
-        report_failed_future(_state->get_exception());
+        report_failed_future(_state->get_std_exception());
     } else if (__builtin_expect(bool(_task), false)) {
         assert(_state && !_state->available());
         _state->set_to_broken_promise();
