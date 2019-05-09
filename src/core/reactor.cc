@@ -5643,7 +5643,7 @@ void engine_exit(std::exception_ptr eptr) {
     engine().exit(1);
 }
 
-void report_failed_future(std::exception_ptr eptr) {
+void report_failed_future(const std::exception_ptr &eptr) {
     seastar_logger.warn("Exceptional future ignored: {}, backtrace: {}", eptr, current_backtrace());
 }
 

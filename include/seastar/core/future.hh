@@ -101,7 +101,7 @@ future<T...> make_exception_future(std::exception_ptr value) noexcept;
 /// \cond internal
 void engine_exit(std::exception_ptr eptr = {});
 
-void report_failed_future(std::exception_ptr ex);
+void report_failed_future(const std::exception_ptr &ex);
 /// \endcond
 
 /// \brief Exception type for broken promises
@@ -268,7 +268,7 @@ struct future_state_base {
 
     void set_exception(std::exception_ptr ex) noexcept {
         assert(_u.st == state::future);
-        new (&_u.ex) std::exception_ptr(ex);
+        new (&_u.ex) std::exception_ptr(std::move(ex));
         assert(_u.st >= state::exception_min);
     }
     std::exception_ptr get_exception() && noexcept {
@@ -279,7 +279,7 @@ struct future_state_base {
         _u.st = state::invalid;
         return ex;
     }
-    std::exception_ptr get_exception() const& noexcept {
+    const std::exception_ptr& get_exception() const& noexcept {
         assert(_u.st >= state::exception_min);
         return _u.ex;
     }
