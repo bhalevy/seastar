@@ -262,6 +262,12 @@ struct future_state_base {
     union any {
         any() { st = state::future; }
         ~any() {}
+
+        // FIXME: GLIBCXX only
+        exception_ptr&& take_exception_ref() {
+            return std::move(ex);
+        }
+
         exception_ptr take_exception() {
             return std::move(ex);
         }
@@ -296,6 +302,13 @@ struct future_state_base {
         // Move ex out so future::~future() knows we've handled it
         return _u.take_exception();
     }
+
+    // FIXME: GLIBCXX only
+    exception_ptr&& get_exception_ref() && noexcept {
+        assert(_u.st >= state::exception_min);
+        return _u.take_exception_ref();
+    }
+
     std::exception_ptr get_std_exception() && noexcept {
         return std::move(*this).get_exception().take_std_exception();
     }
@@ -386,7 +399,7 @@ struct future_state :  public future_state_base, private internal::uninitialized
     void forward_to(promise<T...>& pr) noexcept {
         assert(_u.st != state::future);
         if (_u.st >= state::exception_min) {
-            pr.set_urgent_exception(std::move(*this).get_exception());
+            pr.set_urgent_exception(std::move(std::move(*this).get_exception_ref()));
         } else {
             pr.set_urgent_value(std::move(this->uninitialized_get()));
             this->uninitialized_get().~tuple();
