@@ -344,11 +344,8 @@ struct future_state :  public future_state_base, private internal::uninitialized
     std::tuple<T...> get() && {
         assert(_u.st != state::future);
         if (_u.st >= state::exception_min) {
-            auto ex = std::move(_u.ex);
-            _u.ex.~exception_ptr();
             // Move ex out so future::~future() knows we've handled it
-            _u.st = state::invalid;
-            std::rethrow_exception(std::move(ex));
+            std::rethrow_exception(std::move(*this).get_exception());
         }
         return std::move(this->uninitialized_get());
     }
@@ -371,8 +368,7 @@ struct future_state :  public future_state_base, private internal::uninitialized
     void forward_to(promise<T...>& pr) noexcept {
         assert(_u.st != state::future);
         if (_u.st >= state::exception_min) {
-            pr.set_urgent_exception(std::move(_u.ex));
-            _u.ex.~exception_ptr();
+            pr.set_urgent_exception(std::move(*this).get_exception());
         } else {
             pr.set_urgent_value(std::move(this->uninitialized_get()));
             this->uninitialized_get().~tuple();
