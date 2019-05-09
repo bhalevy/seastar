@@ -286,7 +286,7 @@ struct future_state_base {
 
     void set_to_broken_promise() noexcept;
 
-    void set_exception(exception_ptr ex) noexcept {
+    void set_exception(exception_ptr&& ex) noexcept {
         assert(_u.st == state::future);
         new (&_u.ex) exception_ptr(std::move(ex));
         assert(_u.st >= state::exception_min);
@@ -509,7 +509,7 @@ public:
     ///
     /// Forwards the exception argument to the future and makes it
     /// available.  May be called either before or after \c get_future().
-    void set_exception(exception_ptr ex) noexcept {
+    void set_exception(exception_ptr&& ex) noexcept {
         do_set_exception<urgent::no>(std::move(ex));
     }
 
@@ -550,14 +550,14 @@ private:
     }
 
     template<urgent Urgent>
-    void do_set_exception(exception_ptr ex) noexcept {
+    void do_set_exception(exception_ptr&& ex) noexcept {
         if (_state) {
             _state->set_exception(std::move(ex));
             make_ready<Urgent>();
         }
     }
 
-    void set_urgent_exception(exception_ptr ex) noexcept {
+    void set_urgent_exception(exception_ptr&& ex) noexcept {
         do_set_exception<urgent::yes>(std::move(ex));
     }
 private:
