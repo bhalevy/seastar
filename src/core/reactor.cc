@@ -4822,11 +4822,11 @@ future<size_t> readable_eventfd::wait() {
     });
 }
 
-void schedule(std::unique_ptr<task> t) {
+void schedule(std::unique_ptr<task> t) noexcept {
     engine().add_task(std::move(t));
 }
 
-void schedule_urgent(std::unique_ptr<task> t) {
+void schedule_urgent(std::unique_ptr<task> t) noexcept {
     engine().add_urgent_task(std::move(t));
 }
 
