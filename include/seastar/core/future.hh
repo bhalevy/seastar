@@ -428,7 +428,6 @@ void set_callback(future<T...>& fut, std::unique_ptr<U> callback);
 ///
 template <typename... T>
 class promise {
-    enum class urgent { no, yes };
     future<T...>* _future = nullptr;
     future_state<T...> _local_state;
 
@@ -1257,16 +1256,12 @@ promise<T...>::get_future() noexcept {
 }
 
 template <typename... T>
-template<typename promise<T...>::urgent Urgent>
+template<urgent Urgent>
 inline
 void promise<T...>::make_ready() noexcept {
     if (_task) {
         _state = nullptr;
-        if (Urgent == urgent::yes && !need_preempt()) {
-            ::seastar::schedule_urgent(std::move(_task));
-        } else {
-            ::seastar::schedule(std::move(_task));
-        }
+        ::seastar::schedule<Urgent>(std::move(_task));
     }
 }
 

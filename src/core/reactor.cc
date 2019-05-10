@@ -3745,7 +3745,7 @@ void
 manual_clock::advance(manual_clock::duration d) {
     _now.fetch_add(d.count());
     if (local_engine) {
-        schedule_urgent(make_task(default_scheduling_group(), &manual_clock::expire_timers));
+        schedule<urgent::yes>(make_task(default_scheduling_group(), &manual_clock::expire_timers));
         smp::invoke_on_all(&manual_clock::expire_timers);
     }
 }
@@ -4822,14 +4822,16 @@ future<size_t> readable_eventfd::wait() {
     });
 }
 
-void schedule(std::unique_ptr<task>&& t) noexcept {
-    engine().add_task(std::move(t));
+template <urgent Urgent> void schedule(std::unique_ptr<task>&& task) noexcept {
+    if (Urgent == urgent::yes && !need_preempt()) {
+        engine().add_urgent_task(std::move(task));
+    } else {
+        engine().add_task(std::move(task));
+    }
 }
 
-void schedule_urgent(std::unique_ptr<task>&& t) noexcept {
-    engine().add_urgent_task(std::move(t));
-}
-
+template void schedule<urgent::no>(std::unique_ptr<task>&& task) noexcept;
+template void schedule<urgent::yes>(std::unique_ptr<task>&& task) noexcept;
 }
 
 bool operator==(const ::sockaddr_in a, const ::sockaddr_in b) {

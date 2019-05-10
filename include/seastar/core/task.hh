@@ -35,8 +35,10 @@ public:
     scheduling_group group() const { return _sg; }
 };
 
-void schedule(std::unique_ptr<task>&& t) noexcept;
-void schedule_urgent(std::unique_ptr<task>&& t) noexcept;
+enum class urgent { no, yes };
+template <urgent Urgent = urgent::no> void schedule(std::unique_ptr<task>&& task) noexcept;
+extern template void schedule<urgent::no>(std::unique_ptr<task>&& task) noexcept;
+extern template void schedule<urgent::yes>(std::unique_ptr<task>&& task) noexcept;
 
 template <typename Func>
 class lambda_task final : public task {
