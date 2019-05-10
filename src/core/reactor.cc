@@ -653,6 +653,8 @@ public:
 };
 #endif /* HAVE_OSV */
 
+extern __thread const internal::preemption_monitor* g_need_preempt;
+
 class reactor_backend_aio : public reactor_backend {
     static constexpr size_t max_polls = 10000;
     reactor* _r;
@@ -5561,6 +5563,23 @@ bool smp::pure_poll_queues() {
 
 internal::preemption_monitor bootstrap_preemption_monitor{};
 __thread const internal::preemption_monitor* g_need_preempt = &bootstrap_preemption_monitor;
+
+bool need_preempt() {
+#ifndef SEASTAR_DEBUG
+    // prevent compiler from eliminating loads in a loop
+    std::atomic_signal_fence(std::memory_order_seq_cst);
+    auto np = g_need_preempt;
+    // We aren't reading anything from the ring, so we don't need
+    // any barriers.
+    auto head = np->head.load(std::memory_order_relaxed);
+    auto tail = np->tail.load(std::memory_order_relaxed);
+    // Possible optimization: read head and tail in a single 64-bit load,
+    // and find a funky way to compare the two 32-bit halves.
+    return __builtin_expect(head != tail, false);
+#else
+    return true;
+#endif
+}
 
 __thread reactor* local_engine;
 
