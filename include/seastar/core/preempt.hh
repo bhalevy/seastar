@@ -36,6 +36,6 @@ struct preemption_monitor {
 
 }
 
-bool need_preempt();
+bool need_preempt() noexcept;
 
 }

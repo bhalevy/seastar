@@ -5570,7 +5570,7 @@ bool smp::pure_poll_queues() {
 internal::preemption_monitor bootstrap_preemption_monitor{};
 __thread const internal::preemption_monitor* g_need_preempt = &bootstrap_preemption_monitor;
 
-bool need_preempt() {
+bool need_preempt() noexcept {
 #ifndef SEASTAR_DEBUG
     // prevent compiler from eliminating loads in a loop
     std::atomic_signal_fence(std::memory_order_seq_cst);
