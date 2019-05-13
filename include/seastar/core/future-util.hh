@@ -192,7 +192,7 @@ using stop_iteration = bool_class<stop_iteration_tag>;
 namespace internal {
 
 template <typename AsyncAction>
-class repeater final : public continuation_base<stop_iteration> {
+class repeater final : public loop_continuation<stop_iteration> {
     promise<> _promise;
     AsyncAction _action;
 public:
@@ -336,7 +336,7 @@ using repeat_until_value_return_type
 namespace internal {
 
 template <typename AsyncAction, typename T>
-class repeat_until_value_state final : public continuation_base<compat::optional<T>> {
+class repeat_until_value_state final : public loop_continuation<compat::optional<T>> {
     promise<T> _promise;
     AsyncAction _action;
 public:
@@ -442,7 +442,7 @@ repeat_until_value(AsyncAction action) {
 namespace internal {
 
 template <typename StopCondition, typename AsyncAction>
-class do_until_state final : public continuation_base<> {
+class do_until_state final : public loop_continuation<> {
     promise<> _promise;
     StopCondition _stop;
     AsyncAction _action;
@@ -692,12 +692,12 @@ public:
         }
     }
     when_all_state_component(when_all_state_base *base, Future* future) : _base(base), _final_resting_place(future) {}
-    virtual void run_and_dispose() noexcept override {
+    virtual void set_and_delete(typename Future::state_type&& state) noexcept override {
         using futurator = futurize<Future>;
-        if (__builtin_expect(this->_state.failed(), false)) {
-            *_final_resting_place = futurator::make_exception_future(std::move(this->_state).get_std_exception());
+        if (__builtin_expect(state.failed(), false)) {
+            *_final_resting_place = futurator::make_exception_future(std::move(state).get_std_exception());
         } else {
-            *_final_resting_place = futurator::from_tuple(std::move(this->_state).get_value());
+            *_final_resting_place = futurator::from_tuple(std::move(state).get_value());
         }
         auto base = _base;
         this->~when_all_state_component();

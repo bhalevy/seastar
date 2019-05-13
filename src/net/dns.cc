@@ -379,13 +379,15 @@ public:
 
     future<> close() {
         _closed = true;
-        ares_cancel(_channel);
-        dns_log.trace("Shutting down {} sockets", _sockets.size());
-        for (auto & p : _sockets) {
-            do_close(p.first);
-        }
-        dns_log.trace("Closing gate");
-        return _gate.close();
+        return _ares_call_gate.close().then([me = shared_from_this()] {
+            ares_cancel(me->_channel);
+            dns_log.trace("Shutting down {} sockets", me->_sockets.size());
+            for (auto & p : me->_sockets) {
+                me->do_close(p.first);
+            }
+            dns_log.trace("Closing gate");
+            return me->_gate.close();
+        });
     }
 private:
     enum class type {
@@ -394,8 +396,9 @@ private:
     struct dns_call {
         dns_call(impl & i)
             : _i(i)
-            , _c(++i._calls)
-        {}
+            , _c(++i._calls) {
+            _i._ares_call_gate.enter();
+        }
         ~dns_call() {
             // If a query does not immediately complete
             // it might never do so, unless data actually
@@ -413,6 +416,10 @@ private:
     };
 
     void end_call() {
+        schedule(make_task([me = shared_from_this()] {
+            me->_ares_call_gate.leave();
+        }));
+
         if (--_calls == 0) {
             _timer.cancel();
         }
@@ -960,6 +967,7 @@ private:
     timer<> _timer;
     gate _gate;
     bool _closed = false;
+    gate _ares_call_gate;
 };
 
 net::dns_resolver::dns_resolver()

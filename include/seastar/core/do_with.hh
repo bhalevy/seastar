@@ -50,9 +50,11 @@ class do_with_state final : public continuation_base_from_future<Future>::type {
     typename Future::promise_type _pr;
 public:
     explicit do_with_state(HeldState&& held) : _held(std::move(held)) {}
-    virtual void run_and_dispose() noexcept override {
-        std::move(this->_state).forward_to(_pr);
-        delete this;
+    virtual void set_and_delete(typename Future::state_type&& state) noexcept override {
+        std::move(state).forward_to(_pr);
+
+        // schedule the delete
+        ::seastar::schedule(std::unique_ptr<task>(this));
     }
     HeldState& data() {
         return _held;

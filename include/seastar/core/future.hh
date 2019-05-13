@@ -411,32 +411,89 @@ struct future_state :  public future_state_base, private internal::uninitialized
 static_assert(sizeof(future_state<>) <= 8, "future_state<> is too large");
 static_assert(sizeof(future_state<long>) <= 16, "future_state<long> is too large");
 
+template <typename... T> class set_task;
+
 template <typename... T>
-class continuation_base : public task {
+class continuation_base : public task{
+    virtual void set_and_delete(future_state<T...>&& state) noexcept = 0;
+public:
+    // FIXME: explain
+    virtual void run_and_dispose() noexcept override {
+        delete this;
+    }
+
+    void set_state_and_delete(future_state<T...>&& state) noexcept;
+    void set_exception_and_delete(exception_ptr&& ex) noexcept {
+        future_state<T...> state;
+        state.set_exception(std::move(ex));
+        set_state_and_delete(std::move(state));
+    }
+    void set_to_broken_promise_and_delete() noexcept {
+        future_state<T...> state;
+        state.set_to_broken_promise();
+        set_state_and_delete(std::move(state));
+    }
+    void set_value_and_delete(std::tuple<T...> result) noexcept {
+        future_state<T...> state;
+        state.set(std::move(result));
+        set_state_and_delete(std::move(state));
+    }
+
+    template <typename... A>
+    void set_value_and_delete(A&&... a) noexcept {
+        future_state<T...> state;
+        state.set(std::forward<A>(a)...);
+        set_state_and_delete(std::move(state));
+    }
+
+    friend class set_task<T...>;
+};
+
+template <typename... T>
+class loop_continuation  : public continuation_base<T...> {
 protected:
     future_state<T...> _state;
-    using future_type = future<T...>;
-    using promise_type = promise<T...>;
-public:
-    continuation_base() = default;
-    explicit continuation_base(future_state<T...>&& state) : _state(std::move(state)) {}
-    void set_state(future_state<T...>&& state) {
-        _state = std::move(state);
+    virtual void set_and_delete(future_state<T...>&& new_state) noexcept override {
+        _state = std::move(new_state);
+        this->run_and_dispose();
     }
-    friend class promise<T...>;
-    friend class future<T...>;
 };
 
 template <typename Func, typename... T>
-struct continuation final : continuation_base<T...> {
-    continuation(Func&& func, future_state<T...>&& state) : continuation_base<T...>(std::move(state)), _func(std::move(func)) {}
-    continuation(Func&& func) : _func(std::move(func)) {}
-    virtual void run_and_dispose() noexcept override {
-        _func(std::move(this->_state));
-        delete this;
+class continuation final : public continuation_base<T...> {
+    virtual void set_and_delete(future_state<T...>&& state) noexcept override {
+        _func(std::move(state));
+
+        // schedule the delete
+        ::seastar::schedule(std::unique_ptr<task>(this));
     }
     Func _func;
+
+public:
+    continuation(Func&& func) : _func(std::move(func)) {}
 };
+
+template <typename... T> class set_task final : public task {
+    std::unique_ptr<continuation_base<T...>> _continuation;
+    future_state<T...> _value;
+public:
+    set_task(std::unique_ptr<continuation_base<T...>> continuation, future_state<T...> value)
+        : _continuation(std::move(continuation)), _value(std::move(value)) {}
+    virtual void run_and_dispose() noexcept override {
+        _continuation.release()->set_and_delete(std::move(_value));
+        delete this;
+    }
+};
+
+template <typename... T>
+void continuation_base<T...>::set_state_and_delete(future_state<T...>&& state) noexcept {
+     if (need_preempt()) {
+         ::seastar::schedule(std::make_unique<set_task<T...>>(
+             std::unique_ptr<continuation_base<T...>>(this), std::move(state)));
+         return;
+    }
+    set_and_delete(std::move(state));
+}
 
 namespace internal {
 
@@ -460,7 +517,8 @@ class promise {
     // details.
     future_state<T...>* _state;
 
-    std::unique_ptr<task> _task;
+    // FIXME: rename variable
+    std::unique_ptr<continuation_base<T...>> _task;
     static constexpr bool copy_noexcept = future_state<T...>::copy_noexcept;
 public:
     /// \brief Constructs an empty \c promise.
@@ -509,9 +567,10 @@ public:
     /// future.  May be called either before or after \c get_future().
     template <typename... A>
     void set_value(A&&... a) noexcept {
-        if (_state) {
+        if (_task) {
+            _task.release()->set_value_and_delete(std::forward<A>(a)...);
+        } else if (_state) {
             _state->set(std::forward<A>(a)...);
-            make_ready<urgent::no>();
         }
     }
 
@@ -543,11 +602,13 @@ public:
     }
 #endif
 private:
+    // FIXME: template argument not used
     template<urgent Urgent>
     void do_set_value(std::tuple<T...> result) noexcept {
-        if (_state) {
+        if (_task) {
+            _task.release()->set_value_and_delete(std::move(result));
+        } else if (_state) {
             _state->set(std::move(result));
-            make_ready<Urgent>();
         }
     }
 
@@ -559,11 +620,13 @@ private:
         do_set_value<urgent::yes>(std::move(result));
     }
 
+    // FIXME: template argument not used
     template<urgent Urgent>
     void do_set_exception(exception_ptr&& ex) noexcept {
-        if (_state) {
+        if (_task) {
+            _task.release()->set_exception_and_delete(std::move(ex));
+        } else if (_state) {
             _state->set_exception(std::move(ex));
-            make_ready<Urgent>();
         }
     }
 
@@ -574,16 +637,13 @@ private:
     template <typename Func>
     void schedule(Func&& func) {
         auto tws = std::make_unique<continuation<Func, T...>>(std::move(func));
-        _state = &tws->_state;
+        _state = nullptr;
         _task = std::move(tws);
     }
     void schedule(std::unique_ptr<continuation_base<T...>> callback) {
-        _state = &callback->_state;
+        _state = nullptr;
         _task = std::move(callback);
     }
-    template<urgent Urgent>
-    __attribute__((always_inline))
-    void make_ready() noexcept;
 
     template <typename... U>
     friend class future;
@@ -785,7 +845,9 @@ private:
             if (__builtin_expect(!_state.available() && !_promise, false)) {
                 abandoned();
             }
-            ::seastar::schedule(std::make_unique<continuation<Func, T...>>(std::move(func), std::move(_state)));
+            // FIXME: optimze set_task?
+            auto cont = std::make_unique<continuation<Func, T...>>(std::move(func));
+            ::seastar::schedule(std::make_unique<set_task<T...>>(std::move(cont), std::move(_state)));
         } else {
             assert(_promise);
             detach_promise()->schedule(std::move(func));
@@ -832,6 +894,8 @@ private:
     template<typename... U>
     friend class shared_future;
 public:
+    using state_type = future_state<T...>;
+
     /// \brief The data type carried by the future.
     using value_type = std::tuple<T...>;
     /// \brief The data type carried by the future.
@@ -914,10 +978,13 @@ private:
                 : _thread(thread), _waiting_for(waiting_for) {
         }
         virtual void run_and_dispose() noexcept override {
-            _waiting_for->_state = std::move(this->_state);
             thread_impl::switch_in(_thread);
             // no need to delete, since this is always allocated on
             // _thread's stack.
+        }
+        virtual void set_and_delete(future_state<T...>&& state) noexcept override {
+            _waiting_for->_state = std::move(state);
+            ::seastar::schedule(std::unique_ptr<task>(this));
         }
     };
     void do_wait() noexcept {
@@ -1247,8 +1314,7 @@ public:
 private:
     void set_callback(std::unique_ptr<continuation_base<T...>> callback) {
         if (_state.available()) {
-            callback->set_state(get_available_state());
-            ::seastar::schedule(std::move(callback));
+            callback.release()->set_state_and_delete(get_available_state());
         } else {
             assert(_promise);
             detach_promise()->schedule(std::move(callback));
@@ -1279,16 +1345,6 @@ promise<T...>::get_future() noexcept {
 }
 
 template <typename... T>
-template<urgent Urgent>
-inline
-void promise<T...>::make_ready() noexcept {
-    if (_task) {
-        _state = nullptr;
-        ::seastar::schedule<Urgent>(std::move(_task));
-    }
-}
-
-template <typename... T>
 inline
 promise<T...>::promise(promise&& __restrict__ x) noexcept : _future(x._future), _state(x._state), _task(std::move(x._task)) {
     if (_state == &x._local_state) {
@@ -1312,9 +1368,7 @@ promise<T...>::~promise() noexcept {
     } else if (_state && _state->failed()) {
         report_failed_future(_state->get_std_exception());
     } else if (__builtin_expect(bool(_task), false)) {
-        assert(_state && !_state->available());
-        _state->set_to_broken_promise();
-        make_ready<urgent::no>();
+        _task.release()->set_to_broken_promise_and_delete();
     }
 }
 
