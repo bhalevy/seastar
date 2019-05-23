@@ -477,9 +477,21 @@ public:
     future<T...> get_future() noexcept;
 
     void set_urgent_state(future_state<T...>&& state) noexcept {
-        if (_state) {
-            *get_state() = std::move(state);
-            make_ready<urgent::yes>();
+        do_set_state<urgent::yes>(std::move(state));
+    }
+
+    template<urgent Urgent>
+    void do_set_state(future_state<T...>&& state) noexcept {
+        if (auto* s = get_state()) {
+            *s = std::move(state);
+            if (_task) {
+                _state = nullptr;
+                if (Urgent == urgent::yes && !need_preempt()) {
+                    ::seastar::schedule_urgent(std::move(_task));
+                } else {
+                    ::seastar::schedule(std::move(_task));
+                }
+            }
         }
     }
 
@@ -496,10 +508,7 @@ public:
     /// pr.set_value(std::tuple<int, double>(42, 43.0))
     template <typename... A>
     void set_value(A&&... a) {
-        if (auto *s = get_state()) {
-            s->set(std::forward<A>(a)...);
-            make_ready<urgent::no>();
-        }
+        do_set_state<urgent::no>(future_state<T...>(ready_future_marker(), std::forward<A>(a)...));
     }
 
     /// \brief Marks the promise as failed
@@ -507,10 +516,7 @@ public:
     /// Forwards the exception argument to the future and makes it
     /// available.  May be called either before or after \c get_future().
     void set_exception(std::exception_ptr&& ex) noexcept {
-        if (_state) {
-            _state->set_exception(std::move(ex));
-            make_ready<urgent::no>();
-        }
+        do_set_state<urgent::no>(future_state<T...>(exception_future_marker(), std::move(ex)));
     }
 
     void set_exception(const std::exception_ptr& ex) noexcept {
@@ -543,9 +549,6 @@ private:
         _state = &callback->_state;
         _task = std::move(callback);
     }
-    template<urgent Urgent>
-    __attribute__((always_inline))
-    void make_ready() noexcept;
 
     template <typename... U>
     friend class future;
@@ -1243,20 +1246,6 @@ future<T...>
 promise<T...>::get_future() noexcept {
     assert(!this->_future && this->_state && !this->_task);
     return future<T...>(this);
-}
-
-template <typename... T>
-template<typename promise<T...>::urgent Urgent>
-inline
-void promise<T...>::make_ready() noexcept {
-    if (_task) {
-        _state = nullptr;
-        if (Urgent == urgent::yes && !need_preempt()) {
-            ::seastar::schedule_urgent(std::move(_task));
-        } else {
-            ::seastar::schedule(std::move(_task));
-        }
-    }
 }
 
 template <typename... T>
