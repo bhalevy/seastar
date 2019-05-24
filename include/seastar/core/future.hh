@@ -538,6 +538,20 @@ public:
         _task = std::unique_ptr<task>(&coroutine);
     }
 #endif
+    void propagate_state(future_state<T...>&& state) noexcept {
+        if (_state) {
+            *get_state() = std::move(state);
+            if (_task) {
+                _state = nullptr;
+                if (need_preempt()) {
+                    ::seastar::schedule(std::move(_task));
+                } else {
+                    _task.release()->run_and_dispose();
+                }
+            }
+        }
+    }
+
 private:
     template <typename Func>
     void schedule(Func&& func) {
@@ -972,7 +986,7 @@ private:
                 if (state.failed()) {
                     pr.set_exception(std::move(state).get_exception());
                 } else {
-                    futurator::apply(std::forward<Func>(func), std::move(state).get_value()).forward_to(std::move(pr));
+                    futurator::apply(std::forward<Func>(func), std::move(state).get_value()).propagate_state(std::move(pr));
                 }
             });
         } ();
@@ -1026,7 +1040,7 @@ private:
         [&] () noexcept {
             memory::disable_failure_guard dfg;
             schedule([pr = std::move(pr), func = std::forward<Func>(func)] (future_state<T...>&& state) mutable {
-                futurator::apply(std::forward<Func>(func), future(std::move(state))).forward_to(std::move(pr));
+                futurator::apply(std::forward<Func>(func), future(std::move(state))).propagate_state(std::move(pr));
             });
         } ();
         return fut;
@@ -1043,6 +1057,14 @@ public:
     ///
     /// \param pr a promise that will be fulfilled with the results of this
     /// future.
+    void propagate_state(promise<T...>&& pr) noexcept {
+        if (_state.available()) {
+            pr.propagate_state(std::move(_state));
+        } else {
+            *detach_promise() = std::move(pr);
+        }
+    }
+
     void forward_to(promise<T...>&& pr) noexcept {
         if (_state.available()) {
             pr.set_urgent_state(std::move(_state));
