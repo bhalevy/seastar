@@ -5683,9 +5683,7 @@ void promise_base::check_during_destruction() noexcept {
     } else if (_state && _state->failed()) {
         report_failed_future(_state->get_exception());
     } else if (__builtin_expect(bool(_task), false)) {
-        assert(_state && !_state->available());
-        _state->set_to_broken_promise();
-        ::seastar::schedule(std::move(_task));
+        _task.release()->set_exception(std::make_exception_ptr(broken_promise{}));
     }
 }
 

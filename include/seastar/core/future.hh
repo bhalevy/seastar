@@ -375,29 +375,70 @@ struct future_state :  public future_state_base, private internal::uninitialized
 static_assert(sizeof(future_state<>) <= 8, "future_state<> is too large");
 static_assert(sizeof(future_state<long>) <= 16, "future_state<long> is too large");
 
-template <typename... T>
-class continuation_base : public task {
-protected:
-    future_state<T...> _state;
-    using future_type = future<T...>;
-    using promise_type = promise<T...>;
+class continuation_base_base_base : public task {
 public:
-    continuation_base() = default;
-    explicit continuation_base(future_state<T...>&& state) : _state(std::move(state)) {}
-    void set_state(future_state<T...>&& state) {
-        _state = std::move(state);
+    virtual void set_exception(std::exception_ptr&& ex) noexcept = 0;
+};
+
+template <typename... T>
+class continuation_base_base : public continuation_base_base_base {
+public:
+    virtual void set_and_dispose(future_state<T...>&& state) noexcept = 0;
+    virtual void set_and_schedule(future_state<T...>&& state) noexcept = 0;
+    virtual void set_and_schedule_urgent(future_state<T...>&& state) noexcept = 0;
+    virtual void set_exception(std::exception_ptr&& ex) noexcept override {
+        set_and_schedule(future_state<T...>(exception_future_marker(), std::move(ex)));
     }
-    friend class promise<T...>;
-    friend class future<T...>;
+};
+
+template <typename... T>
+class continuation_base : public continuation_base_base<T...> {
+public:
+    future_state<T...> _state;
+    virtual void set_and_dispose(future_state<T...>&& state) noexcept override {
+        _state = std::move(state);
+        this->run_and_dispose();
+    }
+    virtual void set_and_schedule(future_state<T...>&& state) noexcept override {
+        _state = std::move(state);
+        ::seastar::schedule(std::unique_ptr<task>(this));
+    }
+    virtual void set_and_schedule_urgent(future_state<T...>&& state) noexcept override {
+        _state = std::move(state);
+        ::seastar::schedule_urgent(std::unique_ptr<task>(this));
+    }
+};
+
+template <typename... T> class set_task final : public task {
+    std::unique_ptr<continuation_base_base<T...>> _continuation;
+    future_state<T...> _value;
+
+public:
+    set_task(std::unique_ptr<continuation_base_base<T...>> continuation, future_state<T...> value)
+        : _continuation(std::move(continuation)), _value(std::move(value)) {}
+    virtual void run_and_dispose() noexcept override {
+        _continuation.release()->set_and_dispose(std::move(_value));
+        delete this;
+    }
 };
 
 template <typename Func, typename... T>
-struct continuation final : continuation_base<T...> {
-    continuation(Func&& func, future_state<T...>&& state) : continuation_base<T...>(std::move(state)), _func(std::move(func)) {}
+struct continuation final : continuation_base_base<T...> {
     continuation(Func&& func) : _func(std::move(func)) {}
-    virtual void run_and_dispose() noexcept override {
-        _func(std::move(this->_state));
+    virtual void set_and_schedule(future_state<T...>&& state) noexcept override {
+        ::seastar::schedule(std::make_unique<set_task<T...>>(
+            std::unique_ptr<continuation_base_base<T...>>(this), std::move(state)));
+    }
+    virtual void set_and_schedule_urgent(future_state<T...>&& state) noexcept override {
+        ::seastar::schedule_urgent(std::make_unique<set_task<T...>>(
+            std::unique_ptr<continuation_base_base<T...>>(this), std::move(state)));
+    }
+    virtual void set_and_dispose(future_state<T...>&& state) noexcept override {
+        _func(std::move(state));
         delete this;
+    }
+    virtual void run_and_dispose() noexcept override {
+        assert(0);
     }
     Func _func;
 };
@@ -419,7 +460,7 @@ protected:
     // details.
     future_state_base* _state;
 
-    std::unique_ptr<task> _task;
+    std::unique_ptr<continuation_base_base_base> _task;
 
     promise_base(const promise_base&) = delete;
     promise_base(future_state_base* state) noexcept : _state(state) {}
@@ -448,6 +489,10 @@ class promise : private internal::promise_base {
     future_state<T...>* get_state() {
         return static_cast<future_state<T...>*>(_state);
     }
+    continuation_base_base<T...>* release_task() {
+        return static_cast<continuation_base_base<T...>*>(_task.release());
+    }
+
     static constexpr bool copy_noexcept = future_state<T...>::copy_noexcept;
 public:
     /// \brief Constructs an empty \c promise.
@@ -482,16 +527,17 @@ public:
 
     template<urgent Urgent>
     void do_set_state(future_state<T...>&& state) noexcept {
-        if (auto* s = get_state()) {
-            *s = std::move(state);
-            if (_task) {
-                _state = nullptr;
-                if (Urgent == urgent::yes && !need_preempt()) {
-                    ::seastar::schedule_urgent(std::move(_task));
-                } else {
-                    ::seastar::schedule(std::move(_task));
-                }
+        if (_task) {
+            auto *task = release_task();
+            if (Urgent == urgent::yes && !need_preempt()) {
+                task->set_and_schedule_urgent(std::move(state));
+            } else {
+                task->set_and_schedule(std::move(state));
             }
+            return;
+        }
+        if (auto *s = get_state()) {
+            *s = std::move(state);
         }
     }
 
@@ -539,16 +585,17 @@ public:
     }
 #endif
     void propagate_state(future_state<T...>&& state) noexcept {
+        if (_task) {
+            auto *task = release_task();
+            if (need_preempt()) {
+                task->set_and_schedule(std::move(state));
+            } else {
+                task->set_and_dispose(std::move(state));
+            }
+            return;
+        }
         if (_state) {
             *get_state() = std::move(state);
-            if (_task) {
-                _state = nullptr;
-                if (need_preempt()) {
-                    ::seastar::schedule(std::move(_task));
-                } else {
-                    _task.release()->run_and_dispose();
-                }
-            }
         }
     }
 
@@ -556,11 +603,11 @@ private:
     template <typename Func>
     void schedule(Func&& func) {
         auto tws = std::make_unique<continuation<Func, T...>>(std::move(func));
-        _state = &tws->_state;
+        _state = nullptr;
         _task = std::move(tws);
     }
     void schedule(std::unique_ptr<continuation_base<T...>> callback) {
-        _state = &callback->_state;
+        _state = nullptr;
         _task = std::move(callback);
     }
 
@@ -778,7 +825,8 @@ private:
             if (__builtin_expect(!_state.available() && !_promise, false)) {
                 abandoned();
             }
-            ::seastar::schedule(std::make_unique<continuation<Func, T...>>(std::move(func), std::move(_state)));
+            auto cont = new continuation<Func, T...>(std::move(func));
+            cont->set_and_schedule(std::move(_state));
         } else {
             assert(_promise);
             detach_promise()->schedule(std::move(func));
@@ -1239,8 +1287,7 @@ public:
 private:
     void set_callback(std::unique_ptr<continuation_base<T...>> callback) {
         if (_state.available()) {
-            callback->set_state(get_available_state());
-            ::seastar::schedule(std::move(callback));
+            callback->set_and_schedule(get_available_state());
         } else {
             assert(_promise);
             detach_promise()->schedule(std::move(callback));
