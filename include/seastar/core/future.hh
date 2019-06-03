@@ -537,7 +537,7 @@ public:
     future_state_base& operator=(future_state_base&& x) noexcept = default;
     void set_exception(future_state_base&& state) noexcept {
         assert(_u.st == state::future);
-        *this = std::move(state);
+        new (this) future_state_base(std::move(state));
     }
     std::exception_ptr get_exception() && noexcept {
         assert(_u.st >= state::exception_min);
@@ -692,7 +692,7 @@ protected:
 public:
     continuation_base() noexcept = default;
     void set_state(future_state&& state) noexcept {
-        _state = std::move(state);
+        new (&_state) future_state(std::move(state));
     }
     // This override of waiting_task() is needed here because there are cases
     // when backtrace is obtained from the destructor of this class and objects
