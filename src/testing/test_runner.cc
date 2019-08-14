@@ -65,6 +65,8 @@ test_runner::start(int ac, char** av) {
         app.add_options()
             ("random-seed", boost::program_options::value<unsigned>(), "Random number generator seed");
         auto exit_code = app.run_deprecated(ac, av, [this, &app] {
+            // Signal foreground thread that initialization is done successfully.
+            _ready.set_value(0);
             auto init = [&app] {
                 auto conf_seed = app.configuration()["random-seed"];
                 auto seed = conf_seed.empty() ? std::random_device()():  conf_seed.as<unsigned>();
@@ -90,10 +92,20 @@ test_runner::start(int ac, char** av) {
           });
         });
 
+        // Propagate _exit_code to foreground thread if run_deprecated failed.
+        // Otherwise, _ready is set by the lambda function passed to run_deprecated
         if (exit_code) {
-            exit(exit_code);
+            _ready.set_value(exit_code);
         }
     });
+
+    auto exit_code = _ready.get_future().get();
+    if (exit_code) {
+        finalize();
+        // exit here if run_deprecated returned synchronously with an error
+        // rather than returning - to avoid an annoying boost error message.
+        exit(exit_code);
+    }
 }
 
 void

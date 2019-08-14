@@ -25,6 +25,7 @@
 #include <functional>
 #include <atomic>
 #include <random>
+#include <future>
 #include <seastar/core/future.hh>
 #include <seastar/core/posix.hh>
 #include <seastar/testing/exchanger.hh>
@@ -41,6 +42,7 @@ private:
     std::atomic<bool> _started{false};
     exchanger<std::function<future<>()>> _task;
     bool _done = false;
+    std::promise<int> _ready;
 public:
     void start(int argc, char** argv);
     ~test_runner();
