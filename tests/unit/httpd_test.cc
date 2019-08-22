@@ -225,7 +225,7 @@ public:
     memory_data_sink_impl(std::stringstream& ss) : _ss(ss) {
     }
     virtual future<> put(net::packet data)  override {
-        abort();
+        seastar::abort();
         return make_ready_future<>();
     }
     virtual future<> put(temporary_buffer<char> buf) override {

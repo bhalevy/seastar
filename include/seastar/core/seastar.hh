@@ -72,6 +72,9 @@ class file;
 struct file_open_options;
 struct stat_data;
 
+/// Abort the program.
+[[noreturn]] void abort();
+
 // Networking API
 
 /// \defgroup networking-module Networking

@@ -5841,6 +5841,11 @@ void future_state_base::set_to_broken_promise() noexcept {
     }
 }
 
+void abort() {
+    logger::flush();
+    ::abort();
+}
+
 future<> check_direct_io_support(sstring path) {
     struct w {
         sstring path;

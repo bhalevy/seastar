@@ -480,7 +480,7 @@ SEASTAR_TEST_CASE(test_parallel_for_each) {
         // empty
         parallel_for_each(std::vector<int>(), [] (int) -> future<> {
             BOOST_FAIL("should not reach");
-            abort();
+            seastar::abort();
         }).get();
 
         // immediate result
