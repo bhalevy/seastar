@@ -142,6 +142,7 @@ std::istream& operator>>(std::istream& in, log_level& level) {
     return in;
 }
 
+std::ostream* logger::_out = &std::cerr;
 std::atomic<bool> logger::_stdout = { true };
 std::atomic<bool> logger::_syslog = { false };
 
@@ -202,7 +203,7 @@ logger::really_do_log(log_level level, const char* fmt, const stringer* s, size_
     if (is_stdout_enabled) {
         out << level_map[int(level)] << space_and_current_timestamp();
         print_once(out);
-        std::cout << out.str();
+        *_out << out.str();
     }
     if (is_syslog_enabled) {
         print_once(log);
