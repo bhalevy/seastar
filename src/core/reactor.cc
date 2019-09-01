@@ -606,7 +606,7 @@ public:
 #else
 public:
     template <typename T, typename Func>
-    future<T> submit(Func func) { std::cout << "thread_pool not yet implemented on osv\n"; abort(); }
+    future<T> submit(Func func) { std::cerr << "thread_pool not yet implemented on osv\n"; abort(); }
 #endif
 private:
     void work(sstring thread_name);
@@ -1663,7 +1663,7 @@ reactor::task_quota_timer_thread_fn() {
     }
     auto r = ::pthread_sigmask(SIG_BLOCK, &mask, NULL);
     if (r) {
-        seastar_logger.info("Thread {}: failed to block signals. Aborting.", thread_name.c_str());
+        seastar_logger.error("Thread {}: failed to block signals. Aborting.", thread_name.c_str());
         abort();
     }
 
@@ -5798,19 +5798,19 @@ reactor_backend_osv::wait_and_process() {
 
 future<>
 reactor_backend_osv::readable(pollable_fd_state& fd) {
-    std::cout << "reactor_backend_osv does not support file descriptors - readable() shouldn't have been called!\n";
+    std::cerr << "reactor_backend_osv does not support file descriptors - readable() shouldn't have been called!\n";
     abort();
 }
 
 future<>
 reactor_backend_osv::writeable(pollable_fd_state& fd) {
-    std::cout << "reactor_backend_osv does not support file descriptors - writeable() shouldn't have been called!\n";
+    std::cerr << "reactor_backend_osv does not support file descriptors - writeable() shouldn't have been called!\n";
     abort();
 }
 
 void
 reactor_backend_osv::forget(pollable_fd_state& fd) {
-    std::cout << "reactor_backend_osv does not support file descriptors - forget() shouldn't have been called!\n";
+    std::cerr << "reactor_backend_osv does not support file descriptors - forget() shouldn't have been called!\n";
     abort();
 }
 
