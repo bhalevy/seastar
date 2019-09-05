@@ -3065,6 +3065,15 @@ reactor::open_file_dma(sstring name, open_flags flags, file_open_options options
     });
 }
 
+future<> file::close_if_last() {
+    if (_file_impl.use_count() > 1) {
+        seastar_logger.warn("Deferring file close due to use_count {}.\nBacktrace:\n{}", _file_impl.use_count(), current_backtrace());
+        _file_impl->defer_close();
+        return make_ready_future<>();
+    }
+    return close();
+}
+
 future<>
 reactor::remove_file(sstring pathname) {
     return engine()._thread_pool->submit<syscall_result<int>>([pathname] {

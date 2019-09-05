@@ -416,13 +416,7 @@ public:
     /// \note
     /// to ensure file data reaches stable storage, you must call \ref flush()
     /// before calling \c close().
-    future<> close_if_last() {
-        if (_file_impl.use_count() > 1) {
-            _file_impl->defer_close();
-            return make_ready_future<>();
-        }
-        return close();
-    }
+    future<> close_if_last();
 
     /// Returns a directory listing, given that this file object is a directory.
     subscription<directory_entry> list_directory(std::function<future<> (directory_entry de)> next) {
