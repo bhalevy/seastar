@@ -118,6 +118,7 @@ SEASTAR_TEST_CASE(test1) {
         }).then([ft] {
             return ft->f.close();
         }).then([ft] () mutable {
+            BOOST_REQUIRE(ft->f.is_closed());
             std::cout << "done\n";
             delete ft;
         });
@@ -174,6 +175,7 @@ SEASTAR_TEST_CASE(parallel_write_fsync) {
 
             fsync_thread.join().get();
             f.close().get();
+            BOOST_REQUIRE(f.is_closed());
             remove_file(fname).get();
         });
     }).then([] (internal::stall_report sr) {

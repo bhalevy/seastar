@@ -2422,9 +2422,7 @@ posix_file_impl::~posix_file_impl() {
     }
     delete _refcount;
     if (_fd != -1) {
-        // Note: close() can be a blocking operation on NFS
-        seastar_logger.warn("File destructed while open.\nBacktrace:\n{}", current_backtrace());
-        ::close(_fd);
+        file_impl::defer_close();
     }
 }
 
@@ -2932,6 +2930,11 @@ append_challenged_posix_file_impl::close() noexcept {
     });
 }
 
+bool
+append_challenged_posix_file_impl::is_closed() const {
+    return posix_file_impl::is_closed();
+}
+
 // Some kernels can append to xfs filesystems, some cannot; determine
 // from kernel version.
 static
@@ -3318,6 +3321,21 @@ file::dup() {
     return seastar::file_handle(_file_impl->dup());
 }
 
+file_impl::~file_impl() {
+    if (!is_closed()) {
+        if (_close_requested) {
+            seastar_logger.warn("Auto-closing file.\nBacktrace:\n{}", current_backtrace());
+            (void)close().then_wrapped([] (auto f) {
+                if (f.failed()) {
+                    seastar_logger.error("Auto-closing file failed: {}. Ignored.", f.get_exception());
+                }
+            });
+        } else {
+            seastar_logger.warn("File destructed while open.\nBacktrace:\n{}", current_backtrace());
+        }
+    }
+}
+
 std::unique_ptr<seastar::file_handle_impl>
 file_impl::dup() {
     throw std::runtime_error("this file type cannot be duplicated");
@@ -3469,6 +3487,7 @@ posix_file_impl::size() {
 
 future<>
 posix_file_impl::close() noexcept {
+    file_impl::mark_as_closed();
     if (_fd == -1) {
         seastar_logger.warn("Double close() detected.\nBacktrace:\n{}", current_backtrace());
         return make_ready_future<>();
@@ -3494,6 +3513,11 @@ posix_file_impl::close() noexcept {
     return closed.then([] (syscall_result<int> sr) {
         sr.throw_if_error();
     });
+}
+
+bool
+posix_file_impl::is_closed() const {
+    return _fd == -1;
 }
 
 future<uint64_t>

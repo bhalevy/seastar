@@ -114,14 +114,17 @@ public:
 };
 
 class file_impl {
+    bool _close_requested = false;
+    bool _closed = false;
 protected:
     static file_impl* get_file_impl(file& f);
+    void mark_as_closed() { _closed = true; };
 public:
     unsigned _memory_dma_alignment = 4096;
     unsigned _disk_read_dma_alignment = 4096;
     unsigned _disk_write_dma_alignment = 4096;
 public:
-    virtual ~file_impl() {}
+    virtual ~file_impl();
 
     virtual future<size_t> write_dma(uint64_t pos, const void* buffer, size_t len, const io_priority_class& pc) = 0;
     virtual future<size_t> write_dma(uint64_t pos, std::vector<iovec> iov, const io_priority_class& pc) = 0;
@@ -133,10 +136,18 @@ public:
     virtual future<> discard(uint64_t offset, uint64_t length) = 0;
     virtual future<> allocate(uint64_t position, uint64_t length) = 0;
     virtual future<uint64_t> size(void) = 0;
-    virtual future<> close() = 0;
+    virtual future<> close() { mark_as_closed(); return make_ready_future<>(); }
+    virtual bool is_closed() const { return _closed; };
     virtual std::unique_ptr<file_handle_impl> dup();
     virtual subscription<directory_entry> list_directory(std::function<future<> (directory_entry de)> next) = 0;
     virtual future<temporary_buffer<uint8_t>> dma_read_bulk(uint64_t offset, size_t range_size, const io_priority_class& pc) = 0;
+
+    // Ask to close the file if needed, upon destruction.
+    //
+    // Regardless, the caller should explicitly call close().
+    // This is implemented just as a safety precaution.
+    // Failure to close in the destructor will be ignored.
+    void defer_close() { _close_requested = true; }
 
     friend class reactor;
 };
@@ -393,6 +404,11 @@ public:
     /// before calling \c close().
     future<> close() {
         return _file_impl->close();
+    }
+
+    /// Returns true if the file is closed, or false otherwise.
+    bool is_closed() const {
+        return _file_impl->is_closed();
     }
 
     /// Returns a directory listing, given that this file object is a directory.

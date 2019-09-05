@@ -76,6 +76,7 @@ public:
     virtual future<> allocate(uint64_t position, uint64_t length) override;
     future<uint64_t> size() override;
     virtual future<> close() noexcept override;
+    virtual bool is_closed() const override;
     virtual std::unique_ptr<seastar::file_handle_impl> dup() override;
     virtual subscription<directory_entry> list_directory(std::function<future<> (directory_entry de)> next) override;
     virtual future<temporary_buffer<uint8_t>> dma_read_bulk(uint64_t offset, size_t range_size, const io_priority_class& pc) override;
@@ -173,6 +174,7 @@ public:
     future<> truncate(uint64_t length) override;
     future<uint64_t> size() override;
     future<> close() noexcept override;
+    bool is_closed() const override;
 };
 
 class blockdev_file_impl : public posix_file_impl {

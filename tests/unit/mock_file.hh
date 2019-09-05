@@ -101,6 +101,9 @@ public:
         _closed = true;
         return make_ready_future<>();
     }
+    virtual bool is_closed() const override {
+        return _closed;
+    }
     virtual subscription<directory_entry> list_directory(std::function<future<> (directory_entry de)>) override {
         throw std::bad_function_call();
     }
