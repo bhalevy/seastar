@@ -233,7 +233,7 @@ future<> test_consume_until_end(uint64_t size) {
                 return f.size();
             }).then([size, f] (size_t real_size) {
                 BOOST_REQUIRE_EQUAL(size, real_size);
-            }).then([size, f] {
+            }).then([size, f = std::move(f)] {
                 auto consumer = [offset = uint64_t(0), size] (temporary_buffer<char> buf) mutable -> future<input_stream<char>::unconsumed_remainder> {
                     if (!buf) {
                         return make_ready_future<input_stream<char>::unconsumed_remainder>(temporary_buffer<char>());
@@ -245,13 +245,11 @@ future<> test_consume_until_end(uint64_t size) {
                     BOOST_REQUIRE(std::equal(buf.begin(), buf.end(), expected.begin()));
                     return make_ready_future<input_stream<char>::unconsumed_remainder>(compat::nullopt);
                 };
-                return do_with(make_file_input_stream(f), std::move(consumer), [] (input_stream<char>& in, auto& consumer) {
+                return do_with(make_file_input_stream(std::move(f)), std::move(consumer), [] (input_stream<char>& in, auto& consumer) {
                     return in.consume(consumer).then([&in] {
                         return in.close();
                     });
                 });
-            }).finally([f] () mutable {
-                return f.close().finally([f]{});
             });
     });
 }
@@ -367,8 +365,6 @@ SEASTAR_TEST_CASE(test_fstream_slow_start) {
         static constexpr size_t buffer_size = 260 * 1024;
         static constexpr size_t read_ahead = 1;
 
-        auto mock_file = make_shared<mock_read_only_file>(file_size);
-
         auto history = make_lw_shared<file_input_stream_history>();
 
         file_input_stream_options options{};
@@ -384,6 +380,7 @@ SEASTAR_TEST_CASE(test_fstream_slow_start) {
         auto read_whole_file_with_slow_start = [&] (auto fstr) {
             uint64_t total_read = 0;
             size_t previous_buffer_length = 0;
+            auto mock_file = fstr.mock_file;
 
             // We don't want to assume too much about fstream internals, but with
             // no history we should start with a buffer sizes somewhere in
@@ -437,6 +434,7 @@ SEASTAR_TEST_CASE(test_fstream_slow_start) {
 
         auto read_while_file_at_full_speed = [&] (auto fstr) {
             uint64_t total_read = 0;
+            auto mock_file = fstr.mock_file;
 
             mock_file->set_expected_read_size(buffer_size);
             while (total_read != file_size) {
@@ -453,6 +451,7 @@ SEASTAR_TEST_CASE(test_fstream_slow_start) {
         auto read_and_skip_a_lot = [&] (auto fstr) {
             uint64_t total_read = 0;
             size_t previous_buffer_size = buffer_size;
+            auto mock_file = fstr.mock_file;
 
             mock_file->set_allowed_read_requests(std::numeric_limits<size_t>::max());
             mock_file->set_read_size_verifier([&] (size_t length) {
@@ -487,7 +486,13 @@ SEASTAR_TEST_CASE(test_fstream_slow_start) {
 
         auto make_fstream = [&] {
             struct fstream_wrapper {
+                shared_ptr<mock_read_only_file> mock_file;
                 input_stream<char> s;
+
+                fstream_wrapper(size_t file_size, const file_input_stream_options& options)
+                    : mock_file(make_shared<mock_read_only_file>(file_size))
+                    , s(make_file_input_stream(file(mock_file), 0, file_size, options))
+                { }
                 fstream_wrapper(fstream_wrapper&&) = default;
                 fstream_wrapper& operator=(fstream_wrapper&&) = default;
                 future<temporary_buffer<char>> read() {
@@ -500,7 +505,7 @@ SEASTAR_TEST_CASE(test_fstream_slow_start) {
                     s.close().get();
                 }
             };
-            return fstream_wrapper{make_file_input_stream(file(mock_file), 0, file_size, options)};
+            return fstream_wrapper(file_size, options);
         };
 
         BOOST_TEST_MESSAGE("Reading file, no history, expectiong a slow start");
