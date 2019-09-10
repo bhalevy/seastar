@@ -196,7 +196,8 @@ SEASTAR_TEST_CASE(test_fstream_unaligned) {
                 return f.size().then([] (size_t size) {
                     // assert that file was indeed truncated to the amount of bytes written.
                     BOOST_REQUIRE(size == 40);
-                    return make_ready_future<>();
+                }).finally([f = std::move(f)] () mutable {
+                    return f.close().then([f] {});
                 });
             });
         }).then([] {
