@@ -197,7 +197,9 @@ SEASTAR_TEST_CASE(test_fstream_unaligned) {
                     // assert that file was indeed truncated to the amount of bytes written.
                     BOOST_REQUIRE(size == 40);
                     return make_ready_future<>();
-                });
+                }).then([f] () mutable {
+                    return f.close();
+                }).finally([f] {});
             });
         }).then([] {
             return open_file_dma("testfile.tmp", open_flags::ro);
