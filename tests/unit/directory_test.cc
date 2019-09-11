@@ -76,9 +76,11 @@ int main(int ac, char** av) {
     };
     return app_template().run(ac, av, [] {
         return engine().open_directory(".").then([] (file f) {
-            return do_with(lister(std::move(f)), [] (lister& l) {
-              return l.done().then([] {
-                  return 0;
+            return do_with(lister(f), [f] (lister& l) {
+              return l.done().finally([f = std::move(f)] () mutable {
+                  return f.close().then([f] {
+                      return 0;
+                  });
               });
            });
         });
