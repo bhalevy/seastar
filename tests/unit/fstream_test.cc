@@ -89,7 +89,7 @@ SEASTAR_TEST_CASE(test_fstream) {
                  * 00002ff0  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 5d  |...............]|
                  * 00003000
                  */
-                auto r = make_shared<reader>(std::move(f));
+                auto r = make_shared<reader>(f);
                 return r->in.read_exactly(4096 + 8192).then([r] (temporary_buffer<char> buf) {
                     auto p = buf.get();
                     BOOST_REQUIRE(p[0] == '[' && p[1] == 'A' && p[4095] == ']');
@@ -97,7 +97,9 @@ SEASTAR_TEST_CASE(test_fstream) {
                     return make_ready_future<>();
                 }).then([r] {
                     return r->in.close();
-                }).finally([r] {});
+                }).then([f] () mutable {
+                    return f.close();
+                }).finally([r, f] {});
             }).finally([sem] () {
                 sem->signal();
             });
@@ -126,7 +128,7 @@ SEASTAR_TEST_CASE(test_consume_skip_bytes) {
          * 00004000
          */
         f = open_file_dma("testfile.tmp", open_flags::ro).get0();
-        auto r = make_lw_shared<reader>(std::move(f), file_input_stream_options{512});
+        auto r = make_lw_shared<reader>(f, file_input_stream_options{512});
         struct consumer {
             uint64_t _count = 0;
             using consumption_result_type = typename input_stream<char>::consumption_result_type;
@@ -171,6 +173,7 @@ SEASTAR_TEST_CASE(test_consume_skip_bytes) {
         };
         r->in.consume(consumer{}).get();
         r->in.close().get();
+        f.close().get();
     });
 }
 
@@ -203,14 +206,16 @@ SEASTAR_TEST_CASE(test_fstream_unaligned) {
         }).then([] {
             return open_file_dma("testfile.tmp", open_flags::ro);
         }).then([] (file f) {
-            auto r = make_shared<reader>(std::move(f));
+            auto r = make_shared<reader>(f);
             return r->in.read_exactly(40).then([r] (temporary_buffer<char> buf) {
                 auto p = buf.get();
                 BOOST_REQUIRE(p[0] == '[' && p[1] == 'A' && p[39] == ']');
                 return make_ready_future<>();
             }).then([r] {
                 return r->in.close();
-            }).finally([r] {});
+            }).then([f] () mutable {
+                return f.close();
+            }).finally([r, f] {});
         }).finally([sem] () {
             sem->signal();
         });
