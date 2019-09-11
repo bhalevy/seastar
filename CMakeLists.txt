@@ -267,6 +267,10 @@ option (Seastar_UNUSED_RESULT_ERROR
   "Make [[nodiscard]] violations an error (instead of a warning)."
   OFF)
 
+option (Seastar_ASSERT_CLOSE_FILE
+  "Assert that files are closed when destructed (instead of logging a warning)."
+  OFF)
+
 # When Seastar is embedded with `add_subdirectory`, disable the non-library targets.
 if (NOT (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR))
   set (Seastar_APPS OFF)
@@ -859,6 +863,10 @@ if (ErrorUnused_FOUND)
     target_compile_options (seastar
       PUBLIC -Wno-error=unused-result)
   endif ()
+endif ()
+
+if (Seastar_ASSERT_CLOSE_FILE)
+  list (APPEND Seastar_PRIVATE_COMPILE_DEFINITIONS SEASTAR_ASSERT_CLOSE_FILE)
 endif ()
 
 if ((CMAKE_BUILD_TYPE STREQUAL "Debug") OR (CMAKE_BUILD_TYPE STREQUAL "Sanitize"))
