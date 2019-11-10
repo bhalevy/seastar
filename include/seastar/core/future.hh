@@ -461,6 +461,7 @@ protected:
     __attribute__((always_inline))
     void make_ready() noexcept;
 
+public:
     void set_exception(std::exception_ptr&& ex) noexcept {
         if (_state) {
             _state->set_exception(std::move(ex));
@@ -505,8 +506,9 @@ protected:
     }
     static constexpr bool copy_noexcept = future_state<T...>::copy_noexcept;
 public:
+    promise_base_with_type() noexcept : promise_base(nullptr) { }
     promise_base_with_type(future_state_base* state) noexcept : promise_base(state) { }
-    promise_base_with_type(future<T...>* future) noexcept : promise_base(future, &future->_state) { }
+    promise_base_with_type(future<T...>& future) noexcept : promise_base(&future, &future._state) { }
     promise_base_with_type(promise_base_with_type&& x) noexcept : promise_base(std::move(x)) { }
     promise_base_with_type(const promise_base_with_type&) = delete;
     promise_base_with_type& operator=(promise_base_with_type&& x) noexcept {
@@ -515,6 +517,8 @@ public:
         return *this;
     }
     void operator=(const promise_base_with_type&) = delete;
+
+    future<T...> get_future() noexcept;
 
     void set_urgent_state(future_state<T...>&& state) noexcept {
         if (_state) {
@@ -530,6 +534,8 @@ public:
             make_ready<urgent::no>();
         }
     }
+
+    using internal::promise_base::set_exception;
 
 #if SEASTAR_COROUTINES_TS
     void set_coroutine(future_state<T...>& state, task& coroutine) noexcept {
@@ -877,6 +883,7 @@ private:
     future(future_for_get_promise_marker m) { }
 
     future(promise<T...>* pr) noexcept : future_base(pr, &_state), _state(std::move(pr->_local_state)) { }
+    future(internal::promise_base* pr) noexcept : future_base(pr, &_state) { }
     template <typename... A>
     future(ready_future_marker m, A&&... a) : _state(m, std::forward<A>(a)...) { }
     future(exception_future_marker m, std::exception_ptr ex) noexcept : _state(m, std::move(ex)) { }
@@ -885,10 +892,14 @@ private:
             : _state(std::move(state)) {
         this->check_deprecation();
     }
+
+public:
     promise_base_with_type<T...> get_promise() noexcept {
         assert(!_promise);
-        return promise_base_with_type<T...>(this);
+        return promise_base_with_type<T...>(*this);
     }
+
+private:
     promise_base_with_type<T...>* detach_promise() {
         return static_cast<promise_base_with_type<T...>*>(future_base::detach_promise());
     }
@@ -949,6 +960,7 @@ public:
     using value_type = std::tuple<T...>;
     /// \brief The data type carried by the future.
     using promise_type = promise<T...>;
+    using promise_base_type = promise_base_with_type<T...>;
     /// \brief Moves the future into a new object.
     [[gnu::always_inline]]
     future(future&& x) noexcept : future_base(std::move(x), &_state), _state(std::move(x._state)) { }
@@ -959,6 +971,11 @@ public:
         return *this;
     }
     void operator=(const future&) = delete;
+
+    static future for_promise() noexcept {
+        return future(future_for_get_promise_marker{});
+    }
+
     /// \brief gets the value returned by the computation
     ///
     /// Requires that the future be available.  If the value
@@ -1158,6 +1175,7 @@ private:
         return fut;
     }
 
+public:
     void forward_to(promise_base_with_type<T...>&& pr) noexcept {
         if (_state.available()) {
             pr.set_urgent_state(std::move(_state));
@@ -1166,7 +1184,6 @@ private:
         }
     }
 
-public:
     /// \brief Satisfy some \ref promise object with this future as a result.
     ///
     /// Arranges so that when this future is resolve, it will be used to
@@ -1384,7 +1401,16 @@ private:
 
 inline internal::promise_base::promise_base(future_base* future, future_state_base* state) noexcept
     : _future(future), _state(state) {
+    assert(!_future->_promise);
     _future->_promise = this;
+}
+
+template <typename... T>
+inline
+future<T...>
+promise_base_with_type<T...>::get_future() noexcept {
+    assert(!this->_future && !this->_state && !this->_task);
+    return future<T...>(this);
 }
 
 template <typename... T>
