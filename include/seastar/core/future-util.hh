@@ -112,7 +112,7 @@ iterator_range_estimate_vector_capacity(Iterator begin, Iterator end, std::forwa
 
 class parallel_for_each_state final : private continuation_base<> {
     std::vector<future<>> _incomplete;
-    promise<> _result;
+    promise_base_with_type<> _result;
     // use optional<> to avoid out-of-line constructor
     compat::optional<std::exception_ptr> _ex;
 private:
