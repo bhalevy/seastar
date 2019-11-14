@@ -387,14 +387,14 @@ namespace internal {
 template <typename AsyncAction, typename T>
 class repeat_until_value_state final : public continuation_base<compat::optional<T>> {
     using futurator = futurize<std::result_of_t<AsyncAction()>>;
-    promise<T> _promise;
+    promise_base_with_type<T> _promise;
     AsyncAction _action;
 public:
     explicit repeat_until_value_state(AsyncAction action) : _action(std::move(action)) {}
     repeat_until_value_state(compat::optional<T> st, AsyncAction action) : repeat_until_value_state(std::move(action)) {
         this->_state.set(std::make_tuple(std::move(st)));
     }
-    future<T> get_future() { return _promise.get_future2(); }
+    future<T> get_future() { return _promise.get_future(); }
     virtual void run_and_dispose() noexcept override {
         std::unique_ptr<repeat_until_value_state> zis{this};
         if (this->_state.failed()) {
