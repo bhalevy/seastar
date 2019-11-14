@@ -1186,8 +1186,8 @@ future<T...> with_timeout(std::chrono::time_point<Clock, Duration> timeout, futu
     if (f.available()) {
         return f;
     }
-    auto pr = std::make_unique<promise<T...>>();
-    auto result = pr->get_future2();
+    auto result = future<T...>::for_promise();
+    auto pr = std::make_unique<promise_base_with_type<T...>>(result);
     timer<Clock> timer([&pr = *pr] {
         pr.set_exception(std::make_exception_ptr(ExceptionFactory::timeout()));
     });
