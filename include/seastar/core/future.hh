@@ -115,10 +115,10 @@ struct broken_promise : std::logic_error {
     broken_promise();
 };
 
-namespace internal {
 template <class... T>
 class promise_base_with_type;
 
+namespace internal {
 // It doesn't seem to be possible to use std::tuple_element_t with an empty tuple. There is an static_assert in it that
 // fails the build even if it is in the non enabled side of std::conditional.
 template <typename... T>
@@ -410,7 +410,7 @@ public:
     void set_state(future_state<T...>&& state) {
         _state = std::move(state);
     }
-    friend class internal::promise_base_with_type<T...>;
+    friend class promise_base_with_type<T...>;
     friend class promise<T...>;
     friend class future<T...>;
 };
@@ -489,6 +489,7 @@ protected:
     friend class future_base;
     template <typename... U> friend class seastar::future;
 };
+}
 
 /// \brief A promise with type but no local data.
 ///
@@ -553,7 +554,6 @@ private:
 
     friend struct seastar::future_state<T...>;
 };
-}
 /// \endcond
 
 /// \brief promise - allows a future value to be made available at a later time.
@@ -562,14 +562,14 @@ private:
 ///           A list with two or more types is deprecated; use
 ///           \c promise<std::tuple<T...>> instead.
 template <typename... T>
-class promise : private internal::promise_base_with_type<T...> {
+class promise : private promise_base_with_type<T...> {
     future_state<T...> _local_state;
 
 public:
     /// \brief Constructs an empty \c promise.
     ///
     /// Creates promise with no associated future yet (see get_future()).
-    promise() noexcept : internal::promise_base_with_type<T...>(&_local_state) {}
+    promise() noexcept : promise_base_with_type<T...>(&_local_state) {}
 
     /// \brief Moves a \c promise object.
     promise(promise&& x) noexcept;
@@ -602,7 +602,7 @@ public:
     /// pr.set_value(std::tuple<int, double>(42, 43.0))
     template <typename... A>
     void set_value(A&&... a) {
-        internal::promise_base_with_type<T...>::set_value(std::forward<A>(a)...);
+        promise_base_with_type<T...>::set_value(std::forward<A>(a)...);
     }
 
     /// \brief Marks the promise as failed
@@ -626,7 +626,7 @@ public:
         internal::promise_base::set_exception(std::forward<Exception>(e));
     }
 
-    using internal::promise_base_with_type<T...>::set_urgent_state;
+    using promise_base_with_type<T...>::set_urgent_state;
 
     template <typename... U>
     friend class future;
@@ -885,12 +885,12 @@ private:
             : _state(std::move(state)) {
         this->check_deprecation();
     }
-    internal::promise_base_with_type<T...> get_promise() noexcept {
+    promise_base_with_type<T...> get_promise() noexcept {
         assert(!_promise);
-        return internal::promise_base_with_type<T...>(this);
+        return promise_base_with_type<T...>(this);
     }
-    internal::promise_base_with_type<T...>* detach_promise() {
-        return static_cast<internal::promise_base_with_type<T...>*>(future_base::detach_promise());
+    promise_base_with_type<T...>* detach_promise() {
+        return static_cast<promise_base_with_type<T...>*>(future_base::detach_promise());
     }
     template <typename Func>
     void schedule(Func&& func) {
@@ -1158,7 +1158,7 @@ private:
         return fut;
     }
 
-    void forward_to(internal::promise_base_with_type<T...>&& pr) noexcept {
+    void forward_to(promise_base_with_type<T...>&& pr) noexcept {
         if (_state.available()) {
             pr.set_urgent_state(std::move(_state));
         } else {
@@ -1370,7 +1370,7 @@ private:
     template <typename... U>
     friend class promise;
     template <typename... U>
-    friend class internal::promise_base_with_type;
+    friend class promise_base_with_type;
     template <typename... U, typename... A>
     friend future<U...> make_ready_future(A&&... value);
     template <typename... U>
@@ -1410,7 +1410,7 @@ void internal::promise_base::make_ready() noexcept {
 
 template <typename... T>
 inline
-promise<T...>::promise(promise&& x) noexcept : internal::promise_base_with_type<T...>(std::move(x)) {
+promise<T...>::promise(promise&& x) noexcept : promise_base_with_type<T...>(std::move(x)) {
     if (this->_state == &x._local_state) {
         this->_state = &_local_state;
         _local_state = std::move(x._local_state);
