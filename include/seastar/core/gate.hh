@@ -46,7 +46,7 @@ public:
 /// requests have completed.  The \c gate class provides a solution.
 class gate {
     size_t _count = 0;
-    compat::optional<promise<>> _stopped;
+    compat::optional<promise_base_with_type<>> _stopped;
 public:
     /// Registers an in-progress request.
     ///
@@ -89,11 +89,12 @@ public:
     /// made ready.
     future<> close() {
         assert(!_stopped && "seastar::gate::close() cannot be called more than once");
-        _stopped = compat::make_optional(promise<>());
+        auto fut = future<>::for_promise();
+        _stopped = fut.get_promise();
         if (!_count) {
             _stopped->set_value();
         }
-        return _stopped->get_future2();
+        return fut;
     }
 
     /// Returns a current number of registered in-progress requests.
