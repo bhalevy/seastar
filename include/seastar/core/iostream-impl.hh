@@ -77,7 +77,7 @@ output_stream<CharType>::zero_copy_put(net::packet p) {
     _flush = false;
     if (_flushing) {
         // flush in progress, wait for it to end before continuing
-        return _in_batch.value().get_future2().then([this, p = std::move(p)] () mutable {
+        return _in_batch.value().get_future().then([this, p = std::move(p)] () mutable {
             return _fd.put(std::move(p));
         });
     } else {
@@ -409,7 +409,7 @@ output_stream<CharType>::flush() {
             _flush = true;
             if (!_in_batch) {
                 add_to_flush_poller(this);
-                _in_batch = promise<>();
+                _in_batch = promise_base_with_type<>();
             }
         }
     }
@@ -425,7 +425,7 @@ output_stream<CharType>::put(temporary_buffer<CharType> buf) {
     _flush = false;
     if (_flushing) {
         // flush in progress, wait for it to end before continuing
-        return _in_batch.value().get_future2().then([this, buf = std::move(buf)] () mutable {
+        return _in_batch.value().get_future().then([this, buf = std::move(buf)] () mutable {
             return _fd.put(std::move(buf));
         });
     } else {
@@ -476,7 +476,7 @@ future<>
 output_stream<CharType>::close() {
     return flush().finally([this] {
         if (_in_batch) {
-            return _in_batch.value().get_future2();
+            return _in_batch.value().get_future();
         } else {
             return make_ready_future();
         }
