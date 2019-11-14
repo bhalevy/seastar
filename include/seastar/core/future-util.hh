@@ -492,12 +492,12 @@ namespace internal {
 
 template <typename StopCondition, typename AsyncAction>
 class do_until_state final : public continuation_base<> {
-    promise<> _promise;
+    promise_base_with_type<> _promise;
     StopCondition _stop;
     AsyncAction _action;
 public:
     explicit do_until_state(StopCondition stop, AsyncAction action) : _stop(std::move(stop)), _action(std::move(action)) {}
-    future<> get_future() { return _promise.get_future2(); }
+    future<> get_future() { return _promise.get_future(); }
     virtual void run_and_dispose() noexcept override {
         std::unique_ptr<do_until_state> zis{this};
         if (_state.available()) {
