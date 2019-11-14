@@ -270,14 +270,14 @@ namespace internal {
 template <typename AsyncAction>
 class repeater final : public continuation_base<stop_iteration> {
     using futurator = futurize<std::result_of_t<AsyncAction()>>;
-    promise<> _promise;
+    promise_base_with_type<> _promise;
     AsyncAction _action;
 public:
     explicit repeater(AsyncAction action) : _action(std::move(action)) {}
     repeater(stop_iteration si, AsyncAction action) : repeater(std::move(action)) {
         _state.set(std::make_tuple(si));
     }
-    future<> get_future() { return _promise.get_future2(); }
+    future<> get_future() { return _promise.get_future(); }
     virtual void run_and_dispose() noexcept override {
         std::unique_ptr<repeater> zis{this};
         if (_state.failed()) {
