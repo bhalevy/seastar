@@ -215,7 +215,7 @@ class concrete_execution_stage final : public execution_stage {
     static constexpr size_t max_queue_length = 1024;
 
     using return_type = futurize_t<ReturnType>;
-    using promise_type = typename return_type::promise_type;
+    using promise_type = typename return_type::promise_base_type;
     using input_type = typename tuple_map_types<internal::wrap_for_es, args_tuple>::type;
 
     struct work_item {
@@ -293,7 +293,7 @@ public:
         _queue.emplace_back(std::move(args)...);
         _empty = false;
         _stats.function_calls_enqueued++;
-        auto f = _queue.back()._ready.get_future2();
+        auto f = _queue.back()._ready.get_future();
         flush();
         return f;
     }
