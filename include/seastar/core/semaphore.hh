@@ -127,9 +127,9 @@ private:
     ssize_t _count;
     std::exception_ptr _ex;
     struct entry {
-        promise<> pr;
+        promise_base_with_type<> pr;
         size_t nr;
-        entry(promise<>&& pr_, size_t nr_) : pr(std::move(pr_)), nr(nr_) {}
+        entry(promise_base_with_type<>&& pr_, size_t nr_) : pr(std::move(pr_)), nr(nr_) {}
     };
     struct expiry_handler : private exception_factory {
         void operator()(entry& e) noexcept {
@@ -190,9 +190,8 @@ public:
         if (_ex) {
             return make_exception_future(_ex);
         }
-        promise<> pr;
-        auto fut = pr.get_future2();
-        _wait_list.push_back(entry(std::move(pr), nr), timeout);
+        auto fut = future<>::for_promise();
+        _wait_list.push_back(entry(fut.get_promise(), nr), timeout);
         return fut;
     }
 
