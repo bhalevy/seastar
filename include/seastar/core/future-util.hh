@@ -657,7 +657,7 @@ namespace internal {
 template<typename... Futures>
 struct identity_futures_tuple {
     using future_type = future<std::tuple<Futures...>>;
-    using promise_type = typename future_type::promise_type;
+    using promise_type = typename future_type::promise_base_type;
 
     static void set_promise(promise_type& p, std::tuple<Futures...> futures) {
         p.set_value(std::move(futures));
@@ -800,7 +800,7 @@ public:
             memory::disable_failure_guard dfg;
             return new when_all_state(std::move(futures)...);
         }();
-        auto ret = state->p.get_future2();
+        auto ret = state->p.get_future();
         state->do_wait_all();
         return ret;
     }
@@ -1262,7 +1262,7 @@ class extract_values_from_futures_tuple {
     }
 public:
     using future_type = decltype(transform(std::declval<std::tuple<Futures...>>()));
-    using promise_type = typename future_type::promise_type;
+    using promise_type = typename future_type::promise_base_type;
 
     static void set_promise(promise_type& p, std::tuple<Futures...> tuple) {
         transform(std::move(tuple)).forward_to(std::move(p));
