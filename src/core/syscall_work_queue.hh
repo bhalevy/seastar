@@ -52,7 +52,7 @@ class syscall_work_queue {
         work_item_returning(noncopyable_function<T ()> func) : _func(std::move(func)) {}
         virtual void process() override { _result = this->_func(); }
         virtual void complete() override { _promise.set_value(std::move(*_result)); }
-        future<T> get_future() { return _promise.get_future(); }
+        future<T> get_future() { return _promise.get_future2(); }
     };
 public:
     syscall_work_queue();

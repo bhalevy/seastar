@@ -593,7 +593,7 @@ public:
     /// both are moved.  When \c set_value() or \c set_exception() are called
     /// on the promise, the future will be become ready, and if a continuation
     /// was attached to the future, it will run.
-    future<T...> get_future() noexcept;
+    future<T...> get_future2() noexcept;
 
     /// \brief Sets the promises value
     ///
@@ -1416,7 +1416,7 @@ promise_base_with_type<T...>::get_future() noexcept {
 template <typename... T>
 inline
 future<T...>
-promise<T...>::get_future() noexcept {
+promise<T...>::get_future2() noexcept {
     assert(!this->_future && this->_state && !this->_task);
     return future<T...>(this);
 }

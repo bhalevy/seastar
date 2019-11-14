@@ -637,7 +637,7 @@ sharded<Service>::stop() {
         return internal::sharded_parallel_for_each(_instances.size(), [this] (unsigned c) {
             return smp::submit_to(c, [this] {
                 _instances[engine().cpu_id()].service = nullptr;
-                return _instances[engine().cpu_id()].freed.get_future();
+                return _instances[engine().cpu_id()].freed.get_future2();
             });
         });
     }).then([this] {

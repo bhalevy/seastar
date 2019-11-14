@@ -146,7 +146,7 @@ private:
         future_type get_future(time_point timeout = time_point::max()) {
             if (!_original_future.available()) {
                 promise_type p;
-                auto f = p.get_future();
+                auto f = p.get_future2();
                 if (_peers.empty()) {
                     // _original_future's result is forwarded to each peer.
                     (void)_original_future.then_wrapped([s = this->shared_from_this()] (future_type&& f) mutable {
@@ -245,7 +245,7 @@ public:
     shared_promise(const shared_promise&) = delete;
     shared_promise(shared_promise&&) = default;
     shared_promise& operator=(shared_promise&&) = default;
-    shared_promise() : _promise(), _shared_future(_promise.get_future()) {
+    shared_promise() : _promise(), _shared_future(_promise.get_future2()) {
     }
 
     /// \brief Gets new future associated with this promise.

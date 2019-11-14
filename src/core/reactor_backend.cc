@@ -223,7 +223,7 @@ future<> reactor_backend_aio::poll(pollable_fd_state& fd, promise<> pollable_fd_
         *pr = promise<>();
         set_user_data(*iocb, pr);
         _polling_io.queue(iocb);
-        return pr->get_future();
+        return pr->get_future2();
     } catch (...) {
         return make_exception_future<>(std::current_exception());
     }
@@ -441,7 +441,7 @@ future<> reactor_backend_epoll::get_epoll_future(pollable_fd_state& pfd,
         engine().start_epoll();
     }
     pfd.*pr = promise<>();
-    return (pfd.*pr).get_future();
+    return (pfd.*pr).get_future2();
 }
 
 future<> reactor_backend_epoll::readable(pollable_fd_state& fd) {

@@ -165,7 +165,7 @@ public:
         if (engine().cpu_id() == 0) {
             create_native_net_device(opts);
         }
-        return ready_promise.get_future();
+        return ready_promise.get_future2();
     }
     virtual bool has_per_core_namespace() override { return true; };
     void arp_learn(ethernet_address l2, ipv4_address l3) {
@@ -287,7 +287,7 @@ future<> native_network_stack::initialize() {
             // FIXME: future is discarded
             (void)run_dhcp();
         }
-        return _config.get_future();
+        return _config.get_future2();
     });
 }
 

@@ -206,7 +206,7 @@ class smp_message_queue {
                 _promise.set_exception(std::move(_ex));
             }
         }
-        future_type get_future() { return _promise.get_future(); }
+        future_type get_future() { return _promise.get_future2(); }
     };
     union tx_side {
         tx_side() {}

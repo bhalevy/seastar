@@ -64,7 +64,7 @@ future<> sleep_abortable(typename Clock::duration dur, abort_source& as) {
     };
     //FIXME: Use do_with() after #373
     auto s = std::make_unique<sleeper>(dur, as);
-    auto fut = s->done.get_future();
+    auto fut = s->done.get_future2();
     return fut.finally([s = std::move(s)] { });
 }
 

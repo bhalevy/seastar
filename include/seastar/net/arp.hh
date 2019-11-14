@@ -236,7 +236,7 @@ arp_for<L3>::lookup(const l3addr& paddr) {
     }
 
     res._waiters.emplace_back();
-    return res._waiters.back().get_future();
+    return res._waiters.back().get_future2();
 }
 
 template <typename L3>

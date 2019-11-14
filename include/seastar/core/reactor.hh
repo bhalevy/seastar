@@ -535,7 +535,7 @@ public:
 
     int run();
     void exit(int ret);
-    future<> when_started() { return _start_promise.get_future(); }
+    future<> when_started() { return _start_promise.get_future2(); }
     // The function waits for timeout period for reactor stop notification
     // which happens on termination signals or call for exit().
     template <typename Rep, typename Period>

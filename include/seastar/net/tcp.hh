@@ -464,7 +464,7 @@ private:
             }
         }
         future<> connect_done() {
-            return _connect_done.get_future();
+            return _connect_done.get_future2();
         }
         tcp_state& state() {
             return _state;
@@ -1725,7 +1725,7 @@ future<> tcp<InetTraits>::tcb::wait_for_data() {
         return make_ready_future<>();
     }
     _rcv._data_received_promise = promise<>();
-    return _rcv._data_received_promise->get_future();
+    return _rcv._data_received_promise->get_future2();
 }
 
 template <typename InetTraits>
@@ -1744,7 +1744,7 @@ future<> tcp<InetTraits>::tcb::wait_for_all_data_acked() {
         return make_ready_future<>();
     }
     _snd._all_data_acked_promise = promise<>();
-    return _snd._all_data_acked_promise->get_future();
+    return _snd._all_data_acked_promise->get_future2();
 }
 
 template <typename InetTraits>
@@ -1781,7 +1781,7 @@ future<> tcp<InetTraits>::tcb::wait_send_available() {
         return make_ready_future<>();
     }
     _snd._send_available_promise = promise<>();
-    return _snd._send_available_promise->get_future();
+    return _snd._send_available_promise->get_future2();
 }
 
 template <typename InetTraits>

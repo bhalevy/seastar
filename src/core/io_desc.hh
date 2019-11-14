@@ -39,7 +39,7 @@ public:
     }
 
     future<seastar::internal::linux_abi::io_event> get_future() {
-        return _pr.get_future();
+        return _pr.get_future2();
     }
 };
 

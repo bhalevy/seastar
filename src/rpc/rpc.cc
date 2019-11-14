@@ -209,7 +209,7 @@ namespace rpc {
               _outgoing_queue.back().pcancel = cancel;
           }
           _outgoing_queue_cond.signal();
-          return _outgoing_queue.back().p->get_future();
+          return _outgoing_queue.back().p->get_future2();
       } else {
           return make_exception_future<>(closed_error());
       }
@@ -224,7 +224,7 @@ namespace rpc {
 
   future<> connection::stop() {
       abort();
-      return _stopped.get_future();
+      return _stopped.get_future2();
   }
 
   template<typename Connection>
@@ -427,7 +427,7 @@ namespace rpc {
       auto f = make_ready_future<>();
       if (!error()) {
           promise<bool> p;
-          _sink_closed_future = p.get_future();
+          _sink_closed_future = p.get_future2();
           // stop_send_loop(), which also calls _write_buf.close(), and this code can run in parallel.
           // Use _sink_closed_future to serialize them and skip second call to close()
           f = _write_buf.close().finally([p = std::move(p)] () mutable { p.set_value(true);});
@@ -601,7 +601,7 @@ namespace rpc {
           _error = true;
           _socket.shutdown();
       }
-      return _stopped.get_future();
+      return _stopped.get_future2();
   }
 
   void client::abort_all_streams() {
@@ -1024,7 +1024,7 @@ future<> server::connection::send_unknown_verb_reply(compat::optional<rpc_clock_
       if (_options.streaming_domain) {
           _servers.erase(*_options.streaming_domain);
       }
-      return when_all(_ss_stopped.get_future(),
+      return when_all(_ss_stopped.get_future2(),
           parallel_for_each(_conns | boost::adaptors::map_values, [] (shared_ptr<connection> conn) {
               return conn->stop();
           }),

@@ -55,7 +55,7 @@ SEASTAR_TEST_CASE(test_accept_after_abort) {
     return do_with(seastar::api_v2::server_socket(engine().net().listen(sa, listen_options())), [] (auto& listener) {
         using ftype = future<accept_result>;
         promise<ftype> p;
-        future<ftype> done = p.get_future();
+        future<ftype> done = p.get_future2();
         auto f = listener.accept().then_wrapped([&listener, p = std::move(p)] (auto f) mutable {
             f.ignore_ready_future();
             p.set_value(listener.accept());

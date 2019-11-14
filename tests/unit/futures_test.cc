@@ -60,7 +60,7 @@ SEASTAR_TEST_CASE(test_self_move) {
     promise<std::unique_ptr<int>> p2;
     p2.set_value(std::make_unique<int>(42));
     std::swap(p2, p2);
-    BOOST_REQUIRE_EQUAL(*p2.get_future().get0(), 42);
+    BOOST_REQUIRE_EQUAL(*p2.get_future2().get0(), 42);
 
     auto  f1 = make_ready_future<std::unique_ptr<int>>(std::make_unique<int>(42));
     f1 = std::move(f1); // no crash, but the value of f1 is not defined.
@@ -132,7 +132,7 @@ SEASTAR_TEST_CASE(test_finally_is_called_on_success_and_failure) {
 SEASTAR_TEST_CASE(test_get_on_promise) {
     auto p = promise<uint32_t>();
     p.set_value(10);
-    BOOST_REQUIRE_EQUAL(10u, p.get_future().get0());
+    BOOST_REQUIRE_EQUAL(10u, p.get_future2().get0());
     return make_ready_future();
 }
 
@@ -142,7 +142,7 @@ SEASTAR_TEST_CASE(test_finally_waits_for_inner) {
 
     auto f = make_ready_future().then([] {
     }).finally([=] {
-        return p->get_future().then([=] {
+        return p->get_future2().then([=] {
             *finally = true;
         });
     }).then([=] {
@@ -158,7 +158,7 @@ SEASTAR_TEST_CASE(test_finally_is_called_on_success_and_failure__not_ready_to_ar
     auto finally2 = make_shared<bool>();
 
     promise<> p;
-    auto f = p.get_future().finally([=] {
+    auto f = p.get_future2().finally([=] {
         *finally1 = true;
     }).then([] {
         throw std::runtime_error("");
@@ -178,7 +178,7 @@ SEASTAR_TEST_CASE(test_finally_is_called_on_success_and_failure__not_ready_to_ar
 
 SEASTAR_TEST_CASE(test_exception_from_finally_fails_the_target) {
     promise<> pr;
-    auto f = pr.get_future().finally([=] {
+    auto f = pr.get_future2().finally([=] {
         throw std::runtime_error("");
     }).then([] {
         BOOST_REQUIRE(false);
@@ -218,7 +218,7 @@ SEASTAR_TEST_CASE(test_exception_thrown_from_then_wrapped_causes_future_to_fail)
 SEASTAR_TEST_CASE(test_exception_thrown_from_then_wrapped_causes_future_to_fail__async_case) {
     promise<> p;
 
-    auto f = p.get_future().then_wrapped([] (auto&& f) {
+    auto f = p.get_future2().then_wrapped([] (auto&& f) {
         throw std::runtime_error("");
     }).then_wrapped([] (auto&& f) {
         try {
@@ -236,7 +236,7 @@ SEASTAR_TEST_CASE(test_failing_intermediate_promise_should_fail_the_master_futur
     promise<> p1;
     promise<> p2;
 
-    auto f = p1.get_future().then([f = p2.get_future()] () mutable {
+    auto f = p1.get_future2().then([f = p2.get_future2()] () mutable {
         return std::move(f);
     }).then([] {
         BOOST_REQUIRE(false);
@@ -257,8 +257,8 @@ SEASTAR_TEST_CASE(test_future_forwarding__not_ready_to_unarmed) {
     promise<> p1;
     promise<> p2;
 
-    auto f1 = p1.get_future();
-    auto f2 = p2.get_future();
+    auto f1 = p1.get_future2();
+    auto f2 = p2.get_future2();
 
     f1.forward_to(std::move(p2));
 
@@ -274,8 +274,8 @@ SEASTAR_TEST_CASE(test_future_forwarding__not_ready_to_armed) {
     promise<> p1;
     promise<> p2;
 
-    auto f1 = p1.get_future();
-    auto f2 = p2.get_future();
+    auto f1 = p1.get_future2();
+    auto f2 = p2.get_future2();
 
     auto called = f2.then([] {});
 
@@ -292,7 +292,7 @@ SEASTAR_TEST_CASE(test_future_forwarding__ready_to_unarmed) {
     promise<> p2;
 
     auto f1 = make_ready_future<>();
-    auto f2 = p2.get_future();
+    auto f2 = p2.get_future2();
 
     std::move(f1).forward_to(std::move(p2));
     BOOST_REQUIRE(f2.available());
@@ -306,7 +306,7 @@ SEASTAR_TEST_CASE(test_future_forwarding__ready_to_armed) {
     promise<> p2;
 
     auto f1 = make_ready_future<>();
-    auto f2 = p2.get_future();
+    auto f2 = p2.get_future2();
 
     auto called = std::move(f2).then([] {});
 
@@ -318,7 +318,7 @@ SEASTAR_TEST_CASE(test_future_forwarding__ready_to_armed) {
 
 static void forward_dead_unarmed_promise_with_dead_future_to(promise<>& p) {
     promise<> p2;
-    p.get_future().forward_to(std::move(p2));
+    p.get_future2().forward_to(std::move(p2));
 }
 
 SEASTAR_TEST_CASE(test_future_forwarding__ready_to_unarmed_soon_to_be_dead) {
@@ -693,14 +693,14 @@ SEASTAR_TEST_CASE(futurize_apply_void_future_ok) {
 
 SEASTAR_TEST_CASE(test_unused_shared_future_is_not_a_broken_future) {
     promise<> p;
-    shared_future<> s(p.get_future());
+    shared_future<> s(p.get_future2());
     return make_ready_future<>();
 }
 
 SEASTAR_TEST_CASE(test_shared_future_propagates_value_to_all) {
     return seastar::async([] {
         promise<shared_ptr<int>> p; // shared_ptr<> to check it deals with emptyable types
-        shared_future<shared_ptr<int>> f(p.get_future());
+        shared_future<shared_ptr<int>> f(p.get_future2());
 
         auto f1 = f.get_future();
         auto f2 = f.get_future();
@@ -724,7 +724,7 @@ void check_fails_with_expected(future<T...> f) {
 SEASTAR_TEST_CASE(test_shared_future_propagates_value_to_copies) {
     return seastar::async([] {
         promise<int> p;
-        auto sf1 = shared_future<int>(p.get_future());
+        auto sf1 = shared_future<int>(p.get_future2());
         auto sf2 = sf1;
 
         auto f1 = sf1.get_future();
@@ -740,8 +740,8 @@ SEASTAR_TEST_CASE(test_shared_future_propagates_value_to_copies) {
 SEASTAR_TEST_CASE(test_obtaining_future_from_shared_future_after_it_is_resolved) {
     promise<int> p1;
     promise<int> p2;
-    auto sf1 = shared_future<int>(p1.get_future());
-    auto sf2 = shared_future<int>(p2.get_future());
+    auto sf1 = shared_future<int>(p1.get_future2());
+    auto sf2 = shared_future<int>(p2.get_future2());
     p1.set_value(1);
     p2.set_exception(expected_exception());
     return sf2.get_future().then_wrapped([f1 = sf1.get_future()] (auto&& f) mutable {
@@ -755,7 +755,7 @@ SEASTAR_TEST_CASE(test_obtaining_future_from_shared_future_after_it_is_resolved)
 SEASTAR_TEST_CASE(test_valueless_shared_future) {
     return seastar::async([] {
         promise<> p;
-        shared_future<> f(p.get_future());
+        shared_future<> f(p.get_future2());
 
         auto f1 = f.get_future();
         auto f2 = f.get_future();
@@ -769,7 +769,7 @@ SEASTAR_TEST_CASE(test_valueless_shared_future) {
 
 SEASTAR_TEST_CASE(test_shared_future_propagates_errors_to_all) {
     promise<int> p;
-    shared_future<int> f(p.get_future());
+    shared_future<int> f(p.get_future2());
 
     auto f1 = f.get_future();
     auto f2 = f.get_future();
@@ -788,7 +788,7 @@ SEASTAR_TEST_CASE(test_ignored_future_warning) {
     // This doesn't warn:
     promise<> p;
     p.set_exception(expected_exception());
-    future<> f = p.get_future();
+    future<> f = p.get_future2();
     f.ignore_ready_future();
 
     // And by analogy, neither should this
@@ -921,7 +921,7 @@ static void check_timed_out(future<T...>&& f) {
 SEASTAR_TEST_CASE(test_with_timeout_when_it_times_out) {
     return seastar::async([] {
         promise<> pr;
-        auto f = with_timeout(manual_clock::now() + 2s, pr.get_future());
+        auto f = with_timeout(manual_clock::now() + 2s, pr.get_future2());
 
         BOOST_REQUIRE(!f.available());
 
@@ -953,7 +953,7 @@ SEASTAR_TEST_CASE(test_custom_exception_factory_in_with_timeout) {
             }
         };
         promise<> pr;
-        auto f = with_timeout<my_exception_factory>(manual_clock::now() + 1s, pr.get_future());
+        auto f = with_timeout<my_exception_factory>(manual_clock::now() + 1s, pr.get_future2());
 
         manual_clock::advance(1s);
         later().get();
@@ -966,7 +966,7 @@ SEASTAR_TEST_CASE(test_with_timeout_when_it_does_not_time_out) {
     return seastar::async([] {
         {
             promise<int> pr;
-            auto f = with_timeout(manual_clock::now() + 1s, pr.get_future());
+            auto f = with_timeout(manual_clock::now() + 1s, pr.get_future2());
 
             pr.set_value(42);
 
@@ -1122,7 +1122,7 @@ SEASTAR_THREAD_TEST_CASE(test_broken_promises) {
     compat::optional<future<>> f2;
     { // Broken after attaching a continuation
         auto p = promise<>();
-        f = p.get_future();
+        f = p.get_future2();
         f2 = f->then_wrapped([&] (future<> f3) {
             BOOST_CHECK(f3.failed());
             BOOST_CHECK_THROW(f3.get(), broken_promise);
@@ -1134,7 +1134,7 @@ SEASTAR_THREAD_TEST_CASE(test_broken_promises) {
 
     { // Broken before attaching a continuation
         auto p = promise<>();
-        f = p.get_future();
+        f = p.get_future2();
     }
     f->then_wrapped([&] (future<> f3) {
         BOOST_CHECK(f3.failed());
@@ -1145,7 +1145,7 @@ SEASTAR_THREAD_TEST_CASE(test_broken_promises) {
 
     { // Broken before suspending a thread
         auto p = promise<>();
-        f = p.get_future();
+        f = p.get_future2();
     }
     BOOST_CHECK_THROW(f->get(), broken_promise);
 }
@@ -1156,7 +1156,7 @@ SEASTAR_TEST_CASE(test_warn_on_broken_promise_with_no_future) {
     // this example functions as documentation.
     promise<> p;
     // Intentionally destroy the future
-    (void)p.get_future();
+    (void)p.get_future2();
     p.set_exception(std::runtime_error("foo"));
     return make_ready_future<>();
 }

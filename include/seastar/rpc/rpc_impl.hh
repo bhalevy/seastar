@@ -422,7 +422,7 @@ inline auto wait_for_reply(wait_type, compat::optional<rpc_clock_type::time_poin
     };
     using handler_type = typename rpc::client::template reply_handler<reply_type, decltype(lambda)>;
     auto r = std::make_unique<handler_type>(std::move(lambda));
-    auto fut = r->reply.p.get_future();
+    auto fut = r->reply.p.get_future2();
     dst.wait_for_reply(msg_id, std::move(r), timeout, cancel);
     return fut;
 }

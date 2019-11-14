@@ -71,7 +71,7 @@ public:
             return make_ready_future<>();
         }
         _waiters.emplace_back(promise<>(), false);
-        return _waiters.back().pr.get_future();
+        return _waiters.back().pr.get_future2();
     }
     /// Unlocks a \c shared_mutex after a previous call to \ref lock_shared().
     void unlock_shared() {
@@ -88,7 +88,7 @@ public:
             return make_ready_future<>();
         }
         _waiters.emplace_back(promise<>(), true);
-        return _waiters.back().pr.get_future();
+        return _waiters.back().pr.get_future2();
     }
     /// Unlocks a \c shared_mutex after a previous call to \ref lock().
     void unlock() {

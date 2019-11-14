@@ -70,7 +70,7 @@ struct timer_test {
         t4.arm(700ms);
         t5.arm(800ms);
 
-        return pr1.get_future().then([this] { return test_timer_cancelling(); });
+        return pr1.get_future2().then([this] { return test_timer_cancelling(); });
     }
 
     future<> test_timer_cancelling() {
@@ -84,7 +84,7 @@ struct timer_test {
 
         t1.set_callback([this] { OK(); pr2.set_value(); });
         t1.arm(100ms);
-        return pr2.get_future().then([&t1] { delete &t1; });
+        return pr2.get_future2().then([&t1] { delete &t1; });
     }
 };
 

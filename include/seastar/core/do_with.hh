@@ -58,7 +58,7 @@ public:
         return _held;
     }
     Future get_future() {
-        return _pr.get_future();
+        return _pr.get_future2();
     }
 };
 

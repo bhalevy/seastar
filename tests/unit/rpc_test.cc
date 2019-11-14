@@ -109,7 +109,7 @@ public:
               _socket(factory, inject_error ? &_error_injector : nullptr) {
     }
     virtual future<connected_socket> connect(socket_address sa, socket_address local, transport proto = transport::TCP) override {
-        return _connect ? _socket.connect(sa, local, proto) : _p.get_future();
+        return _connect ? _socket.connect(sa, local, proto) : _p.get_future2();
     }
     virtual void set_reuseaddr(bool reuseaddr) override {}
     virtual bool get_reuseaddr() const override { return false; };
@@ -253,7 +253,7 @@ SEASTAR_TEST_CASE(test_rpc_cancel) {
             bool rpc_executed = false;
             int good = 0;
             promise<> handler_called;
-            future<> f_handler_called = handler_called.get_future();
+            future<> f_handler_called = handler_called.get_future2();
             auto call = proto.register_handler(1, [&rpc_executed,  handler_called = std::move(handler_called)] () mutable {
                 handler_called.set_value(); rpc_executed = true; return sleep(1ms);
             });

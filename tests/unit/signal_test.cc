@@ -41,7 +41,7 @@ SEASTAR_TEST_CASE(test_sighup) {
 
         kill(getpid(), SIGHUP);
 
-        return p->get_future().then([&] {
+        return p->get_future2().then([&] {
             BOOST_REQUIRE_EQUAL(signaled, true);
         });
     });

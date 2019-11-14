@@ -252,7 +252,7 @@ int main(int ac, char** av) {
                 auto p = make_lw_shared<promise<>>();
                 auto t = make_lw_shared<timer<>>();
                 fmt::print("test7 got {:d} {:d}\n", a, b);
-                auto f = p->get_future().then([a, b, t] {
+                auto f = p->get_future2().then([a, b, t] {
                     fmt::print("test7 calc res\n");
                     return a - b;
                 });

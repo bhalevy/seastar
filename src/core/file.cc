@@ -644,7 +644,7 @@ append_challenged_posix_file_impl::read_dma(uint64_t pos, void* buffer, size_t l
             });
         }
     });
-    return pr->get_future();
+    return pr->get_future2();
 }
 
 future<size_t>
@@ -681,7 +681,7 @@ append_challenged_posix_file_impl::read_dma(uint64_t pos, std::vector<iovec> iov
             });
         }
     });
-    return pr->get_future();
+    return pr->get_future2();
 }
 
 future<size_t>
@@ -706,7 +706,7 @@ append_challenged_posix_file_impl::write_dma(uint64_t pos, const void* buffer, s
             });
         }
     });
-    return pr->get_future();
+    return pr->get_future2();
 }
 
 future<size_t>
@@ -732,7 +732,7 @@ append_challenged_posix_file_impl::write_dma(uint64_t pos, std::vector<iovec> io
             });
         }
     });
-    return pr->get_future();
+    return pr->get_future2();
 }
 
 future<>
@@ -760,7 +760,7 @@ append_challenged_posix_file_impl::flush() {
                 });
             }
         });
-        return pr->get_future();
+        return pr->get_future2();
     }
 }
 
@@ -791,7 +791,7 @@ append_challenged_posix_file_impl::truncate(uint64_t length) {
             });
         }
     });
-    return pr->get_future();
+    return pr->get_future2();
 }
 
 future<uint64_t>
@@ -804,7 +804,7 @@ append_challenged_posix_file_impl::close() noexcept {
     // Caller should have drained all pending I/O
     _closing_state = state::draining;
     process_queue();
-    return _completed.get_future().then([this] {
+    return _completed.get_future2().then([this] {
         if (_logical_size != _committed_size) {
             auto r = ::ftruncate(_fd, _logical_size);
             if (r != -1) {

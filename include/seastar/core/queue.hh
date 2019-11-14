@@ -250,7 +250,7 @@ future<> queue<T>::not_empty() {
         return make_ready_future<>();
     } else {
         _not_empty = promise<>();
-        return _not_empty->get_future();
+        return _not_empty->get_future2();
     }
 }
 
@@ -264,7 +264,7 @@ future<> queue<T>::not_full() {
         return make_ready_future<>();
     } else {
         _not_full = promise<>();
-        return _not_full->get_future();
+        return _not_full->get_future2();
     }
 }
 

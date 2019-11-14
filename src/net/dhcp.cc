@@ -369,7 +369,7 @@ public:
             (void)send_discover(l.ip);
         });
         _retry_timer.arm_periodic(1s);
-        return _result.get_future();
+        return _result.get_future2();
     }
 
     template<typename T>

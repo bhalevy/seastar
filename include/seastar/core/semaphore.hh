@@ -191,7 +191,7 @@ public:
             return make_exception_future(_ex);
         }
         promise<> pr;
-        auto fut = pr.get_future();
+        auto fut = pr.get_future2();
         _wait_list.push_back(entry(std::move(pr), nr), timeout);
         return fut;
     }

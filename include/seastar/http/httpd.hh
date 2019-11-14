@@ -232,7 +232,7 @@ class http_server {
     timer<> _date_format_timer { [this] {_date = http_date();} };
     bool _stopping = false;
     promise<> _all_connections_stopped;
-    future<> _stopped = _all_connections_stopped.get_future();
+    future<> _stopped = _all_connections_stopped.get_future2();
 private:
     void maybe_idle() {
         if (_stopping && !_connections_being_accepted && !_current_connections) {

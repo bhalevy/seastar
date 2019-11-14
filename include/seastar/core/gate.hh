@@ -93,7 +93,7 @@ public:
         if (!_count) {
             _stopped->set_value();
         }
-        return _stopped->get_future();
+        return _stopped->get_future2();
     }
 
     /// Returns a current number of registered in-progress requests.

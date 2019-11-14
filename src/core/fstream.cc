@@ -217,7 +217,7 @@ public:
         if (!_reads_in_progress) {
             _done->set_value();
         }
-        return _done->get_future().then([this] {
+        return _done->get_future2().then([this] {
             uint64_t dropped = 0;
             for (auto&& c : _read_buffers) {
                 _reactor._io_stats.fstream_read_aheads_discarded += 1;
