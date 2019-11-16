@@ -1399,6 +1399,21 @@ private:
     /// \endcond
 };
 
+template <typename... T>
+class promise_future_pair {
+    // FIXME: optimize. We can store just the promise_base_with_type and a future_state
+    promise_base_with_type<T...> pr;
+    future<T...> fut;
+
+public:
+    promise_future_pair() : fut(pr.get_future()) {}
+    future<T...> get_future() noexcept { return std::move(fut); }
+    template <typename... A>
+    void set_value(A&&... a) {
+        pr.set_value(std::forward<A>(a)...);
+    }
+};
+
 inline internal::promise_base::promise_base(future_base* future, future_state_base* state) noexcept
     : _future(future), _state(state) {
     assert(!_future->_promise);

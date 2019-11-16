@@ -56,7 +56,7 @@ template <typename... T>
 class stream {
     subscription<T...>* _sub = nullptr;
     promise<> _done;
-    promise<> _ready;
+    promise_future_pair<> _ready;
 public:
     using next_fn = std::function<future<> (T...)>;
     stream() = default;
@@ -153,7 +153,7 @@ template <typename... T>
 inline
 future<>
 stream<T...>::started() {
-    return _ready.get_future2();
+    return _ready.get_future();
 }
 
 template <typename... T>
