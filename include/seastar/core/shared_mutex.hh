@@ -50,8 +50,8 @@ class shared_mutex {
     unsigned _readers = 0;
     bool _writer = false;
     struct waiter {
-        waiter(promise<>&& pr, bool for_write) : pr(std::move(pr)), for_write(for_write) {}
-        promise<> pr;
+        waiter(promise_base_with_type<>&& pr, bool for_write) : pr(std::move(pr)), for_write(for_write) {}
+        promise_base_with_type<> pr;
         bool for_write;
     };
     circular_buffer<waiter> _waiters;
@@ -70,8 +70,9 @@ public:
             ++_readers;
             return make_ready_future<>();
         }
-        _waiters.emplace_back(promise<>(), false);
-        return _waiters.back().pr.get_future2();
+        auto fut = future<>::for_promise();
+        _waiters.emplace_back(fut.get_promise(), false);
+        return fut;
     }
     /// Unlocks a \c shared_mutex after a previous call to \ref lock_shared().
     void unlock_shared() {
@@ -87,8 +88,9 @@ public:
             _writer = true;
             return make_ready_future<>();
         }
-        _waiters.emplace_back(promise<>(), true);
-        return _waiters.back().pr.get_future2();
+        auto fut = future<>::for_promise();
+        _waiters.emplace_back(fut.get_promise(), true);
+        return fut;
     }
     /// Unlocks a \c shared_mutex after a previous call to \ref lock().
     void unlock() {
