@@ -233,19 +233,20 @@ public:
     using shared_future_type = shared_future<T...>;
     using future_type = typename shared_future_type::future_type;
     using promise_type = typename shared_future_type::promise_type;
+    using promise_base_type = typename future_type::promise_base_type;
     using clock = typename shared_future_type::clock;
     using time_point = typename shared_future_type::time_point;
     using value_tuple_type = typename shared_future_type::value_tuple_type;
     using future_state_type = typename shared_future_type::future_state_type;
 private:
-    promise_type _promise;
+    promise_base_type _promise;
     shared_future_type _shared_future;
     static constexpr bool copy_noexcept = future_state_type::copy_noexcept;
 public:
     shared_promise(const shared_promise&) = delete;
     shared_promise(shared_promise&&) = default;
     shared_promise& operator=(shared_promise&&) = default;
-    shared_promise() : _promise(), _shared_future(_promise.get_future2()) {
+    shared_promise() : _promise(), _shared_future(_promise.get_future()) {
     }
 
     /// \brief Gets new future associated with this promise.
