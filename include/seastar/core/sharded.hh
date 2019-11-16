@@ -107,7 +107,7 @@ template <typename Service>
 class sharded {
     struct entry {
         shared_ptr<Service> service;
-        promise<> freed;
+        promise_future_pair<> freed;
     };
     std::vector<entry> _instances;
 private:
@@ -637,7 +637,7 @@ sharded<Service>::stop() {
         return internal::sharded_parallel_for_each(_instances.size(), [this] (unsigned c) {
             return smp::submit_to(c, [this] {
                 _instances[engine().cpu_id()].service = nullptr;
-                return _instances[engine().cpu_id()].freed.get_future2();
+                return _instances[engine().cpu_id()].freed.get_future();
             });
         });
     }).then([this] {
