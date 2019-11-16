@@ -176,7 +176,7 @@ class smp_message_queue {
         using value_type = typename future_type::value_type;
         compat::optional<value_type> _result;
         std::exception_ptr _ex; // if !_result
-        typename futurator::promise_type _promise; // used on local side
+        typename futurator::type::promise_base_type _promise; // used on local side
         async_work_item(smp_message_queue& queue, smp_service_group ssg, Func&& func) : work_item(ssg), _queue(queue), _func(std::move(func)) {}
         virtual void process() override {
             try {
@@ -206,7 +206,7 @@ class smp_message_queue {
                 _promise.set_exception(std::move(_ex));
             }
         }
-        future_type get_future() { return _promise.get_future2(); }
+        future_type get_future() { return _promise.get_future(); }
     };
     union tx_side {
         tx_side() {}
