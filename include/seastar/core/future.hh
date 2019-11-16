@@ -646,6 +646,9 @@ public:
 template<>
 class promise<void> : public promise<> {};
 
+template<>
+class promise_base_with_type<void> : public promise_base_with_type<> {};
+
 /// @}
 
 /// \addtogroup future-util
