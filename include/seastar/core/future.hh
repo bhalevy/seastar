@@ -1412,6 +1412,9 @@ public:
     void set_value(A&&... a) {
         pr.set_value(std::forward<A>(a)...);
     }
+    void set_exception(std::exception_ptr&& ex) noexcept {
+        pr.set_exception(std::move(ex));
+    }
 };
 
 inline internal::promise_base::promise_base(future_base* future, future_state_base* state) noexcept

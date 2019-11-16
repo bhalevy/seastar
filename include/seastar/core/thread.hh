@@ -111,7 +111,7 @@ class thread_context : private task {
     stack_holder _stack{make_stack()};
     noncopyable_function<void ()> _func;
     jmp_buf_link _context;
-    promise<> _done;
+    promise_future_pair<> _done;
     bool _joined = false;
 
     boost::intrusive::list_member_hook<> _all_link;
@@ -221,7 +221,7 @@ inline
 future<>
 thread::join() {
     _context->_joined = true;
-    return _context->_done.get_future2();
+    return _context->_done.get_future();
 }
 
 /// Executes a callable in a seastar thread.
