@@ -260,7 +260,7 @@ private:
     bool _handle_sigint = true;
     std::optional<future<std::unique_ptr<network_stack>>> _network_stack_ready;
     int _return = 0;
-    promise<> _start_promise;
+    promise_base_with_type<> _start_promise;
     semaphore _cpu_started;
     internal::preemption_monitor _preemption_monitor{};
     uint64_t _global_tasks_processed = 0;
@@ -535,7 +535,7 @@ public:
 
     int run();
     void exit(int ret);
-    future<> when_started() { return _start_promise.get_future2(); }
+    future<> when_started() { return _start_promise.get_future(); }
     // The function waits for timeout period for reactor stop notification
     // which happens on termination signals or call for exit().
     template <typename Rep, typename Period>
