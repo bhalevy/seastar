@@ -55,7 +55,7 @@ class subscription;
 template <typename... T>
 class stream {
     subscription<T...>* _sub = nullptr;
-    promise<> _done;
+    promise_base_with_type<> _done;
     promise_future_pair<> _ready;
 public:
     using next_fn = std::function<future<> (T...)>;
@@ -233,7 +233,7 @@ template <typename... T>
 inline
 future<>
 subscription<T...>::done() {
-    return _stream->_done.get_future2();
+    return _stream->_done.get_future();
 }
 
 }
