@@ -101,6 +101,7 @@ public:
     using clock = typename options::clock_type;
     using time_point = typename clock::time_point;
     using future_type = typename future_option_traits<T...>::template parametrize<future>::type;
+    using promise_base_type = typename future_type::promise_base_type;
     using promise_type = typename future_option_traits<T...>::template parametrize<promise>::type;
     using value_tuple_type = typename future_option_traits<T...>::template parametrize<std::tuple>::type;
 private:
@@ -110,7 +111,7 @@ private:
     /// \cond internal
     class shared_state : public enable_lw_shared_from_this<shared_state> {
         future_type _original_future;
-        expiring_fifo<promise_type, promise_expiry, clock> _peers;
+        expiring_fifo<promise_base_type, promise_expiry, clock> _peers;
 
     public:
         ~shared_state() {
@@ -145,15 +146,14 @@ private:
 
         future_type get_future(time_point timeout = time_point::max()) {
             if (!_original_future.available()) {
-                promise_type p;
-                auto f = p.get_future2();
                 if (_peers.empty()) {
                     // _original_future's result is forwarded to each peer.
                     (void)_original_future.then_wrapped([s = this->shared_from_this()] (future_type&& f) mutable {
                         s->resolve(std::move(f));
                     });
                 }
-                _peers.push_back(std::move(p), timeout);
+                auto f = future_type::for_promise();
+                _peers.push_back(f.get_promise(), timeout);
                 return f;
             } else if (_original_future.failed()) {
                 return future_type(exception_future_marker(), _original_future._state.get_exception());
