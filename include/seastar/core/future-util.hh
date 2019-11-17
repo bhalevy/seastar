@@ -156,6 +156,7 @@ private:
         wait_for_one();
     }
 public:
+    parallel_for_each_state(future<>& fut) : _result(fut) { }
     void reserve(size_t n) {
         _incomplete.reserve(n);
     }
@@ -164,9 +165,6 @@ public:
     }
     void add_future(future<>&& f) {
         _incomplete.push_back(std::move(f));
-    }
-    future<> get_future() {
-        return _result.get_future();
     }
     void start() {
         wait_for_one();
@@ -196,6 +194,7 @@ future<>
 parallel_for_each(Iterator begin, Iterator end, Func&& func) noexcept {
     parallel_for_each_state* s = nullptr;
     compat::optional<std::exception_ptr> ex;
+    auto fut = future<>::for_promise();
     // Process all elements, giving each future the following treatment:
     //   - available, not failed: do nothing
     //   - available, failed: collect exception in ex
@@ -204,7 +203,7 @@ parallel_for_each(Iterator begin, Iterator end, Func&& func) noexcept {
         auto f = futurize_apply(std::forward<Func>(func), *begin++);
         if (!f.available()) {
             if (!s) {
-                s = new parallel_for_each_state;
+                s = new parallel_for_each_state(fut);
                 using itraits = std::iterator_traits<Iterator>;
                 s->reserve(internal::iterator_range_estimate_vector_capacity(begin, end, typename itraits::iterator_category()) + 1);
             }
@@ -224,7 +223,7 @@ parallel_for_each(Iterator begin, Iterator end, Func&& func) noexcept {
         // s->start() takes ownership of s (and chains it to one of the futures it contains)
         // so this isn't a leak
         s->start();
-        return s->get_future();
+        return fut;
     } else {
         if (__builtin_expect(bool(ex), false)) {
             return make_exception_future<>(std::move(*ex));
