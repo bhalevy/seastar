@@ -677,13 +677,44 @@ auto protocol<Serializer, MsgType>::register_handler(MsgType t, Func&& func) {
 }
 
 template<typename Serializer, typename MsgType>
+void protocol<Serializer, MsgType>::unregister_handler(MsgType t) {
+    _handlers_version++;
+    auto it = _handlers.find(t);
+    if (it != _handlers.end()) {
+        rpc_handler& h = it->second;
+        if (!h.used()) {
+            _handlers.erase(it);
+        } else if (h.registered()) {
+            // handler in use. defer erase.
+            h.count = -(h.count);
+        } else {
+            throw std::runtime_error("handler already unregistered");
+        }
+    }
+}
+
+template<typename Serializer, typename MsgType>
 std::pair<rpc_handler*, uint32_t> protocol<Serializer, MsgType>::get_handler(uint64_t msg_id) {
     rpc_handler* h = nullptr;
     auto it = _handlers.find(MsgType(msg_id));
-    if (it != _handlers.end()) {
+    if (it != _handlers.end() && __builtin_expect(it->second.registered(), true)) {
         h = &it->second;
+        assert(h->count < std::numeric_limits<decltype(h->count)>::max());
+        h->count++;
     }
     return std::make_pair(h, _handlers_version);
+}
+
+template<typename Serializer, typename MsgType>
+void protocol<Serializer, MsgType>::put_handler(rpc_handler* h, uint64_t msg_id) {
+    if (__builtin_expect(h->count > 0, true)) {
+        h->count--;
+    } else {
+        assert(h->count < 0);
+        if (++h->count == 0) {
+            _handlers.erase(MsgType(msg_id));
+        }
+    }
 }
 
 template<typename T> T make_shard_local_buffer_copy(foreign_ptr<std::unique_ptr<T>> org);

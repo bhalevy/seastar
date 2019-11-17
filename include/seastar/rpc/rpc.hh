@@ -550,6 +550,15 @@ using rpc_handler_func = std::function<future<> (shared_ptr<server::connection>,
 struct rpc_handler {
     scheduling_group sg;
     rpc_handler_func func;
+    int32_t count = 0; // number of in-flight holders, negative when unregistered.
+
+    bool used() const {
+        return count != 0;
+    }
+
+    bool registered() const {
+        return count >= 0;
+    }
 };
 
 class protocol_base {
@@ -558,6 +567,7 @@ public:
     virtual shared_ptr<server::connection> make_server_connection(rpc::server& server, connected_socket fd, socket_address addr, connection_id id) = 0;
     // returns a pointer to rpc handler function and a version of handler's table
     virtual std::pair<rpc_handler*, uint32_t> get_handler(uint64_t msg_id) = 0;
+    virtual void put_handler(rpc_handler*, uint64_t msg_id) = 0;
     virtual uint32_t get_handlers_table_version() const = 0;
 };
 
@@ -629,10 +639,7 @@ public:
     template <typename Func>
     auto register_handler(MsgType t, scheduling_group sg, Func&& func);
 
-    void unregister_handler(MsgType t) {
-        _handlers_version++;
-        _handlers.erase(t);
-    }
+    void unregister_handler(MsgType t);
 
     void set_logger(std::function<void(const sstring&)> logger) {
         _logger.set(std::move(logger));
@@ -647,6 +654,8 @@ public:
     }
 
     std::pair<rpc_handler*, uint32_t> get_handler(uint64_t msg_id) override;
+
+    void put_handler(rpc_handler*, uint64_t msg_id) override;
 
     uint32_t get_handlers_table_version() const override {
         return _handlers_version;
