@@ -672,13 +672,11 @@ auto protocol<Serializer, MsgType>::register_handler(MsgType t, scheduling_group
 template<typename Serializer, typename MsgType>
 template<typename Func>
 auto protocol<Serializer, MsgType>::register_handler(MsgType t, Func&& func) {
-    _handlers_version++;
     return register_handler(t, scheduling_group(), std::forward<Func>(func));
 }
 
 template<typename Serializer, typename MsgType>
 void protocol<Serializer, MsgType>::unregister_handler(MsgType t) {
-    _handlers_version++;
     auto it = _handlers.find(t);
     if (it != _handlers.end()) {
         rpc_handler& h = it->second;
@@ -692,7 +690,7 @@ void protocol<Serializer, MsgType>::unregister_handler(MsgType t) {
 }
 
 template<typename Serializer, typename MsgType>
-std::pair<rpc_handler*, uint32_t> protocol<Serializer, MsgType>::get_handler(uint64_t msg_id) {
+rpc_handler* protocol<Serializer, MsgType>::get_handler(uint64_t msg_id) {
     rpc_handler* h = nullptr;
     auto it = _handlers.find(MsgType(msg_id));
     if (it != _handlers.end() && __builtin_expect(it->second.count >= 0, true)) {
@@ -700,7 +698,7 @@ std::pair<rpc_handler*, uint32_t> protocol<Serializer, MsgType>::get_handler(uin
         assert(h->count < std::numeric_limits<decltype(h->count)>::max());
         h->count++;
     }
-    return std::make_pair(h, _handlers_version);
+    return h;
 }
 
 template<typename Serializer, typename MsgType>
