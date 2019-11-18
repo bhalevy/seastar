@@ -4106,10 +4106,9 @@ reactor::calculate_poll_time() {
 }
 
 future<> later() {
-    promise<> p;
-    auto f = p.get_future2();
+    future<> f = future<>::for_promise();
     engine().force_poll();
-    schedule(make_task(default_scheduling_group(), [p = std::move(p)] () mutable {
+    schedule(make_task(default_scheduling_group(), [p = f.get_promise()] () mutable {
         p.set_value();
     }));
     return f;
