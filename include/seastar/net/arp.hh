@@ -131,7 +131,7 @@ private:
         }
     };
     struct resolution {
-        std::vector<promise<l2addr>> _waiters;
+        std::vector<promise_base_with_type<l2addr>> _waiters;
         timer<> _timeout_timer;
     };
 private:
@@ -235,8 +235,9 @@ arp_for<L3>::lookup(const l3addr& paddr) {
         return make_exception_future<ethernet_address>(arp_queue_full_error());
     }
 
-    res._waiters.emplace_back();
-    return res._waiters.back().get_future2();
+    auto ret = future<ethernet_address>::for_promise();
+    res._waiters.emplace_back(ret);
+    return ret;
 }
 
 template <typename L3>
