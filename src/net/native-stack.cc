@@ -141,7 +141,7 @@ void create_native_net_device(boost::program_options::variables_map opts) {
 // native_network_stack
 class native_network_stack : public network_stack {
 public:
-    static thread_local promise<std::unique_ptr<network_stack>> ready_promise;
+    static thread_local promise_base_with_type<std::unique_ptr<network_stack>> ready_promise;
 private:
     interface _netif;
     ipv4 _inet;
@@ -165,7 +165,7 @@ public:
         if (engine().cpu_id() == 0) {
             create_native_net_device(opts);
         }
-        return ready_promise.get_future2();
+        return ready_promise.get_future();
     }
     virtual bool has_per_core_namespace() override { return true; };
     void arp_learn(ethernet_address l2, ipv4_address l3) {
@@ -179,7 +179,7 @@ public:
     std::vector<network_interface> network_interfaces() override;
 };
 
-thread_local promise<std::unique_ptr<network_stack>> native_network_stack::ready_promise;
+thread_local promise_base_with_type<std::unique_ptr<network_stack>> native_network_stack::ready_promise;
 
 udp_channel
 native_network_stack::make_udp_channel(const socket_address& addr) {
