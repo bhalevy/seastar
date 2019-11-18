@@ -1024,7 +1024,7 @@ future<> server::connection::send_unknown_verb_reply(compat::optional<rpc_clock_
       if (_options.streaming_domain) {
           _servers.erase(*_options.streaming_domain);
       }
-      return when_all(_ss_stopped.get_future2(),
+      return when_all(_ss_stopped.get_future(),
           parallel_for_each(_conns | boost::adaptors::map_values, [] (shared_ptr<connection> conn) {
               return conn->stop();
           }),

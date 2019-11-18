@@ -519,7 +519,7 @@ private:
     resource_limits _limits;
     rpc_semaphore _resources_available;
     std::unordered_map<connection_id, shared_ptr<connection>> _conns;
-    promise<> _ss_stopped;
+    promise_future_pair<> _ss_stopped;
     gate _reply_gate;
     server_options _options;
     uint64_t _next_client_id = 1;
