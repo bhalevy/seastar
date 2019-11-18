@@ -905,8 +905,8 @@ future<> server::connection::send_unknown_verb_reply(compat::optional<rpc_clock_
                       // Otherwise, use the old per-handler scheduling group.
                       auto sg = _isolation_config ? _isolation_config->sched_group : h ? h->sg : scheduling_group();
                       return with_scheduling_group(sg, [this, timeout, type, msg_id, h = std::move(h), data = std::move(data.value())] () mutable {
-                          if (h) {
-                              return h->func(shared_from_this(), timeout, msg_id, std::move(data));
+                          if (h && !h->unregistered) {
+                              return h->func(shared_from_this(), timeout, msg_id, std::move(data), h);
                           } else {
                               return send_unknown_verb_reply(timeout, msg_id, type);
                           }

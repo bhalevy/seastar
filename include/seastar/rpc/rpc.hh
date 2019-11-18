@@ -545,12 +545,14 @@ public:
     friend client;
 };
 
+struct rpc_handler;
 using rpc_handler_func = std::function<future<> (shared_ptr<server::connection>, compat::optional<rpc_clock_type::time_point> timeout, int64_t msgid,
-                                                 rcv_buf data)>;
+                                                 rcv_buf data, lw_shared_ptr<rpc_handler>)>;
 
 struct rpc_handler {
     scheduling_group sg;
     rpc_handler_func func;
+    bool unregistered = false;
 };
 
 class protocol_base {

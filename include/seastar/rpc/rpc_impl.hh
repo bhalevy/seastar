@@ -564,7 +564,8 @@ auto recv_helper(signature<Ret (InArgs...)> sig, Func&& func, WantClientInfo wci
     return [func = lref_to_cref(std::forward<Func>(func))](shared_ptr<server::connection> client,
                                                            compat::optional<rpc_clock_type::time_point> timeout,
                                                            int64_t msg_id,
-                                                           rcv_buf data) mutable {
+                                                           rcv_buf data,
+                                                           lw_shared_ptr<rpc_handler> h) mutable {
         auto error_reply = [client, timeout, msg_id] (auto err) {
             client->get_logger()(client->peer_address(), err);
             // FIXME: future is discarded
@@ -579,7 +580,10 @@ auto recv_helper(signature<Ret (InArgs...)> sig, Func&& func, WantClientInfo wci
             return error_reply(format("request size {:d} large than memory limit {:d}", memory_consumed, client->max_request_size()));
         }
         // note: apply is executed asynchronously with regards to networking so we cannot chain futures here by doing "return apply()"
-        auto f = client->wait_for_resources(memory_consumed, timeout).then([client, timeout, msg_id, data = std::move(data), &func] (auto permit) mutable {
+        auto f = client->wait_for_resources(memory_consumed, timeout).then([client, timeout, msg_id, data = std::move(data), &func, &error_reply, h] (auto permit) mutable {
+            if (h->unregistered) {
+                return error_reply(format("handler for msg_id {:d} is unregistered", msg_id));
+            }
             try {
                 // FIXME: future is discarded
                 (void)with_gate(client->get_server().reply_gate(), [client, timeout, msg_id, data = std::move(data), permit = std::move(permit), &func] () mutable {
@@ -596,6 +600,7 @@ auto recv_helper(signature<Ret (InArgs...)> sig, Func&& func, WantClientInfo wci
                     }
                 });
             } catch (gate_closed_exception&) {/* ignore */ }
+            return make_ready_future();
         });
 
         if (timeout) {
