@@ -48,7 +48,7 @@ class file_data_source_impl : public data_source_impl {
     unsigned _reads_in_progress = 0;
     unsigned _current_read_ahead;
     future<> _dropped_reads = make_ready_future<>();
-    compat::optional<promise<>> _done;
+    compat::optional<promise_base_with_type<>> _done;
     size_t _current_buffer_size;
     bool _in_slow_start = false;
     using unused_ratio_target = std::ratio<25, 100>;
@@ -213,11 +213,12 @@ public:
         return make_ready_future<temporary_buffer<char>>();
     }
     virtual future<> close() override {
-        _done.emplace();
+        auto fut = future<>::for_promise();
+        _done.emplace(fut);
         if (!_reads_in_progress) {
             _done->set_value();
         }
-        return _done->get_future2().then([this] {
+        return fut.then([this] {
             uint64_t dropped = 0;
             for (auto&& c : _read_buffers) {
                 _reactor._io_stats.fstream_read_aheads_discarded += 1;
