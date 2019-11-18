@@ -146,7 +146,7 @@ private:
     interface _netif;
     ipv4 _inet;
     bool _dhcp = false;
-    promise<> _config;
+    promise_base_with_type<> _config;
     timer<> _timer;
 
     future<> run_dhcp(bool is_renew = false, const dhcp::lease & res = dhcp::lease());
@@ -264,7 +264,7 @@ void native_network_stack::on_dhcp(compat::optional<dhcp::lease> lease, bool is_
             auto& res = *lease;
             _timer.set_callback(
                     [this, res]() {
-                        _config = promise<>();
+                        _config = promise_base_with_type<>();
                         // callback ignores future result
                         (void)run_dhcp(true, res);
                     });
@@ -287,7 +287,7 @@ future<> native_network_stack::initialize() {
             // FIXME: future is discarded
             (void)run_dhcp();
         }
-        return _config.get_future2();
+        return _config.get_future();
     });
 }
 
