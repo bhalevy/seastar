@@ -43,12 +43,12 @@ template future<> sleep_abortable<lowres_clock>(typename lowres_clock::duration)
 template <typename Clock>
 future<> sleep_abortable(typename Clock::duration dur, abort_source& as) {
     struct sleeper {
-        promise<> done;
+        promise_base_with_type<> done;
         timer<Clock> tmr;
         abort_source::subscription sc;
 
-        sleeper(typename Clock::duration dur, abort_source& as)
-                : tmr([this] { done.set_value(); }) {
+        sleeper(typename Clock::duration dur, abort_source& as, future<>& fut)
+                : done(fut), tmr([this] { done.set_value(); }) {
             auto sc_opt = as.subscribe([this] {
                 if (tmr.cancel()) {
                     done.set_exception(sleep_aborted());
@@ -63,8 +63,8 @@ future<> sleep_abortable(typename Clock::duration dur, abort_source& as) {
         }
     };
     //FIXME: Use do_with() after #373
-    auto s = std::make_unique<sleeper>(dur, as);
-    auto fut = s->done.get_future2();
+    auto fut = future<>::for_promise();
+    auto s = std::make_unique<sleeper>(dur, as, fut);
     return fut.finally([s = std::move(s)] { });
 }
 
