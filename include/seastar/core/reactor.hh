@@ -258,7 +258,7 @@ private:
     bool _stopped = false;
     condition_variable _stop_requested;
     bool _handle_sigint = true;
-    std::optional<future<std::unique_ptr<network_stack>>> _network_stack_ready;
+    future<std::unique_ptr<network_stack>> _network_stack_ready = make_ready_future<std::unique_ptr<network_stack>>();
     int _return = 0;
     promise_base_with_type<> _start_promise;
     semaphore _cpu_started;

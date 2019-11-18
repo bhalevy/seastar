@@ -2581,7 +2581,7 @@ int reactor::run() {
         });
     });
     // Wait for network stack in the background and then signal all cpus.
-    (void)_network_stack_ready->then([this] (std::unique_ptr<network_stack> stack) {
+    (void)_network_stack_ready.then([this] (std::unique_ptr<network_stack> stack) {
         _network_stack = std::move(stack);
         return smp::invoke_on_all([] {
             engine()._cpu_started.signal();
