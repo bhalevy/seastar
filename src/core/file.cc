@@ -631,7 +631,8 @@ append_challenged_posix_file_impl::read_dma(uint64_t pos, void* buffer, size_t l
         });
     }
     len = std::min(pos + len, align_up<uint64_t>(_logical_size, _disk_read_dma_alignment)) - pos;
-    auto pr = make_lw_shared(promise<size_t>());
+    auto fut = future<size_t>::for_promise();
+    auto pr = make_lw_shared(fut.get_promise());
     enqueue({
         opcode::read,
         pos,
@@ -644,7 +645,7 @@ append_challenged_posix_file_impl::read_dma(uint64_t pos, void* buffer, size_t l
             });
         }
     });
-    return pr->get_future2();
+    return fut;
 }
 
 future<size_t>
