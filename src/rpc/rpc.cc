@@ -426,11 +426,10 @@ namespace rpc {
   future<> connection::stream_close() {
       auto f = make_ready_future<>();
       if (!error()) {
-          promise<bool> p;
-          _sink_closed_future = p.get_future2();
+          _sink_closed_future = future<bool>::for_promise();
           // stop_send_loop(), which also calls _write_buf.close(), and this code can run in parallel.
           // Use _sink_closed_future to serialize them and skip second call to close()
-          f = _write_buf.close().finally([p = std::move(p)] () mutable { p.set_value(true);});
+          f = _write_buf.close().finally([p = _sink_closed_future.get_promise()] () mutable { p.set_value(true);});
       }
       return f.finally([this] () mutable { return stop(); });
   }
