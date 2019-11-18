@@ -714,7 +714,8 @@ append_challenged_posix_file_impl::write_dma(uint64_t pos, const void* buffer, s
 
 future<size_t>
 append_challenged_posix_file_impl::write_dma(uint64_t pos, std::vector<iovec> iov, const io_priority_class& pc) {
-    auto pr = make_lw_shared(promise<size_t>());
+    auto fut = future<size_t>::for_promise();
+    auto pr = make_lw_shared(fut.get_promise());
     auto len = boost::accumulate(iov | boost::adaptors::transformed(std::mem_fn(&iovec::iov_len)), size_t(0));
     enqueue({
         opcode::write,
@@ -735,7 +736,7 @@ append_challenged_posix_file_impl::write_dma(uint64_t pos, std::vector<iovec> io
             });
         }
     });
-    return pr->get_future2();
+    return fut;
 }
 
 future<>
