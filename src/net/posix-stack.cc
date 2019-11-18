@@ -470,7 +470,7 @@ future<accept_result> posix_ap_server_socket_impl::accept() {
         try {
             auto i = sockets.emplace(std::piecewise_construct, std::make_tuple(t_sa), std::make_tuple());
             assert(i.second);
-            return i.first->second.get_future2();
+            return i.first->second.get_future();
         } catch (...) {
             return make_exception_future<accept_result>(std::current_exception());
         }
