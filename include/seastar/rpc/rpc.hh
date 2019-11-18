@@ -663,7 +663,10 @@ private:
 
     void register_receiver(MsgType t, rpc_handler&& handler) {
         assert(engine().cpu_id() == _cpu_id);
-        _handlers.emplace(t, std::move(handler));
+        auto r = _handlers.emplace(t, std::move(handler));
+        if (!r.second) {
+            throw std::runtime_error("registered handler already exists");
+        }
     }
 };
 }
