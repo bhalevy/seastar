@@ -669,7 +669,8 @@ append_challenged_posix_file_impl::read_dma(uint64_t pos, std::vector<iovec> iov
         }
         iov.erase(i, iov.end());
     }
-    auto pr = make_lw_shared(promise<size_t>());
+    auto fut = future<size_t>::for_promise();
+    auto pr = make_lw_shared(fut.get_promise());
     enqueue({
         opcode::read,
         pos,
@@ -682,7 +683,7 @@ append_challenged_posix_file_impl::read_dma(uint64_t pos, std::vector<iovec> iov
             });
         }
     });
-    return pr->get_future2();
+    return fut;
 }
 
 future<size_t>
