@@ -665,7 +665,11 @@ private:
     auto make_client(signature<Ret(In...)> sig, MsgType t);
 
     void register_receiver(MsgType t, rpc_handler&& handler) {
-        _handlers.emplace(t, std::move(handler));
+        auto r = _handlers.emplace(t, std::move(handler));
+        if (!r.second) {
+            auto e = r.first->second;
+            throw std::runtime_error(e.registered() ? "registered handler already exists" : "unregistered handler still exists");
+        }
     }
 };
 }
