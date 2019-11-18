@@ -544,12 +544,14 @@ public:
     friend client;
 };
 
+struct rpc_handler;
 using rpc_handler_func = std::function<future<> (shared_ptr<server::connection>, compat::optional<rpc_clock_type::time_point> timeout, int64_t msgid,
-                                                 rcv_buf data)>;
+                                                 rcv_buf data, lw_shared_ptr<rpc_handler>)>;
 
 struct rpc_handler {
     scheduling_group sg;
     rpc_handler_func func;
+    bool unregistered = false;
 };
 
 class protocol_base {
@@ -627,7 +629,12 @@ public:
     auto register_handler(MsgType t, scheduling_group sg, Func&& func);
 
     void unregister_handler(MsgType t) {
-        _handlers.erase(t);
+        auto it = _handlers.find(t);
+        if (it != _handlers.end()) {
+            auto& h = it->second;
+            h->unregistered = true;
+            _handlers.erase(it);
+        }
     }
 
     void set_logger(std::function<void(const sstring&)> logger) {
