@@ -379,7 +379,7 @@ private:
             // The total size of data stored in std::deque<packet> data
             size_t data_size = 0;
             tcp_packet_merger out_of_order;
-            compat::optional<promise<>> _data_received_promise;
+            compat::optional<promise_base_with_type<>> _data_received_promise;
             // The maximun memory buffer size allowed for receiving
             // Currently, it is the same as default receive window size when window scaling is enabled
             size_t max_receive_buf_size = 3737600;
@@ -1724,8 +1724,9 @@ future<> tcp<InetTraits>::tcb::wait_for_data() {
     if (!_rcv.data.empty() || foreign_will_not_send()) {
         return make_ready_future<>();
     }
-    _rcv._data_received_promise = promise<>();
-    return _rcv._data_received_promise->get_future2();
+    auto fut = future<>::for_promise();
+    _rcv._data_received_promise = fut.get_promise();
+    return fut;
 }
 
 template <typename InetTraits>
