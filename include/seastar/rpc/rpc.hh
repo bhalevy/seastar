@@ -193,7 +193,7 @@ protected:
     struct outgoing_entry {
         timer<rpc_clock_type> t;
         snd_buf buf;
-        compat::optional<promise<>> p = promise<>();
+        compat::optional<promise_base_with_type<>> p = promise_base_with_type<>();
         cancellable* pcancel = nullptr;
         outgoing_entry(snd_buf b) : buf(std::move(b)) {}
         outgoing_entry(outgoing_entry&& o) : t(std::move(o.t)), buf(std::move(o.buf)), p(std::move(o.p)), pcancel(o.pcancel) {
