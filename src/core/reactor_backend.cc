@@ -207,7 +207,7 @@ bool reactor_backend_aio::wait_and_process(int timeout, const sigset_t* active_s
     return did_work;
 }
 
-future<> reactor_backend_aio::poll(pollable_fd_state& fd, promise<> pollable_fd_state::*promise_field, int events) {
+future<> reactor_backend_aio::poll(pollable_fd_state& fd, promise_base_with_type<> pollable_fd_state::*promise_field, int events) {
     if (!_r->_epoll_poller) {
         _r->_epoll_poller = reactor::poller(std::make_unique<io_poll_poller>(this));
     }
@@ -220,10 +220,11 @@ future<> reactor_backend_aio::poll(pollable_fd_state& fd, promise<> pollable_fd_
         *iocb = make_poll_iocb(fd.fd.get(), events);
         fd.events_rw = events == (POLLIN|POLLOUT);
         auto pr = &(fd.*promise_field);
-        *pr = promise<>();
+        auto fut = future<>::for_promise();
+        *pr = fut.get_promise();
         set_user_data(*iocb, pr);
         _polling_io.queue(iocb);
-        return pr->get_future2();
+        return fut;
     } catch (...) {
         return make_exception_future<>(std::current_exception());
     }
@@ -404,13 +405,13 @@ reactor_backend_epoll::wait_and_process(int timeout, const sigset_t* active_sigm
     return nr;
 }
 
-void reactor_backend_epoll::complete_epoll_event(pollable_fd_state& pfd, promise<> pollable_fd_state::*pr,
+void reactor_backend_epoll::complete_epoll_event(pollable_fd_state& pfd, promise_base_with_type<> pollable_fd_state::*pr,
         int events, int event) {
     if (pfd.events_requested & events & event) {
         pfd.events_requested &= ~event;
         pfd.events_known &= ~event;
         (pfd.*pr).set_value();
-        pfd.*pr = promise<>();
+        pfd.*pr = promise_base_with_type<>();
     }
 }
 
@@ -423,7 +424,7 @@ void reactor_backend_epoll::signal_received(int signo, siginfo_t* siginfo, void*
 }
 
 future<> reactor_backend_epoll::get_epoll_future(pollable_fd_state& pfd,
-        promise<> pollable_fd_state::*pr, int event) {
+        promise_base_with_type<> pollable_fd_state::*pr, int event) {
     if (pfd.events_known & event) {
         pfd.events_known &= ~event;
         return make_ready_future();
@@ -440,8 +441,9 @@ future<> reactor_backend_epoll::get_epoll_future(pollable_fd_state& pfd,
         assert(r == 0);
         engine().start_epoll();
     }
-    pfd.*pr = promise<>();
-    return (pfd.*pr).get_future2();
+    auto fut = future<>::for_promise();
+    pfd.*pr = fut.get_promise();
+    return fut;
 }
 
 future<> reactor_backend_epoll::readable(pollable_fd_state& fd) {
