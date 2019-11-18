@@ -780,7 +780,8 @@ append_challenged_posix_file_impl::stat() {
 
 future<>
 append_challenged_posix_file_impl::truncate(uint64_t length) {
-    auto pr = make_lw_shared(promise<>());
+    auto fut = future<>::for_promise();
+    auto pr = make_lw_shared(fut.get_promise());
     enqueue({
         opcode::truncate,
         length,
@@ -796,7 +797,7 @@ append_challenged_posix_file_impl::truncate(uint64_t length) {
             });
         }
     });
-    return pr->get_future2();
+    return fut;
 }
 
 future<uint64_t>
