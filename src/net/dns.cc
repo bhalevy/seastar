@@ -279,7 +279,7 @@ public:
     }
 
     future<hostent> get_host_by_addr(inet_address addr) {
-        class promise_wrap : public promise<hostent> {
+        class promise_wrap : public promise_base_with_type<hostent> {
         public:
             promise_wrap(inet_address a)
                 : addr(std::move(a))
@@ -290,7 +290,7 @@ public:
         dns_log.debug("Query addr {}", addr);
 
         auto p = new promise_wrap(std::move(addr));
-        auto f = p->get_future2();
+        auto f = p->get_future();
 
         dns_call call(*this);
 
@@ -322,8 +322,8 @@ public:
     future<srv_records> get_srv_records(srv_proto proto,
                                         const sstring& service,
                                         const sstring& domain) {
-        auto p = std::make_unique<promise<srv_records>>();
-        auto f = p->get_future2();
+        auto f = future<srv_records>::for_promise();
+        auto p = std::make_unique<promise_base_with_type<srv_records>>(f.get_promise());
 
         const auto query = format("_{}._{}.{}",
                                   service,
@@ -337,8 +337,8 @@ public:
         ares_query(_channel, query.c_str(), ns_c_in, ns_t_srv,
                    [](void* arg, int status, int timeouts,
                       unsigned char* buf, int len) {
-            auto p = std::unique_ptr<promise<srv_records>>(
-                reinterpret_cast<promise<srv_records> *>(arg));
+            auto p = std::unique_ptr<promise_base_with_type<srv_records>>(
+                reinterpret_cast<promise_base_with_type<srv_records> *>(arg));
             if (status != ARES_SUCCESS) {
                 dns_log.debug("Query failed: {}", status);
                 p->set_exception(std::system_error(status, ares_errorc));
