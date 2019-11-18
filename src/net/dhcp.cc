@@ -350,7 +350,7 @@ public:
 
     future<compat::optional<lease>> run(const lease & l,
             const steady_clock_type::duration & timeout) {
-
+        auto fut = _result.get_future();
         _state = state::NONE;
         _timer.set_callback([this]() {
             _state = state::FAIL;
@@ -369,7 +369,7 @@ public:
             (void)send_discover(l.ip);
         });
         _retry_timer.arm_periodic(1s);
-        return _result.get_future2();
+        return fut;
     }
 
     template<typename T>
@@ -428,7 +428,7 @@ public:
     }
 
 private:
-    promise<compat::optional<lease>> _result;
+    promise_base_with_type<compat::optional<lease>> _result;
     state _state = state::NONE;
     timer<> _timer;
     timer<> _retry_timer;
