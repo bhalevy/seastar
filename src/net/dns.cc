@@ -229,7 +229,7 @@ public:
     }
 
     future<hostent> get_host_by_name(sstring name, opt_family family)  {
-        class promise_wrap : public promise<hostent> {
+        class promise_wrap : public promise_base_with_type<hostent> {
         public:
             promise_wrap(sstring s)
                 : name(std::move(s))
@@ -247,7 +247,7 @@ public:
         }
 
         auto p = new promise_wrap(std::move(name));
-        auto f = p->get_future2();
+        auto f = p->get_future();
 
         dns_call call(*this);
 
