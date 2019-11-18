@@ -544,12 +544,14 @@ public:
     friend client;
 };
 
+struct rpc_handler;
 using rpc_handler_func = std::function<future<> (shared_ptr<server::connection>, compat::optional<rpc_clock_type::time_point> timeout, int64_t msgid,
-                                                 rcv_buf data)>;
+                                                 rcv_buf data, rpc_handler*)>;
 
 struct rpc_handler {
     scheduling_group sg;
     rpc_handler_func func;
+    bool unregistered = false;
 };
 
 class protocol_base {
@@ -557,8 +559,7 @@ public:
     virtual ~protocol_base() {};
     virtual shared_ptr<server::connection> make_server_connection(rpc::server& server, connected_socket fd, socket_address addr, connection_id id) = 0;
     // returns a pointer to rpc handler function and a version of handler's table
-    virtual std::pair<rpc_handler*, uint32_t> get_handler(uint64_t msg_id) = 0;
-    virtual uint32_t get_handlers_table_version() const = 0;
+    virtual rpc_handler* get_handler(uint64_t msg_id) = 0;
 };
 
 // MsgType is a type that holds type of a message. The type should be hashable
@@ -610,7 +611,6 @@ private:
     shard_id _cpu_id;
     std::unordered_map<MsgType, lw_shared_ptr<rpc_handler>> _handlers;
     std::list<lw_shared_ptr<rpc_handler>> _unregistered_handlers;
-    uint32_t  _handlers_version = 0;
     Serializer _serializer;
     logger _logger;
 
@@ -639,9 +639,10 @@ public:
         assert(engine().cpu_id() == _cpu_id);
         auto it = _handlers.find(t);
         if (it != _handlers.end()) {
+            auto h = it->second;
+            h->unregistered = true;
             _unregistered_handlers.emplace_back(it->second);
             _handlers.erase(it);
-            _handlers_version++;
         }
     }
 
@@ -657,11 +658,7 @@ public:
         return make_shared<rpc::server::connection>(server, std::move(fd), std::move(addr), _logger, &_serializer, id);
     }
 
-    std::pair<rpc_handler*, uint32_t> get_handler(uint64_t msg_id) override;
-
-    uint32_t get_handlers_table_version() const override {
-        return _handlers_version;
-    }
+    rpc_handler* get_handler(uint64_t msg_id) override;
 private:
     template<typename Ret, typename... In>
     auto make_client(signature<Ret(In...)> sig, MsgType t);

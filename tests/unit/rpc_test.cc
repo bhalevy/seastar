@@ -923,23 +923,23 @@ SEASTAR_TEST_CASE(test_handler_registration) {
     return with_rpc_env({}, {}, false, false, [] (test_rpc_proto& proto, test_rpc_proto::server& s, make_socket_fn make_socket) {
         return seastar::async([&proto, make_socket] {
             // non-existing handler should not be found
-            BOOST_REQUIRE(proto.get_handler(1).first == nullptr);
+            BOOST_REQUIRE(proto.get_handler(1) == nullptr);
 
             // existing handler should be found
             auto handler = [] () { return make_ready_future<>(); };
             proto.register_handler(1, handler);
-            BOOST_REQUIRE(proto.get_handler(1).first != nullptr);
+            BOOST_REQUIRE(proto.get_handler(1) != nullptr);
 
             // cannot register handler if already registered
             BOOST_REQUIRE_THROW(proto.register_handler(1, handler), std::runtime_error);
 
             // unregistered handler should not be found
             proto.unregister_handler(1);
-            BOOST_REQUIRE(proto.get_handler(1).first == nullptr);
+            BOOST_REQUIRE(proto.get_handler(1) == nullptr);
 
             // re-registering a handler should succeed
             proto.register_handler(1, handler);
-            BOOST_REQUIRE(proto.get_handler(1).first != nullptr);
+            BOOST_REQUIRE(proto.get_handler(1) != nullptr);
         });
     });
 }
