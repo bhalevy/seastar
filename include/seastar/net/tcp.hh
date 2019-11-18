@@ -315,7 +315,7 @@ private:
         tcp_state _state = CLOSED;
         tcp& _tcp;
         connection* _conn = nullptr;
-        promise<> _connect_done;
+        promise_base_with_type<> _connect_done;
         ipaddr _local_ip;
         ipaddr _foreign_ip;
         uint16_t _local_port;
@@ -464,7 +464,7 @@ private:
             }
         }
         future<> connect_done() {
-            return _connect_done.get_future2();
+            return _connect_done.get_future();
         }
         tcp_state& state() {
             return _state;
