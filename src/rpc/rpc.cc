@@ -224,7 +224,7 @@ namespace rpc {
 
   future<> connection::stop() {
       abort();
-      return _stopped.get_future2();
+      return _stopped.get_future();
   }
 
   template<typename Connection>
@@ -601,7 +601,7 @@ namespace rpc {
           _error = true;
           _socket.shutdown();
       }
-      return _stopped.get_future2();
+      return _stopped.get_future();
   }
 
   void client::abort_all_streams() {

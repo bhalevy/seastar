@@ -184,7 +184,7 @@ protected:
     output_stream<char> _write_buf;
     bool _error = false;
     bool _connected = false;
-    promise<> _stopped;
+    promise_future_pair<> _stopped;
     stats _stats;
     const logger& _logger;
     // The owner of the pointer below is an instance of rpc::protocol<typename Serializer> class.
