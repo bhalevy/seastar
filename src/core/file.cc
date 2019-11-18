@@ -745,7 +745,8 @@ append_challenged_posix_file_impl::flush() {
         // FIXME: determine if flush can block concurrent reads or writes
         return posix_file_impl::flush();
     } else {
-        auto pr = make_lw_shared(promise<>());
+        auto fut = future<>::for_promise();
+        auto pr = make_lw_shared(fut.get_promise());
         enqueue({
             opcode::flush,
             0,
@@ -764,7 +765,7 @@ append_challenged_posix_file_impl::flush() {
                 });
             }
         });
-        return pr->get_future2();
+        return fut;
     }
 }
 
