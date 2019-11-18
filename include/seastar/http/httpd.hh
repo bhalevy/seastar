@@ -231,8 +231,8 @@ class http_server {
     sstring _date = http_date();
     timer<> _date_format_timer { [this] {_date = http_date();} };
     bool _stopping = false;
-    promise<> _all_connections_stopped;
-    future<> _stopped = _all_connections_stopped.get_future2();
+    future<> _stopped = future<>::for_promise();
+    promise_base_with_type<> _all_connections_stopped = _stopped.get_promise();
 private:
     void maybe_idle() {
         if (_stopping && !_connections_being_accepted && !_current_connections) {
