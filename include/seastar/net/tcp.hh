@@ -342,12 +342,12 @@ private:
             bool closed = false;
             promise<> _window_opened;
             // Wait for all data are acked
-            compat::optional<promise<>> _all_data_acked_promise;
+            compat::optional<promise_base_with_type<>> _all_data_acked_promise;
             // Limit number of data queued into send queue
             size_t max_queue_space = 212992;
             size_t current_queue_space = 0;
             // wait for there is at least one byte available in the queue
-            compat::optional<promise<>> _send_available_promise;
+            compat::optional<promise_base_with_type<>> _send_available_promise;
             // Round-trip time variation
             std::chrono::milliseconds rttvar;
             // Smoothed round-trip time
@@ -1744,8 +1744,9 @@ future<> tcp<InetTraits>::tcb::wait_for_all_data_acked() {
     if (_snd.data.empty() && _snd.unsent_len == 0) {
         return make_ready_future<>();
     }
-    _snd._all_data_acked_promise = promise<>();
-    return _snd._all_data_acked_promise->get_future2();
+    auto fut = future<>::for_promise();
+    _snd._all_data_acked_promise = fut.get_promise();
+    return fut;
 }
 
 template <typename InetTraits>
@@ -1781,8 +1782,9 @@ future<> tcp<InetTraits>::tcb::wait_send_available() {
     if (_snd.max_queue_space > _snd.current_queue_space) {
         return make_ready_future<>();
     }
-    _snd._send_available_promise = promise<>();
-    return _snd._send_available_promise->get_future2();
+    auto fut = future<>::for_promise();
+    _snd._send_available_promise = fut.get_promise();
+    return fut;
 }
 
 template <typename InetTraits>
