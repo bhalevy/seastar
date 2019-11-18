@@ -369,7 +369,7 @@ inline std::exception_ptr unmarshal_exception(rcv_buf& d) {
 template <typename Payload, typename... T>
 struct rcv_reply_base  {
     bool done = false;
-    promise<T...> p;
+    promise_base_with_type<T...> p;
     template<typename... V>
     void set_value(V&&... v) {
         done = true;
@@ -422,7 +422,7 @@ inline auto wait_for_reply(wait_type, compat::optional<rpc_clock_type::time_poin
     };
     using handler_type = typename rpc::client::template reply_handler<reply_type, decltype(lambda)>;
     auto r = std::make_unique<handler_type>(std::move(lambda));
-    auto fut = r->reply.p.get_future2();
+    auto fut = r->reply.p.get_future();
     dst.wait_for_reply(msg_id, std::move(r), timeout, cancel);
     return fut;
 }
