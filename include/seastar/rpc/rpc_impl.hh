@@ -567,11 +567,21 @@ auto recv_helper(signature<Ret (InArgs...)> sig, Func&& func, WantClientInfo wci
                                                            rcv_buf data) mutable {
         auto error_reply = [client, timeout, msg_id] (auto err) {
             client->get_logger()(client->peer_address(), err);
-            // FIXME: future is discarded
-            (void)with_gate(client->get_server().reply_gate(), [client, timeout, msg_id, err = std::move(err)] {
-                return reply<Serializer>(wait_style(), futurize<Ret>::make_exception_future(std::runtime_error(err.c_str())), msg_id, client, timeout);
-            });
-            return make_ready_future();
+            try {
+                return with_gate(client->get_server().reply_gate(), [client, timeout, msg_id, err = std::move(err)] {
+                    return reply<Serializer>(wait_style(), futurize<Ret>::make_exception_future(std::runtime_error(err.c_str())), msg_id, client, timeout);
+                });
+            } catch (gate_closed_exception&) {
+                /* ignore */
+                return make_ready_future<>();
+            } catch (semaphore_timed_out& e) {
+                if (timeout) {
+                    /* ignore */
+                    return make_ready_future<>();
+                } else {
+                    return make_exception_future<>(e);
+                }
+            }
         };
 
         auto memory_consumed = client->estimate_request_size(data.size);
