@@ -903,15 +903,10 @@ future<> server::connection::send_unknown_verb_reply(compat::optional<rpc_clock_
                       auto h = _server._proto->get_handler(type);
                       // If the new method of per-connection scheduling group was used, honor it.
                       // Otherwise, use the old per-handler scheduling group.
-                      auto sg = _isolation_config ? _isolation_config->sched_group : h.first ? h.first->sg : scheduling_group();
-                      return with_scheduling_group(sg, [this, timeout, type, msg_id, h, data = std::move(data.value())] () mutable {
-                          // with_scheduling_group may defer and the callback might be unregistered already when the code runs
-                          // verify it by checking that handlers table version did not change, otherwise search for the handler again
-                          if (h.first && h.second != _server._proto->get_handlers_table_version()) {
-                              h = _server._proto->get_handler(type);
-                          }
-                          if (h.first) {
-                              return h.first->func(shared_from_this(), timeout, msg_id, std::move(data));
+                      auto sg = _isolation_config ? _isolation_config->sched_group : h ? h->sg : scheduling_group();
+                      return with_scheduling_group(sg, [this, timeout, type, msg_id, h = std::move(h), data = std::move(data.value())] () mutable {
+                          if (h) {
+                              return h->func(shared_from_this(), timeout, msg_id, std::move(data));
                           } else {
                               return send_unknown_verb_reply(timeout, msg_id, type);
                           }
