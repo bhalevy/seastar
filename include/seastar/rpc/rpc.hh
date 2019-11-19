@@ -608,7 +608,8 @@ public:
     friend server;
 private:
     shard_id _cpu_id;
-    std::unordered_map<MsgType, rpc_handler> _handlers;
+    std::unordered_map<MsgType, lw_shared_ptr<rpc_handler>> _handlers;
+    std::list<lw_shared_ptr<rpc_handler>> _unregistered_handlers;
     uint32_t  _handlers_version = 0;
     Serializer _serializer;
     logger _logger;
@@ -636,8 +637,12 @@ public:
 
     void unregister_handler(MsgType t) {
         assert(engine().cpu_id() == _cpu_id);
-        _handlers_version++;
-        _handlers.erase(t);
+        auto it = _handlers.find(t);
+        if (it != _handlers.end()) {
+            _unregistered_handlers.emplace_back(it->second);
+            _handlers.erase(it);
+            _handlers_version++;
+        }
     }
 
     void set_logger(std::function<void(const sstring&)> logger) {
@@ -663,7 +668,7 @@ private:
 
     void register_receiver(MsgType t, rpc_handler&& handler) {
         assert(engine().cpu_id() == _cpu_id);
-        auto r = _handlers.emplace(t, std::move(handler));
+        auto r = _handlers.emplace(t, make_lw_shared<rpc_handler>(std::move(handler)));
         if (!r.second) {
             throw std::runtime_error("registered handler already exists");
         }

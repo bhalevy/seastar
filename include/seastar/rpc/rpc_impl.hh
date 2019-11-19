@@ -681,7 +681,7 @@ std::pair<rpc_handler*, uint32_t> protocol<Serializer, MsgType>::get_handler(uin
     rpc_handler* h = nullptr;
     auto it = _handlers.find(MsgType(msg_id));
     if (it != _handlers.end()) {
-        h = &it->second;
+        h = it->second.get();
     }
     return std::make_pair(h, _handlers_version);
 }
