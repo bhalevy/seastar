@@ -153,11 +153,12 @@ class rpc_test_env {
         }
 
         future<> stop() {
-            for (auto t : _handlers) {
-                proto->unregister_handler(t);
-            }
-            auto sptr = server.get();
-            return sptr->stop().finally([s = std::move(server)] {});
+            return parallel_for_each(_handlers, [this] (auto t) {
+                return proto->unregister_handler(t);
+            }).then([this] {
+                auto sptr = server.get();
+                return sptr->stop().finally([s = std::move(server)] {});
+            });
         }
 
         template<typename Func>
@@ -997,11 +998,21 @@ SEASTAR_TEST_CASE(test_handler_registration) {
         auto& proto = env.proto();
 
         auto has_handler = [&proto] (int id) {
-            return proto.get_handler(id).first != nullptr;
+            auto h = proto.get_handler(id);
+            if (h) {
+                proto.put_handler(h);
+                return true;
+            }
+            return false;
         };
 
         // non-existing handler should not be found
         BOOST_REQUIRE(!has_handler(1));
+
+        // unregistered non-existing handler should return ready future
+        auto fut = proto.unregister_handler(1);
+        BOOST_REQUIRE(fut.available() && !fut.failed());
+        fut.get();
 
         // existing handler should be found
         auto handler = [] () { return make_ready_future<>(); };
@@ -1012,7 +1023,7 @@ SEASTAR_TEST_CASE(test_handler_registration) {
         BOOST_REQUIRE_THROW(proto.register_handler(1, handler), std::runtime_error);
 
         // unregistered handler should not be found
-        proto.unregister_handler(1);
+        proto.unregister_handler(1).get();
         BOOST_REQUIRE(!has_handler(1));
 
         // re-registering a handler should succeed
