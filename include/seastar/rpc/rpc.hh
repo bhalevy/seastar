@@ -607,13 +607,18 @@ public:
 
     friend server;
 private:
+    shard_id _cpu_id;
     std::unordered_map<MsgType, rpc_handler> _handlers;
     uint32_t  _handlers_version = 0;
     Serializer _serializer;
     logger _logger;
 
 public:
-    protocol(Serializer&& serializer) : _serializer(std::forward<Serializer>(serializer)) {}
+    protocol(Serializer&& serializer) :
+        _cpu_id(engine().cpu_id()),
+        _serializer(std::forward<Serializer>(serializer))
+    {}
+
     template<typename Func>
     auto make_client(MsgType t);
 
@@ -630,6 +635,7 @@ public:
     auto register_handler(MsgType t, scheduling_group sg, Func&& func);
 
     void unregister_handler(MsgType t) {
+        assert(engine().cpu_id() == _cpu_id);
         _handlers_version++;
         _handlers.erase(t);
     }
@@ -656,6 +662,7 @@ private:
     auto make_client(signature<Ret(In...)> sig, MsgType t);
 
     void register_receiver(MsgType t, rpc_handler&& handler) {
+        assert(engine().cpu_id() == _cpu_id);
         _handlers.emplace(t, std::move(handler));
     }
 };
