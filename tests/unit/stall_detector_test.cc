@@ -88,8 +88,8 @@ SEASTAR_THREAD_TEST_CASE(no_poll_no_stall) {
     temporary_stall_detector_settings tsds(10ms, [&] { ++reports; });
     spin_some_cooperatively(1ms); // need to yield so that stall detector change from above take effect
     static constexpr unsigned tasks = 2000;
-    promise<> p;
-    auto f = p.get_future2();
+    auto f = future<>::for_promise();
+    auto p = f.get_promise();
     parallel_for_each(boost::irange(0u, tasks), [&p] (unsigned int i) {
         (void)later().then([i, &p] {
             spin(500us);
