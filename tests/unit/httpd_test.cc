@@ -423,7 +423,7 @@ public:
                         size_t count = 0;
                         http_server& _server;
                         std::function<future<>(output_stream<char> &&)> _write_func;
-                        promise<> _all_message_sent;
+                        promise_base_with_type<> _all_message_sent;
                     public:
                         test_handler(http_server& server, std::function<future<>(output_stream<char> &&)>&& write_func) : _server(server), _write_func(write_func) {
                         }
@@ -435,7 +435,7 @@ public:
                             return make_ready_future<std::unique_ptr<reply>>(std::move(rep));
                         }
                         future<> wait_for_message() {
-                            return _all_message_sent.get_future2();
+                            return _all_message_sent.get_future();
                         }
                     };
                     auto handler = new test_handler(*server, std::move(write_func));
