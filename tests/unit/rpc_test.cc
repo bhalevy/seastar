@@ -252,9 +252,8 @@ SEASTAR_TEST_CASE(test_rpc_cancel) {
             test_rpc_proto::client c1(proto, {}, make_socket(), ipv4_addr());
             bool rpc_executed = false;
             int good = 0;
-            promise<> handler_called;
-            future<> f_handler_called = handler_called.get_future2();
-            auto call = proto.register_handler(1, [&rpc_executed,  handler_called = std::move(handler_called)] () mutable {
+            auto f_handler_called = future<>::for_promise();
+            auto call = proto.register_handler(1, [&rpc_executed,  handler_called = f_handler_called.get_promise()] () mutable {
                 handler_called.set_value(); rpc_executed = true; return sleep(1ms);
             });
             rpc::cancellable cancel;
