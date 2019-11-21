@@ -140,18 +140,19 @@ SEASTAR_TEST_CASE(test_get_on_promise) {
 
 SEASTAR_TEST_CASE(test_finally_waits_for_inner) {
     auto finally = make_shared<bool>();
-    auto p = make_shared<promise<>>();
+    auto f0 = future<>::for_promise();
+    auto p = f0.get_promise();
 
     auto f = make_ready_future().then([] {
-    }).finally([=] {
-        return p->get_future2().then([=] {
+    }).finally([f0 = std::move(f0), finally] () mutable {
+        return f0.then([=] {
             *finally = true;
         });
     }).then([=] {
         BOOST_REQUIRE(*finally);
     });
     BOOST_REQUIRE(!*finally);
-    p->set_value();
+    p.set_value();
     return f;
 }
 
