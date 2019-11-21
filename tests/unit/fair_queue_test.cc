@@ -62,14 +62,14 @@ struct test_env {
     void do_op(unsigned index, unsigned weight)  {
         auto cl = classes[index];
         struct request {
-            promise<> pr;
+            promise_base_with_type<> pr;
             fair_queue_request_descriptor fqdesc;
         };
 
         auto req = std::make_unique<request>();
         req->fqdesc.weight = weight;
         req->fqdesc.size  = 0;
-        inflight.push_back(req->pr.get_future2());
+        inflight.push_back(req->pr.get_future());
         auto fqdesc = req->fqdesc;
 
         fq.queue(cl, fqdesc, [this, index, req = std::move(req)] () mutable noexcept {
