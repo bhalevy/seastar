@@ -324,14 +324,15 @@ SEASTAR_TEST_CASE(test_future_forwarding__ready_to_armed) {
     return called;
 }
 
-static void forward_dead_unarmed_promise_with_dead_future_to(promise<>& p) {
+static void forward_dead_unarmed_promise_with_dead_future_to(promise_base_with_type<>& p) {
     auto f2 = future<>::for_promise();
     auto p2 = f2.get_promise();
     f2.forward_to(std::move(p2));
 }
 
 SEASTAR_TEST_CASE(test_future_forwarding__ready_to_unarmed_soon_to_be_dead) {
-    promise<> p1;
+    auto f1 = future<>::for_promise();
+    auto p1 = f1.get_promise();
     forward_dead_unarmed_promise_with_dead_future_to(p1);
     make_ready_future<>().forward_to(std::move(p1));
     return make_ready_future<>();
