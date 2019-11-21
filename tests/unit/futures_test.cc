@@ -279,11 +279,11 @@ SEASTAR_TEST_CASE(test_future_forwarding__not_ready_to_unarmed) {
 }
 
 SEASTAR_TEST_CASE(test_future_forwarding__not_ready_to_armed) {
-    promise<> p1;
-    promise<> p2;
+    auto f1 = future<>::for_promise();
+    auto p1 = f1.get_promise();
 
-    auto f1 = p1.get_future2();
-    auto f2 = p2.get_future2();
+    auto f2 = future<>::for_promise();
+    auto p2 = f2.get_promise();
 
     auto called = f2.then([] {});
 
@@ -297,10 +297,10 @@ SEASTAR_TEST_CASE(test_future_forwarding__not_ready_to_armed) {
 }
 
 SEASTAR_TEST_CASE(test_future_forwarding__ready_to_unarmed) {
-    promise<> p2;
-
     auto f1 = make_ready_future<>();
-    auto f2 = p2.get_future2();
+
+    auto f2 = future<>::for_promise();
+    auto p2 = f2.get_promise();
 
     std::move(f1).forward_to(std::move(p2));
     BOOST_REQUIRE(f2.available());
