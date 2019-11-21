@@ -239,10 +239,12 @@ SEASTAR_TEST_CASE(test_exception_thrown_from_then_wrapped_causes_future_to_fail_
 }
 
 SEASTAR_TEST_CASE(test_failing_intermediate_promise_should_fail_the_master_future) {
-    promise<> p1;
-    promise<> p2;
+    auto f1 = future<>::for_promise();
+    auto p1 = f1.get_promise();
+    auto f2 = future<>::for_promise();
+    auto p2 = f2.get_promise();
 
-    auto f = p1.get_future2().then([f = p2.get_future2()] () mutable {
+    auto f = f1.then([f = std::move(f2)] () mutable {
         return std::move(f);
     }).then([] {
         BOOST_REQUIRE(false);
