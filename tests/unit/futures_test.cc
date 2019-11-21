@@ -769,8 +769,9 @@ SEASTAR_TEST_CASE(test_obtaining_future_from_shared_future_after_it_is_resolved)
 
 SEASTAR_TEST_CASE(test_valueless_shared_future) {
     return seastar::async([] {
-        promise<> p;
-        shared_future<> f(p.get_future2());
+        auto f0 = future<>::for_promise();
+        auto p = f0.get_promise();
+        shared_future<> f(std::move(f0));
 
         auto f1 = f.get_future();
         auto f2 = f.get_future();
@@ -783,8 +784,9 @@ SEASTAR_TEST_CASE(test_valueless_shared_future) {
 }
 
 SEASTAR_TEST_CASE(test_shared_future_propagates_errors_to_all) {
-    promise<int> p;
-    shared_future<int> f(p.get_future2());
+    auto f0 = future<int>::for_promise();
+    auto p = f0.get_promise();;
+    shared_future<int> f(std::move(f0));
 
     auto f1 = f.get_future();
     auto f2 = f.get_future();
@@ -801,9 +803,9 @@ SEASTAR_TEST_CASE(test_shared_future_propagates_errors_to_all) {
 
 SEASTAR_TEST_CASE(test_ignored_future_warning) {
     // This doesn't warn:
-    promise<> p;
+    auto f = future<>::for_promise();
+    auto p = f.get_promise();
     p.set_exception(expected_exception());
-    future<> f = p.get_future2();
     f.ignore_ready_future();
 
     // And by analogy, neither should this
