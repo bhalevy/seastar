@@ -57,10 +57,11 @@ SEASTAR_TEST_CASE(test_self_move) {
     p1.set_value(std::make_unique<int>(42));
     p1 = std::move(p1); // no crash, but the value of p1 is not defined.
 
-    promise<std::unique_ptr<int>> p2;
+    auto f = future<std::unique_ptr<int>>::for_promise();
+    auto p2 = f.get_promise();
     p2.set_value(std::make_unique<int>(42));
     std::swap(p2, p2);
-    BOOST_REQUIRE_EQUAL(*p2.get_future2().get0(), 42);
+    BOOST_REQUIRE_EQUAL(*f.get0(), 42);
 
     auto  f1 = make_ready_future<std::unique_ptr<int>>(std::make_unique<int>(42));
     f1 = std::move(f1); // no crash, but the value of f1 is not defined.
@@ -130,9 +131,10 @@ SEASTAR_TEST_CASE(test_finally_is_called_on_success_and_failure) {
 }
 
 SEASTAR_TEST_CASE(test_get_on_promise) {
-    auto p = promise<uint32_t>();
+    auto f = future<uint32_t>::for_promise();
+    auto p = f.get_promise();
     p.set_value(10);
-    BOOST_REQUIRE_EQUAL(10u, p.get_future2().get0());
+    BOOST_REQUIRE_EQUAL(10u, f.get0());
     return make_ready_future();
 }
 
