@@ -44,7 +44,7 @@ struct timer_test {
     timer<Clock> t3;
     timer<Clock> t4;
     timer<Clock> t5;
-    promise<> pr1;
+    promise_base_with_type<> pr1;
     promise<> pr2;
 
     future<> run() {
@@ -70,7 +70,7 @@ struct timer_test {
         t4.arm(700ms);
         t5.arm(800ms);
 
-        return pr1.get_future2().then([this] { return test_timer_cancelling(); });
+        return pr1.get_future().then([this] { return test_timer_cancelling(); });
     }
 
     future<> test_timer_cancelling() {
