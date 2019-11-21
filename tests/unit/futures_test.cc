@@ -937,8 +937,9 @@ static void check_timed_out(future<T...>&& f) {
 
 SEASTAR_TEST_CASE(test_with_timeout_when_it_times_out) {
     return seastar::async([] {
-        promise<> pr;
-        auto f = with_timeout(manual_clock::now() + 2s, pr.get_future2());
+        auto f0 = future<>::for_promise();
+        auto pr = f0.get_promise();
+        auto f = with_timeout(manual_clock::now() + 2s, std::move(f0));
 
         BOOST_REQUIRE(!f.available());
 
