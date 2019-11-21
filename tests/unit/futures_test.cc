@@ -160,8 +160,9 @@ SEASTAR_TEST_CASE(test_finally_is_called_on_success_and_failure__not_ready_to_ar
     auto finally1 = make_shared<bool>();
     auto finally2 = make_shared<bool>();
 
-    promise<> p;
-    auto f = p.get_future2().finally([=] {
+    auto f0 = future<>::for_promise();
+    auto p = f0.get_promise();
+    auto f = f0.finally([=] {
         *finally1 = true;
     }).then([] {
         throw std::runtime_error("");
