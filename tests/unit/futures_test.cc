@@ -735,8 +735,9 @@ void check_fails_with_expected(future<T...> f) {
 
 SEASTAR_TEST_CASE(test_shared_future_propagates_value_to_copies) {
     return seastar::async([] {
-        promise<int> p;
-        auto sf1 = shared_future<int>(p.get_future2());
+        auto f = future<int>::for_promise();
+        auto p = f.get_promise();
+        auto sf1 = shared_future<int>(std::move(f));
         auto sf2 = sf1;
 
         auto f1 = sf1.get_future();
@@ -750,10 +751,12 @@ SEASTAR_TEST_CASE(test_shared_future_propagates_value_to_copies) {
 }
 
 SEASTAR_TEST_CASE(test_obtaining_future_from_shared_future_after_it_is_resolved) {
-    promise<int> p1;
-    promise<int> p2;
-    auto sf1 = shared_future<int>(p1.get_future2());
-    auto sf2 = shared_future<int>(p2.get_future2());
+    auto f1 = future<int>::for_promise();
+    auto p1 = f1.get_promise();
+    auto f2 = future<int>::for_promise();
+    auto p2 = f2.get_promise();
+    auto sf1 = shared_future<int>(std::move(f1));
+    auto sf2 = shared_future<int>(std::move(f2));
     p1.set_value(1);
     p2.set_exception(expected_exception());
     return sf2.get_future().then_wrapped([f1 = sf1.get_future()] (auto&& f) mutable {
