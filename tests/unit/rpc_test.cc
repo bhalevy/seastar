@@ -99,7 +99,7 @@ struct rpc_loopback_error_injector : public loopback_error_injector {
 };
 
 class rpc_socket_impl : public ::net::socket_impl {
-    promise<connected_socket> _p;
+    promise_base_with_type<connected_socket> _p;
     bool _connect;
     loopback_socket_impl _socket;
     rpc_loopback_error_injector _error_injector;
@@ -109,7 +109,7 @@ public:
               _socket(factory, inject_error ? &_error_injector : nullptr) {
     }
     virtual future<connected_socket> connect(socket_address sa, socket_address local, transport proto = transport::TCP) override {
-        return _connect ? _socket.connect(sa, local, proto) : _p.get_future2();
+        return _connect ? _socket.connect(sa, local, proto) : _p.get_future();
     }
     virtual void set_reuseaddr(bool reuseaddr) override {}
     virtual bool get_reuseaddr() const override { return false; };
