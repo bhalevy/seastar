@@ -984,8 +984,9 @@ SEASTAR_TEST_CASE(test_custom_exception_factory_in_with_timeout) {
 SEASTAR_TEST_CASE(test_with_timeout_when_it_does_not_time_out) {
     return seastar::async([] {
         {
-            promise<int> pr;
-            auto f = with_timeout(manual_clock::now() + 1s, pr.get_future2());
+            auto f0 = future<int>::for_promise();
+            auto pr = f0.get_promise();
+            auto f = with_timeout(manual_clock::now() + 1s, std::move(f0));
 
             pr.set_value(42);
 
