@@ -45,7 +45,7 @@ struct timer_test {
     timer<Clock> t4;
     timer<Clock> t5;
     promise_base_with_type<> pr1;
-    promise<> pr2;
+    promise_base_with_type<> pr2;
 
     future<> run() {
         t1.set_callback([this] {
@@ -84,7 +84,7 @@ struct timer_test {
 
         t1.set_callback([this] { OK(); pr2.set_value(); });
         t1.arm(100ms);
-        return pr2.get_future2().then([&t1] { delete &t1; });
+        return pr2.get_future().then([&t1] { delete &t1; });
     }
 };
 
