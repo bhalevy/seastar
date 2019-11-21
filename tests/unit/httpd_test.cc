@@ -491,7 +491,7 @@ public:
                         size_t count = 0;
                         http_server& _server;
                         std::vector<std::tuple<bool, size_t>> _tests;
-                        promise<> _all_message_sent;
+                        promise_base_with_type<> _all_message_sent;
                     public:
                         test_handler(http_server& server, const std::vector<std::tuple<bool, size_t>>& tests) : _server(server), _tests(tests) {
                         }
@@ -505,7 +505,7 @@ public:
                             return make_ready_future<std::unique_ptr<reply>>(std::move(rep));
                         }
                         future<> wait_for_message() {
-                            return _all_message_sent.get_future2();
+                            return _all_message_sent.get_future();
                         }
                     };
                     auto handler = new test_handler(*server, tests);
