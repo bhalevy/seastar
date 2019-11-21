@@ -970,8 +970,9 @@ SEASTAR_TEST_CASE(test_custom_exception_factory_in_with_timeout) {
                 return custom_error();
             }
         };
-        promise<> pr;
-        auto f = with_timeout<my_exception_factory>(manual_clock::now() + 1s, pr.get_future2());
+        auto f0 = future<>::for_promise();
+        auto pr = f0.get_promise();
+        auto f = with_timeout<my_exception_factory>(manual_clock::now() + 1s, std::move(f0));
 
         manual_clock::advance(1s);
         later().get();
