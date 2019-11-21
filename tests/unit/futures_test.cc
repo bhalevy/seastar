@@ -1153,8 +1153,8 @@ SEASTAR_THREAD_TEST_CASE(test_broken_promises) {
     BOOST_CHECK(!f);
 
     { // Broken before attaching a continuation
-        auto p = promise<>();
-        f = p.get_future2();
+        f = future<>::for_promise();
+        auto p = f->get_promise();
     }
     f->then_wrapped([&] (future<> f3) {
         BOOST_CHECK(f3.failed());
@@ -1164,8 +1164,8 @@ SEASTAR_THREAD_TEST_CASE(test_broken_promises) {
     BOOST_CHECK(!f);
 
     { // Broken before suspending a thread
-        auto p = promise<>();
-        f = p.get_future2();
+        f = future<>::for_promise();
+        auto p = f->get_promise();
     }
     BOOST_CHECK_THROW(f->get(), broken_promise);
 }
