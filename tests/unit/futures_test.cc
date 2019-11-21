@@ -1141,8 +1141,8 @@ SEASTAR_THREAD_TEST_CASE(test_broken_promises) {
     compat::optional<future<>> f;
     compat::optional<future<>> f2;
     { // Broken after attaching a continuation
-        auto p = promise<>();
-        f = p.get_future2();
+        f = future<>::for_promise();
+        auto p = f->get_promise();
         f2 = f->then_wrapped([&] (future<> f3) {
             BOOST_CHECK(f3.failed());
             BOOST_CHECK_THROW(f3.get(), broken_promise);
