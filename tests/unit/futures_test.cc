@@ -181,8 +181,9 @@ SEASTAR_TEST_CASE(test_finally_is_called_on_success_and_failure__not_ready_to_ar
 }
 
 SEASTAR_TEST_CASE(test_exception_from_finally_fails_the_target) {
-    promise<> pr;
-    auto f = pr.get_future2().finally([=] {
+    auto f0 = future<>::for_promise();
+    auto pr = f0.get_promise();
+    auto f = f0.finally([=] {
         throw std::runtime_error("");
     }).then([] {
         BOOST_REQUIRE(false);
@@ -220,9 +221,10 @@ SEASTAR_TEST_CASE(test_exception_thrown_from_then_wrapped_causes_future_to_fail)
 }
 
 SEASTAR_TEST_CASE(test_exception_thrown_from_then_wrapped_causes_future_to_fail__async_case) {
-    promise<> p;
+    auto f0 = future<>::for_promise();
+    auto p = f0.get_promise();
 
-    auto f = p.get_future2().then_wrapped([] (auto&& f) {
+    auto f = f0.then_wrapped([] (auto&& f) {
         throw std::runtime_error("");
     }).then_wrapped([] (auto&& f) {
         try {
