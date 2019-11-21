@@ -33,15 +33,16 @@ extern "C" {
 }
 
 SEASTAR_TEST_CASE(test_sighup) {
-    return do_with(make_lw_shared<promise<>>(), false, [](auto const& p, bool& signaled) {
-        engine().handle_signal(SIGHUP, [p, &signaled] {
+    return do_with(false, [](bool& signaled) {
+        auto fut = future<>::for_promise();
+        engine().handle_signal(SIGHUP, [p = fut.get_promise(), &signaled] () mutable {
             signaled = true;
-            p->set_value();
+            p.set_value();
         });
 
         kill(getpid(), SIGHUP);
 
-        return p->get_future2().then([&] {
+        return fut.then([&] {
             BOOST_REQUIRE_EQUAL(signaled, true);
         });
     });
