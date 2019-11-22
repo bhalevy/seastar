@@ -400,6 +400,7 @@ class continuation_base : public task {
 protected:
     future_state<T...> _state;
     using future_type = future<T...>;
+    using promise_type = promise<T...>;
 public:
     continuation_base() = default;
     explicit continuation_base(future_state<T...>&& state) : _state(std::move(state)) {}
@@ -456,7 +457,6 @@ protected:
     __attribute__((always_inline))
     void make_ready() noexcept;
 
-public:
     void set_exception(std::exception_ptr&& ex) noexcept {
         if (_state) {
             _state->set_exception(std::move(ex));
