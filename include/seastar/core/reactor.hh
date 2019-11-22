@@ -260,7 +260,7 @@ private:
     bool _handle_sigint = true;
     future<std::unique_ptr<network_stack>> _network_stack_ready = make_ready_future<std::unique_ptr<network_stack>>();
     int _return = 0;
-    promise_base_with_type<> _start_promise;
+    promise<> _start_promise;
     semaphore _cpu_started;
     internal::preemption_monitor _preemption_monitor{};
     uint64_t _global_tasks_processed = 0;

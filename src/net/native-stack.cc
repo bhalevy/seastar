@@ -141,12 +141,12 @@ void create_native_net_device(boost::program_options::variables_map opts) {
 // native_network_stack
 class native_network_stack : public network_stack {
 public:
-    static thread_local promise_base_with_type<std::unique_ptr<network_stack>> ready_promise;
+    static thread_local promise<std::unique_ptr<network_stack>> ready_promise;
 private:
     interface _netif;
     ipv4 _inet;
     bool _dhcp = false;
-    promise_base_with_type<> _config;
+    promise<> _config;
     timer<> _timer;
 
     future<> run_dhcp(bool is_renew = false, const dhcp::lease & res = dhcp::lease());
@@ -179,7 +179,7 @@ public:
     std::vector<network_interface> network_interfaces() override;
 };
 
-thread_local promise_base_with_type<std::unique_ptr<network_stack>> native_network_stack::ready_promise;
+thread_local promise<std::unique_ptr<network_stack>> native_network_stack::ready_promise;
 
 udp_channel
 native_network_stack::make_udp_channel(const socket_address& addr) {
@@ -264,7 +264,7 @@ void native_network_stack::on_dhcp(compat::optional<dhcp::lease> lease, bool is_
             auto& res = *lease;
             _timer.set_callback(
                     [this, res]() {
-                        _config = promise_base_with_type<>();
+                        _config = promise<>();
                         // callback ignores future result
                         (void)run_dhcp(true, res);
                     });

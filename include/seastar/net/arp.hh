@@ -131,7 +131,7 @@ private:
         }
     };
     struct resolution {
-        std::vector<promise_base_with_type<l2addr>> _waiters;
+        std::vector<promise<l2addr>> _waiters;
         timer<> _timeout_timer;
     };
 private:

@@ -127,9 +127,9 @@ private:
     ssize_t _count;
     std::exception_ptr _ex;
     struct entry {
-        promise_base_with_type<> pr;
+        promise<> pr;
         size_t nr;
-        entry(promise_base_with_type<>&& pr_, size_t nr_) : pr(std::move(pr_)), nr(nr_) {}
+        entry(promise<>&& pr_, size_t nr_) : pr(std::move(pr_)), nr(nr_) {}
     };
     struct expiry_handler : private exception_factory {
         void operator()(entry& e) noexcept {

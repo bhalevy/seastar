@@ -43,7 +43,7 @@ template future<> sleep_abortable<lowres_clock>(typename lowres_clock::duration)
 template <typename Clock>
 future<> sleep_abortable(typename Clock::duration dur, abort_source& as) {
     struct sleeper {
-        promise_base_with_type<> done;
+        promise<> done;
         timer<Clock> tmr;
         abort_source::subscription sc;
 

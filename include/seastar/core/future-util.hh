@@ -111,7 +111,7 @@ iterator_range_estimate_vector_capacity(Iterator begin, Iterator end, std::forwa
 
 class parallel_for_each_state final : private continuation_base<> {
     std::vector<future<>> _incomplete;
-    promise_base_with_type<> _result;
+    promise<> _result;
     // use optional<> to avoid out-of-line constructor
     compat::optional<std::exception_ptr> _ex;
 private:
@@ -270,7 +270,7 @@ namespace internal {
 template <typename AsyncAction>
 class repeater final : public continuation_base<stop_iteration> {
     using futurator = futurize<std::result_of_t<AsyncAction()>>;
-    promise_base_with_type<> _promise;
+    promise<> _promise;
     AsyncAction _action;
 public:
     explicit repeater(AsyncAction action) : _action(std::move(action)) {}
@@ -387,7 +387,7 @@ namespace internal {
 template <typename AsyncAction, typename T>
 class repeat_until_value_state final : public continuation_base<compat::optional<T>> {
     using futurator = futurize<std::result_of_t<AsyncAction()>>;
-    promise_base_with_type<T> _promise;
+    promise<T> _promise;
     AsyncAction _action;
 public:
     explicit repeat_until_value_state(AsyncAction action) : _action(std::move(action)) {}
@@ -492,7 +492,7 @@ namespace internal {
 
 template <typename StopCondition, typename AsyncAction>
 class do_until_state final : public continuation_base<> {
-    promise_base_with_type<> _promise;
+    promise<> _promise;
     StopCondition _stop;
     AsyncAction _action;
 public:
@@ -1187,7 +1187,7 @@ future<T...> with_timeout(std::chrono::time_point<Clock, Duration> timeout, futu
         return f;
     }
     auto result = future<T...>::for_promise();
-    auto pr = std::make_unique<promise_base_with_type<T...>>(result);
+    auto pr = std::make_unique<promise<T...>>(result);
     timer<Clock> timer([&pr = *pr] {
         pr.set_exception(std::make_exception_ptr(ExceptionFactory::timeout()));
     });

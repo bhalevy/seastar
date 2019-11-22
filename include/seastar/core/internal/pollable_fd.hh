@@ -58,8 +58,8 @@ public:
     int events_requested = 0; // wanted by pollin/pollout promises
     int events_epoll = 0;     // installed in epoll
     int events_known = 0;     // returned from epoll
-    promise_base_with_type<> pollin;
-    promise_base_with_type<> pollout;
+    promise<> pollin;
+    promise<> pollout;
     friend class reactor;
     friend class pollable_fd;
 };

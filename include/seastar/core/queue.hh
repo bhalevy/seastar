@@ -35,8 +35,8 @@ template <typename T>
 class queue {
     std::queue<T, circular_buffer<T>> _q;
     size_t _max;
-    compat::optional<promise_base_with_type<>> _not_empty;
-    compat::optional<promise_base_with_type<>> _not_full;
+    compat::optional<promise<>> _not_empty;
+    compat::optional<promise<>> _not_full;
     std::exception_ptr _ex = nullptr;
 private:
     void notify_not_empty();
@@ -137,7 +137,7 @@ inline
 void queue<T>::notify_not_empty() {
     if (_not_empty) {
         _not_empty->set_value();
-        _not_empty = compat::optional<promise_base_with_type<>>();
+        _not_empty = compat::optional<promise<>>();
     }
 }
 
@@ -146,7 +146,7 @@ inline
 void queue<T>::notify_not_full() {
     if (_not_full) {
         _not_full->set_value();
-        _not_full = compat::optional<promise_base_with_type<>>();
+        _not_full = compat::optional<promise<>>();
     }
 }
 
@@ -249,7 +249,7 @@ future<> queue<T>::not_empty() {
     if (!empty()) {
         return make_ready_future<>();
     } else {
-        _not_empty = promise_base_with_type<>();
+        _not_empty = promise<>();
         return _not_empty->get_future();
     }
 }
@@ -263,7 +263,7 @@ future<> queue<T>::not_full() {
     if (!full()) {
         return make_ready_future<>();
     } else {
-        _not_full = promise_base_with_type<>();
+        _not_full = promise<>();
         return _not_full->get_future();
     }
 }

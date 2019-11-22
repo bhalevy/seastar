@@ -423,7 +423,7 @@ public:
                         size_t count = 0;
                         http_server& _server;
                         std::function<future<>(output_stream<char> &&)> _write_func;
-                        promise_base_with_type<> _all_message_sent;
+                        promise<> _all_message_sent;
                     public:
                         test_handler(http_server& server, std::function<future<>(output_stream<char> &&)>&& write_func) : _server(server), _write_func(write_func) {
                         }
@@ -491,7 +491,7 @@ public:
                         size_t count = 0;
                         http_server& _server;
                         std::vector<std::tuple<bool, size_t>> _tests;
-                        promise_base_with_type<> _all_message_sent;
+                        promise<> _all_message_sent;
                     public:
                         test_handler(http_server& server, const std::vector<std::tuple<bool, size_t>>& tests) : _server(server), _tests(tests) {
                         }

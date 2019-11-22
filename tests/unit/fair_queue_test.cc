@@ -62,7 +62,7 @@ struct test_env {
     void do_op(unsigned index, unsigned weight)  {
         auto cl = classes[index];
         struct request {
-            promise_base_with_type<> pr;
+            promise<> pr;
             fair_queue_request_descriptor fqdesc;
         };
 

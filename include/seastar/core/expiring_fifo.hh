@@ -38,7 +38,7 @@ struct dummy_expiry {
 
 template<typename... T>
 struct promise_expiry {
-    void operator()(promise_base_with_type<T...>& pr) noexcept {
+    void operator()(promise<T...>& pr) noexcept {
         pr.set_exception(std::make_exception_ptr(timed_out_error()));
     };
 };

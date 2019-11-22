@@ -42,7 +42,7 @@ namespace seastar {
 template <typename Clock = steady_clock_type, typename Rep, typename Period>
 future<> sleep(std::chrono::duration<Rep, Period> dur) {
     struct sleeper {
-        promise_base_with_type<> done;
+        promise<> done;
         timer<Clock> tmr;
         sleeper(std::chrono::duration<Rep, Period> dur)
             : tmr([this] { done.set_value(); })

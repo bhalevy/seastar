@@ -256,7 +256,7 @@ async(thread_attributes attr, Func&& func, Args&&... args) {
         thread_attributes attr;
         Func func;
         std::tuple<Args...> args;
-        promise_base_with_type<return_type> pr;
+        promise<return_type> pr;
         thread th;
     };
     return do_with(work{std::move(attr), std::forward<Func>(func), std::forward_as_tuple(std::forward<Args>(args)...)}, [] (work& w) mutable {

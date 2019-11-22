@@ -150,7 +150,7 @@ class append_challenged_posix_file_impl : public posix_file_impl, public enable_
 
     bool _sloppy_size = false;
     // Fulfiled when _done and I/O is complete
-    promise_base_with_type<> _completed;
+    promise<> _completed;
 private:
     void commit_size(uint64_t size) noexcept;
     bool must_run_alone(const op& candidate) const noexcept;

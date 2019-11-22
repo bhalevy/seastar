@@ -315,7 +315,7 @@ private:
         tcp_state _state = CLOSED;
         tcp& _tcp;
         connection* _conn = nullptr;
-        promise_base_with_type<> _connect_done;
+        promise<> _connect_done;
         ipaddr _local_ip;
         ipaddr _foreign_ip;
         uint16_t _local_port;
@@ -340,14 +340,14 @@ private:
             std::deque<packet> unsent;
             uint32_t unsent_len = 0;
             bool closed = false;
-            promise_base_with_type<> _window_opened;
+            promise<> _window_opened;
             // Wait for all data are acked
-            compat::optional<promise_base_with_type<>> _all_data_acked_promise;
+            compat::optional<promise<>> _all_data_acked_promise;
             // Limit number of data queued into send queue
             size_t max_queue_space = 212992;
             size_t current_queue_space = 0;
             // wait for there is at least one byte available in the queue
-            compat::optional<promise_base_with_type<>> _send_available_promise;
+            compat::optional<promise<>> _send_available_promise;
             // Round-trip time variation
             std::chrono::milliseconds rttvar;
             // Smoothed round-trip time
@@ -379,7 +379,7 @@ private:
             // The total size of data stored in std::deque<packet> data
             size_t data_size = 0;
             tcp_packet_merger out_of_order;
-            compat::optional<promise_base_with_type<>> _data_received_promise;
+            compat::optional<promise<>> _data_received_promise;
             // The maximun memory buffer size allowed for receiving
             // Currently, it is the same as default receive window size when window scaling is enabled
             size_t max_receive_buf_size = 3737600;

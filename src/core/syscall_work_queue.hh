@@ -47,7 +47,7 @@ class syscall_work_queue {
     template <typename T>
     struct work_item_returning :  work_item {
         noncopyable_function<T ()> _func;
-        promise_base_with_type<T> _promise;
+        promise<T> _promise;
         compat::optional<T> _result;
         work_item_returning(noncopyable_function<T ()> func) : _func(std::move(func)) {}
         virtual void process() override { _result = this->_func(); }

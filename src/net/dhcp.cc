@@ -428,7 +428,7 @@ public:
     }
 
 private:
-    promise_base_with_type<compat::optional<lease>> _result;
+    promise<compat::optional<lease>> _result;
     state _state = state::NONE;
     timer<> _timer;
     timer<> _retry_timer;

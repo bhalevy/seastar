@@ -73,7 +73,7 @@ namespace seastar {
 /// @{
 
 template <class... T>
-class promise_base_with_type;
+class promise;
 
 template <class... T>
 class future;
@@ -406,7 +406,7 @@ public:
     void set_state(future_state<T...>&& state) {
         _state = std::move(state);
     }
-    friend class promise_base_with_type<T...>;
+    friend class promise<T...>;
     friend class future<T...>;
 };
 
@@ -495,24 +495,24 @@ public:
 ///           A list with two or more types is deprecated; use
 ///           \c promise<std::tuple<T...>> instead.
 template <typename... T>
-class promise_base_with_type : protected internal::promise_base {
+class promise : protected internal::promise_base {
 protected:
     future_state<T...>* get_state() {
         return static_cast<future_state<T...>*>(_state);
     }
     static constexpr bool copy_noexcept = future_state<T...>::copy_noexcept;
 public:
-    promise_base_with_type() noexcept : promise_base(nullptr) { }
-    promise_base_with_type(future_state_base* state) noexcept : promise_base(state) { }
-    promise_base_with_type(future<T...>& future) noexcept : promise_base(&future, &future._state) { }
-    promise_base_with_type(promise_base_with_type&& x) noexcept : promise_base(std::move(x)) { }
-    promise_base_with_type(const promise_base_with_type&) = delete;
-    promise_base_with_type& operator=(promise_base_with_type&& x) noexcept {
-        this->~promise_base_with_type();
-        new (this) promise_base_with_type(std::move(x));
+    promise() noexcept : promise_base(nullptr) { }
+    promise(future_state_base* state) noexcept : promise_base(state) { }
+    promise(future<T...>& future) noexcept : promise_base(&future, &future._state) { }
+    promise(promise&& x) noexcept : promise_base(std::move(x)) { }
+    promise(const promise&) = delete;
+    promise& operator=(promise&& x) noexcept {
+        this->~promise();
+        new (this) promise(std::move(x));
         return *this;
     }
-    void operator=(const promise_base_with_type&) = delete;
+    void operator=(const promise&) = delete;
 
     future<T...> get_future() noexcept;
 
@@ -563,7 +563,7 @@ private:
 /// For example, You may have a \c promise<T> where \c T can legally be
 /// \c void.
 template<>
-class promise_base_with_type<void> : public promise_base_with_type<> {};
+class promise<void> : public promise<> {};
 
 /// @}
 
@@ -808,14 +808,14 @@ private:
     }
 
 public:
-    promise_base_with_type<T...> get_promise() noexcept {
+    promise<T...> get_promise() noexcept {
         assert(!_promise);
-        return promise_base_with_type<T...>(*this);
+        return promise<T...>(*this);
     }
 
 private:
-    promise_base_with_type<T...>* detach_promise() {
-        return static_cast<promise_base_with_type<T...>*>(future_base::detach_promise());
+    promise<T...>* detach_promise() {
+        return static_cast<promise<T...>*>(future_base::detach_promise());
     }
     template <typename Func>
     void schedule(Func&& func) {
@@ -872,7 +872,7 @@ private:
 public:
     /// \brief The data type carried by the future.
     using value_type = std::tuple<T...>;
-    using promise_base_type = promise_base_with_type<T...>;
+    using promise_base_type = promise<T...>;
     /// \brief Moves the future into a new object.
     [[gnu::always_inline]]
     future(future&& x) noexcept : future_base(std::move(x), &_state), _state(std::move(x._state)) { }
@@ -1107,7 +1107,7 @@ public:
     ///
     /// \param pr a promise that will be fulfilled with the results of this
     /// future.
-    void forward_to(promise_base_with_type<T...>&& pr) noexcept {
+    void forward_to(promise<T...>&& pr) noexcept {
         if (_state.available()) {
             pr.set_urgent_state(std::move(_state));
         } else {
@@ -1294,7 +1294,7 @@ private:
     template <typename... U>
     friend class promise;
     template <typename... U>
-    friend class promise_base_with_type;
+    friend class promise;
     template <typename... U, typename... A>
     friend future<U...> make_ready_future(A&&... value);
     template <typename... U>
@@ -1308,8 +1308,8 @@ private:
 
 template <typename... T>
 class promise_future_pair {
-    // FIXME: optimize. We can store just the promise_base_with_type and a future_state
-    promise_base_with_type<T...> pr;
+    // FIXME: optimize. We can store just the promise and a future_state
+    promise<T...> pr;
     future<T...> fut;
 
 public:
@@ -1333,7 +1333,7 @@ inline internal::promise_base::promise_base(future_base* future, future_state_ba
 template <typename... T>
 inline
 future<T...>
-promise_base_with_type<T...>::get_future() noexcept {
+promise<T...>::get_future() noexcept {
     assert(!this->_future && !this->_state && !this->_task);
     return future<T...>(this);
 }

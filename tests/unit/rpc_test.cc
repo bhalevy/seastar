@@ -99,7 +99,7 @@ struct rpc_loopback_error_injector : public loopback_error_injector {
 };
 
 class rpc_socket_impl : public ::net::socket_impl {
-    promise_base_with_type<connected_socket> _p;
+    promise<connected_socket> _p;
     bool _connect;
     loopback_socket_impl _socket;
     rpc_loopback_error_injector _error_injector;

@@ -169,7 +169,7 @@ bool reactor_backend_aio::await_events(int timeout, const sigset_t* active_sigma
                 process_smp_wakeup();
                 continue;
             }
-            auto* pr = reinterpret_cast<promise_base_with_type<>*>(uintptr_t(event.data));
+            auto* pr = reinterpret_cast<promise<>*>(uintptr_t(event.data));
             pr->set_value();
             free_iocb(iocb);
         }
@@ -207,7 +207,7 @@ bool reactor_backend_aio::wait_and_process(int timeout, const sigset_t* active_s
     return did_work;
 }
 
-future<> reactor_backend_aio::poll(pollable_fd_state& fd, promise_base_with_type<> pollable_fd_state::*promise_field, int events) {
+future<> reactor_backend_aio::poll(pollable_fd_state& fd, promise<> pollable_fd_state::*promise_field, int events) {
     if (!_r->_epoll_poller) {
         _r->_epoll_poller = reactor::poller(std::make_unique<io_poll_poller>(this));
     }
@@ -405,13 +405,13 @@ reactor_backend_epoll::wait_and_process(int timeout, const sigset_t* active_sigm
     return nr;
 }
 
-void reactor_backend_epoll::complete_epoll_event(pollable_fd_state& pfd, promise_base_with_type<> pollable_fd_state::*pr,
+void reactor_backend_epoll::complete_epoll_event(pollable_fd_state& pfd, promise<> pollable_fd_state::*pr,
         int events, int event) {
     if (pfd.events_requested & events & event) {
         pfd.events_requested &= ~event;
         pfd.events_known &= ~event;
         (pfd.*pr).set_value();
-        pfd.*pr = promise_base_with_type<>();
+        pfd.*pr = promise<>();
     }
 }
 
@@ -424,7 +424,7 @@ void reactor_backend_epoll::signal_received(int signo, siginfo_t* siginfo, void*
 }
 
 future<> reactor_backend_epoll::get_epoll_future(pollable_fd_state& pfd,
-        promise_base_with_type<> pollable_fd_state::*pr, int event) {
+        promise<> pollable_fd_state::*pr, int event) {
     if (pfd.events_known & event) {
         pfd.events_known &= ~event;
         return make_ready_future();

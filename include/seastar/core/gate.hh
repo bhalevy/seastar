@@ -46,7 +46,7 @@ public:
 /// requests have completed.  The \c gate class provides a solution.
 class gate {
     size_t _count = 0;
-    compat::optional<promise_base_with_type<>> _stopped;
+    compat::optional<promise<>> _stopped;
 public:
     /// Registers an in-progress request.
     ///

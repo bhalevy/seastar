@@ -27,7 +27,7 @@
 namespace seastar {
 
 class io_desc {
-    promise_base_with_type<seastar::internal::linux_abi::io_event> _pr;
+    promise<seastar::internal::linux_abi::io_event> _pr;
 public:
     virtual ~io_desc() = default;
     virtual void set_exception(std::exception_ptr eptr) {

@@ -53,7 +53,7 @@ SEASTAR_TEST_CASE(test_self_move) {
     std::swap(s2, s2);
     BOOST_REQUIRE_EQUAL(*std::get<0>(std::move(s2).get()), 42);
 
-    promise_base_with_type<std::unique_ptr<int>> p1;
+    promise<std::unique_ptr<int>> p1;
     p1.set_value(std::make_unique<int>(42));
     p1 = std::move(p1); // no crash, but the value of p1 is not defined.
 
@@ -78,13 +78,13 @@ SEASTAR_TEST_CASE(test_self_move) {
 
 SEASTAR_TEST_CASE(test_set_future_state_with_tuple) {
     future_state<int> s1;
-    promise_base_with_type<int> p1;
+    promise<int> p1;
     const std::tuple<int> v1(42);
     s1.set(v1);
     p1.set_value(v1);
 
     future_state<int, int> s2;
-    promise_base_with_type<int, int> p2;
+    promise<int, int> p2;
     const std::tuple<int, int> v2(41, 42);
     s2.set(v2);
     p2.set_value(v2);
@@ -325,7 +325,7 @@ SEASTAR_TEST_CASE(test_future_forwarding__ready_to_armed) {
     return called;
 }
 
-static void forward_dead_unarmed_promise_with_dead_future_to(promise_base_with_type<>& p) {
+static void forward_dead_unarmed_promise_with_dead_future_to(promise<>& p) {
     auto f2 = future<>::for_promise();
     auto p2 = f2.get_promise();
     f2.forward_to(std::move(p2));

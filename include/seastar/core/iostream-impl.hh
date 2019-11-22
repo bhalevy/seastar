@@ -409,7 +409,7 @@ output_stream<CharType>::flush() {
             _flush = true;
             if (!_in_batch) {
                 add_to_flush_poller(this);
-                _in_batch = promise_base_with_type<>();
+                _in_batch = promise<>();
             }
         }
     }

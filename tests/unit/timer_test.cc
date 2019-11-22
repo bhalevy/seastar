@@ -44,8 +44,8 @@ struct timer_test {
     timer<Clock> t3;
     timer<Clock> t4;
     timer<Clock> t5;
-    promise_base_with_type<> pr1;
-    promise_base_with_type<> pr2;
+    promise<> pr1;
+    promise<> pr2;
 
     future<> run() {
         t1.set_callback([this] {

@@ -284,7 +284,7 @@ class output_stream final {
     size_t _end = 0;
     bool _trim_to_size = false;
     bool _batch_flushes = false;
-    compat::optional<promise_base_with_type<>> _in_batch;
+    compat::optional<promise<>> _in_batch;
     bool _flush = false;
     bool _flushing = false;
     std::exception_ptr _ex;

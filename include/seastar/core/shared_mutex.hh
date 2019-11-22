@@ -50,8 +50,8 @@ class shared_mutex {
     unsigned _readers = 0;
     bool _writer = false;
     struct waiter {
-        waiter(promise_base_with_type<>&& pr, bool for_write) : pr(std::move(pr)), for_write(for_write) {}
-        promise_base_with_type<> pr;
+        waiter(promise<>&& pr, bool for_write) : pr(std::move(pr)), for_write(for_write) {}
+        promise<> pr;
         bool for_write;
     };
     circular_buffer<waiter> _waiters;

@@ -369,7 +369,7 @@ inline std::exception_ptr unmarshal_exception(rcv_buf& d) {
 template <typename Payload, typename... T>
 struct rcv_reply_base  {
     bool done = false;
-    promise_base_with_type<T...> p;
+    promise<T...> p;
     template<typename... V>
     void set_value(V&&... v) {
         done = true;
