@@ -1174,9 +1174,9 @@ SEASTAR_TEST_CASE(test_warn_on_broken_promise_with_no_future) {
     // Example code where we expect a "Exceptional future ignored"
     // warning. We can't directly test that the warning is issued, but
     // this example functions as documentation.
-    promise<> p;
+
     // Intentionally destroy the future
-    (void)p.get_future2();
+    auto p = future<>::for_promise().get_promise();
     p.set_exception(std::runtime_error("foo"));
     return make_ready_future<>();
 }
