@@ -719,6 +719,7 @@ protected:
             detach_promise();
         }
     }
+
     promise_base* detach_promise() noexcept {
         _promise->_state = nullptr;
         _promise->_future = nullptr;
@@ -809,7 +810,6 @@ private:
             : _state(std::move(state)) {
         this->check_deprecation();
     }
-
     promise<T...>* detach_promise() {
         return static_cast<promise<T...>*>(future_base::detach_promise());
     }
@@ -1328,7 +1328,6 @@ public:
 
 inline internal::promise_base::promise_base(future_base* future, future_state_base* state) noexcept
     : _future(future), _state(state) {
-    assert(!_future->_promise);
     _future->_promise = this;
 }
 
