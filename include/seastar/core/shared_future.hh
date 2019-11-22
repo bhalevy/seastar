@@ -101,7 +101,7 @@ public:
     using clock = typename options::clock_type;
     using time_point = typename clock::time_point;
     using future_type = typename future_option_traits<T...>::template parametrize<future>::type;
-    using promise_base_type = typename future_type::promise_type;
+    using promise_type = typename future_option_traits<T...>::template parametrize<promise>::type;
     using value_tuple_type = typename future_option_traits<T...>::template parametrize<std::tuple>::type;
 private:
     using future_state_type = typename future_option_traits<T...>::template parametrize<future_state>::type;
@@ -110,7 +110,7 @@ private:
     /// \cond internal
     class shared_state : public enable_lw_shared_from_this<shared_state> {
         future_type _original_future;
-        expiring_fifo<promise_base_type, promise_expiry, clock> _peers;
+        expiring_fifo<promise_type, promise_expiry, clock> _peers;
 
     public:
         ~shared_state() {
@@ -231,13 +231,13 @@ class shared_promise {
 public:
     using shared_future_type = shared_future<T...>;
     using future_type = typename shared_future_type::future_type;
-    using promise_base_type = typename future_type::promise_type;
+    using promise_type = typename shared_future_type::promise_type;
     using clock = typename shared_future_type::clock;
     using time_point = typename shared_future_type::time_point;
     using value_tuple_type = typename shared_future_type::value_tuple_type;
     using future_state_type = typename shared_future_type::future_state_type;
 private:
-    promise_base_type _promise;
+    promise_type _promise;
     shared_future_type _shared_future;
     static constexpr bool copy_noexcept = future_state_type::copy_noexcept;
 public:
