@@ -498,6 +498,23 @@ class promise : protected internal::promise_base {
     future_state<T...>* get_state() {
         return static_cast<future_state<T...>*>(_state);
     }
+    template <typename Func>
+    void schedule(Func&& func) {
+        auto tws = std::make_unique<continuation<Func, T...>>(std::move(func));
+        _state = &tws->_state;
+        _task = std::move(tws);
+    }
+    void schedule(std::unique_ptr<continuation_base<T...>> callback) {
+        _state = &callback->_state;
+        _task = std::move(callback);
+    }
+
+#if SEASTAR_COROUTINES_TS
+    void set_coroutine(future_state<T...>& state, task& coroutine) noexcept {
+        _state = &state;
+        _task = std::unique_ptr<task>(&coroutine);
+    }
+#endif
 
 public:
     /// \brief Constructs an empty \c promise.
@@ -569,24 +586,6 @@ public:
             *get_state() = std::move(state);
             make_ready<urgent::yes>();
         }
-    }
-
-#if SEASTAR_COROUTINES_TS
-    void set_coroutine(future_state<T...>& state, task& coroutine) noexcept {
-        _state = &state;
-        _task = std::unique_ptr<task>(&coroutine);
-    }
-#endif
-private:
-    template <typename Func>
-    void schedule(Func&& func) {
-        auto tws = std::make_unique<continuation<Func, T...>>(std::move(func));
-        _state = &tws->_state;
-        _task = std::move(tws);
-    }
-    void schedule(std::unique_ptr<continuation_base<T...>> callback) {
-        _state = &callback->_state;
-        _task = std::move(callback);
     }
 
     template <typename... U>
