@@ -801,7 +801,7 @@ private:
     // future_state.
     future(future_for_get_promise_marker m) { }
 
-    future(internal::promise_base* pr) noexcept : future_base(pr, &_state) { }
+    future(promise<T...>* pr) noexcept : future_base(pr, &_state) { }
     template <typename... A>
     future(ready_future_marker m, A&&... a) : _state(m, std::forward<A>(a)...) { }
     future(exception_future_marker m, std::exception_ptr ex) noexcept : _state(m, std::move(ex)) { }
