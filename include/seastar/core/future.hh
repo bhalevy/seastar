@@ -551,10 +551,10 @@ private:
         _task = std::move(callback);
     }
 
-    template <typename... U>
-    friend class seastar::future;
-
     friend struct seastar::future_state<T...>;
+
+    template <typename... U>
+    friend class future;
 };
 
 /// \brief Specialization of \c promise<void>
