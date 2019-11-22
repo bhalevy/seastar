@@ -73,6 +73,9 @@ namespace seastar {
 /// @{
 
 template <class... T>
+class promise_base_with_type;
+
+template <class... T>
 class future;
 
 template <typename... T>
@@ -111,9 +114,6 @@ void report_failed_future(const std::exception_ptr& ex) noexcept;
 struct broken_promise : std::logic_error {
     broken_promise();
 };
-
-template <class... T>
-class promise_base_with_type;
 
 namespace internal {
 // It doesn't seem to be possible to use std::tuple_element_t with an empty tuple. There is an static_assert in it that
@@ -487,12 +487,13 @@ public:
 };
 }
 
-/// \brief A promise with type but no local data.
+/// \endcond
+
+/// \brief promise - allows a future value to be made available at a later time.
 ///
-/// This is a promise without any local data. We use this for when the
-/// future is created first, so we know the promise always has an
-/// external place to point to. We cannot just use promise_base
-/// because we need to know the type that is being stored.
+/// \tparam T A list of types to be carried as the result of the associated future.
+///           A list with two or more types is deprecated; use
+///           \c promise<std::tuple<T...>> instead.
 template <typename... T>
 class promise_base_with_type : protected internal::promise_base {
 protected:
@@ -555,15 +556,6 @@ private:
 
     friend struct seastar::future_state<T...>;
 };
-/// \endcond
-
-/// \brief promise - allows a future value to be made available at a later time.
-///
-/// \tparam T A list of types to be carried as the result of the associated future.
-///           A list with two or more types is deprecated; use
-///           \c promise<std::tuple<T...>> instead.
-
-// FIXME: move promise_base_with_type here
 
 /// \brief Specialization of \c promise<void>
 ///
