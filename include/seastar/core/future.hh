@@ -524,13 +524,6 @@ public:
     /// was attached to the future, it will run.
     future<T...> get_future() noexcept;
 
-    void set_urgent_state(future_state<T...>&& state) noexcept {
-        if (_state) {
-            *get_state() = std::move(state);
-            make_ready<urgent::yes>();
-        }
-    }
-
     /// \brief Sets the promises value
     ///
     /// Forwards the arguments and makes them available to the associated
@@ -571,6 +564,13 @@ public:
         internal::promise_base::set_exception(std::forward<Exception>(e));
     }
 
+    void set_urgent_state(future_state<T...>&& state) noexcept {
+        if (_state) {
+            *get_state() = std::move(state);
+            make_ready<urgent::yes>();
+        }
+    }
+
 #if SEASTAR_COROUTINES_TS
     void set_coroutine(future_state<T...>& state, task& coroutine) noexcept {
         _state = &state;
@@ -588,8 +588,6 @@ private:
         _state = &callback->_state;
         _task = std::move(callback);
     }
-
-    friend struct seastar::future_state<T...>;
 
     template <typename... U>
     friend class future;
