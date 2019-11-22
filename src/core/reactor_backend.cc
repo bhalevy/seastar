@@ -169,7 +169,7 @@ bool reactor_backend_aio::await_events(int timeout, const sigset_t* active_sigma
                 process_smp_wakeup();
                 continue;
             }
-            auto* pr = reinterpret_cast<promise<>*>(uintptr_t(event.data));
+            auto* pr = reinterpret_cast<promise_base_with_type<>*>(uintptr_t(event.data));
             pr->set_value();
             free_iocb(iocb);
         }
