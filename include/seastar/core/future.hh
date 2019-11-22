@@ -566,85 +566,14 @@ private:
 /// \tparam T A list of types to be carried as the result of the associated future.
 ///           A list with two or more types is deprecated; use
 ///           \c promise<std::tuple<T...>> instead.
-template <typename... T>
-class promise : private promise_base_with_type<T...> {
-    future_state<T...> _local_state;
 
-public:
-    /// \brief Constructs an empty \c promise.
-    ///
-    /// Creates promise with no associated future yet (see get_future()).
-    promise() noexcept : promise_base_with_type<T...>(&_local_state) {}
-
-    /// \brief Moves a \c promise object.
-    promise(promise&& x) noexcept;
-    promise(const promise&) = delete;
-    promise& operator=(promise&& x) noexcept {
-        this->~promise();
-        new (this) promise(std::move(x));
-        return *this;
-    }
-    void operator=(const promise&) = delete;
-
-    /// \brief Gets the promise's associated future.
-    ///
-    /// The future and promise will be remember each other, even if either or
-    /// both are moved.  When \c set_value() or \c set_exception() are called
-    /// on the promise, the future will be become ready, and if a continuation
-    /// was attached to the future, it will run.
-    future<T...> get_future2() noexcept;
-
-    /// \brief Sets the promises value
-    ///
-    /// Forwards the arguments and makes them available to the associated
-    /// future.  May be called either before or after \c get_future().
-    ///
-    /// The arguments can have either the types the promise is
-    /// templated with, or a corresponding std::tuple. That is, given
-    /// a promise<int, double>, both calls are valid:
-    ///
-    /// pr.set_value(42, 43.0);
-    /// pr.set_value(std::tuple<int, double>(42, 43.0))
-    template <typename... A>
-    void set_value(A&&... a) {
-        promise_base_with_type<T...>::set_value(std::forward<A>(a)...);
-    }
-
-    /// \brief Marks the promise as failed
-    ///
-    /// Forwards the exception argument to the future and makes it
-    /// available.  May be called either before or after \c get_future().
-    void set_exception(std::exception_ptr&& ex) noexcept {
-        internal::promise_base::set_exception(std::move(ex));
-    }
-
-    void set_exception(const std::exception_ptr& ex) noexcept {
-        internal::promise_base::set_exception(ex);
-    }
-
-    /// \brief Marks the promise as failed
-    ///
-    /// Forwards the exception argument to the future and makes it
-    /// available.  May be called either before or after \c get_future().
-    template<typename Exception>
-    std::enable_if_t<!std::is_same<std::remove_reference_t<Exception>, std::exception_ptr>::value, void> set_exception(Exception&& e) noexcept {
-        internal::promise_base::set_exception(std::forward<Exception>(e));
-    }
-
-    using promise_base_with_type<T...>::set_urgent_state;
-
-    template <typename... U>
-    friend class future;
-};
+// FIXME: move promise_base_with_type here
 
 /// \brief Specialization of \c promise<void>
 ///
 /// This is an alias for \c promise<>, for generic programming purposes.
 /// For example, You may have a \c promise<T> where \c T can legally be
 /// \c void.
-template<>
-class promise<void> : public promise<> {};
-
 template<>
 class promise_base_with_type<void> : public promise_base_with_type<> {};
 
@@ -1435,14 +1364,6 @@ promise_base_with_type<T...>::get_future() noexcept {
     return future<T...>(this);
 }
 
-template <typename... T>
-inline
-future<T...>
-promise<T...>::get_future2() noexcept {
-    assert(!this->_future && this->_state && !this->_task);
-    return future<T...>(this);
-}
-
 template<internal::promise_base::urgent Urgent>
 inline
 void internal::promise_base::make_ready() noexcept {
@@ -1453,15 +1374,6 @@ void internal::promise_base::make_ready() noexcept {
         } else {
             ::seastar::schedule(std::move(_task));
         }
-    }
-}
-
-template <typename... T>
-inline
-promise<T...>::promise(promise&& x) noexcept : promise_base_with_type<T...>(std::move(x)) {
-    if (this->_state == &x._local_state) {
-        this->_state = &_local_state;
-        _local_state = std::move(x._local_state);
     }
 }
 
