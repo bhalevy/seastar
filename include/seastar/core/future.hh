@@ -403,7 +403,6 @@ class continuation_base : public task {
 protected:
     future_state<T...> _state;
     using future_type = future<T...>;
-    using promise_type = promise<T...>;
 public:
     continuation_base() = default;
     explicit continuation_base(future_state<T...>&& state) : _state(std::move(state)) {}
@@ -679,8 +678,6 @@ template <typename T>
 struct futurize {
     /// If \c T is a future, \c T; otherwise \c future<T>
     using type = future<T>;
-    /// The promise type associated with \c type.
-    using promise_type = promise<T>;
     /// The value tuple type associated with \c type
     using value_type = std::tuple<T>;
 
@@ -712,7 +709,6 @@ struct futurize {
 template <>
 struct futurize<void> {
     using type = future<>;
-    using promise_type = promise<>;
     using value_type = std::tuple<>;
 
     template<typename Func, typename... FuncArgs>
@@ -731,7 +727,6 @@ struct futurize<void> {
 template <typename... Args>
 struct futurize<future<Args...>> {
     using type = future<Args...>;
-    using promise_type = promise<Args...>;
     using value_type = std::tuple<Args...>;
 
     template<typename Func, typename... FuncArgs>
@@ -960,8 +955,6 @@ private:
 public:
     /// \brief The data type carried by the future.
     using value_type = std::tuple<T...>;
-    /// \brief The data type carried by the future.
-    using promise_type = promise<T...>;
     using promise_base_type = promise_base_with_type<T...>;
     /// \brief Moves the future into a new object.
     [[gnu::always_inline]]
