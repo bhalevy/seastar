@@ -215,7 +215,7 @@ class concrete_execution_stage final : public execution_stage {
     static constexpr size_t max_queue_length = 1024;
 
     using return_type = futurize_t<ReturnType>;
-    using promise_type = typename return_type::promise_base_type;
+    using promise_type = typename return_type::promise_type;
     using input_type = typename tuple_map_types<internal::wrap_for_es, args_tuple>::type;
 
     struct work_item {

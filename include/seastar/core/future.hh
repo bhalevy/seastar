@@ -876,7 +876,8 @@ private:
 public:
     /// \brief The data type carried by the future.
     using value_type = std::tuple<T...>;
-    using promise_base_type = promise<T...>;
+    /// \brief The data type carried by the future.
+    using promise_type = promise<T...>;
     /// \brief Moves the future into a new object.
     [[gnu::always_inline]]
     future(future&& x) noexcept : future_base(std::move(x), &_state), _state(std::move(x._state)) { }
