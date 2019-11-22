@@ -890,15 +890,6 @@ public:
         return future(future_for_get_promise_marker{});
     }
 
-    void set_exception(std::exception_ptr&& ex) noexcept {
-        _state.set_exception(std::move(ex));
-    }
-
-    template <typename... A>
-    void set_value(A&&... a) {
-        _state.set(std::forward<A>(a)...);
-    }
-
     /// \brief gets the value returned by the computation
     ///
     /// Requires that the future be available.  If the value
