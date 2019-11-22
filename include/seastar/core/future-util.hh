@@ -1218,7 +1218,6 @@ struct tuple_to_future;
 template<typename... Elements>
 struct tuple_to_future<std::tuple<Elements...>> {
     using type = future<Elements...>;
-    using promise_type = promise<Elements...>;
 
     static auto make_ready(std::tuple<Elements...> t) {
         auto create_future = [] (auto&&... args) {

@@ -102,7 +102,6 @@ public:
     using time_point = typename clock::time_point;
     using future_type = typename future_option_traits<T...>::template parametrize<future>::type;
     using promise_base_type = typename future_type::promise_base_type;
-    using promise_type = typename future_option_traits<T...>::template parametrize<promise>::type;
     using value_tuple_type = typename future_option_traits<T...>::template parametrize<std::tuple>::type;
 private:
     using future_state_type = typename future_option_traits<T...>::template parametrize<future_state>::type;
@@ -232,7 +231,6 @@ class shared_promise {
 public:
     using shared_future_type = shared_future<T...>;
     using future_type = typename shared_future_type::future_type;
-    using promise_type = typename shared_future_type::promise_type;
     using promise_base_type = typename future_type::promise_base_type;
     using clock = typename shared_future_type::clock;
     using time_point = typename shared_future_type::time_point;

@@ -73,9 +73,6 @@ namespace seastar {
 /// @{
 
 template <class... T>
-class promise;
-
-template <class... T>
 class future;
 
 template <typename... T>
@@ -410,7 +407,6 @@ public:
         _state = std::move(state);
     }
     friend class promise_base_with_type<T...>;
-    friend class promise<T...>;
     friend class future<T...>;
 };
 
@@ -1109,14 +1105,6 @@ private:
     }
 
 public:
-    void forward_to(promise_base_with_type<T...>&& pr) noexcept {
-        if (_state.available()) {
-            pr.set_urgent_state(std::move(_state));
-        } else {
-            *detach_promise() = std::move(pr);
-        }
-    }
-
     /// \brief Satisfy some \ref promise object with this future as a result.
     ///
     /// Arranges so that when this future is resolve, it will be used to
@@ -1127,19 +1115,13 @@ public:
     ///
     /// \param pr a promise that will be fulfilled with the results of this
     /// future.
-    void forward_to(promise<T...>&& pr) noexcept {
+    void forward_to(promise_base_with_type<T...>&& pr) noexcept {
         if (_state.available()) {
             pr.set_urgent_state(std::move(_state));
-        } else if (&pr._local_state != pr._state) {
-            // The only case when _state points to _local_state is
-            // when get_future was never called. Given that pr will
-            // soon be destroyed, we know get_future will never be
-            // called and we can just ignore this request.
+        } else {
             *detach_promise() = std::move(pr);
         }
     }
-
-
 
     /**
      * Finally continuation for statements that require waiting for the result.
