@@ -595,6 +595,8 @@ template <typename T>
 struct futurize {
     /// If \c T is a future, \c T; otherwise \c future<T>
     using type = future<T>;
+    /// The promise type associated with \c type.
+    using promise_type = promise<T>;
     /// The value tuple type associated with \c type
     using value_type = std::tuple<T>;
 
@@ -626,6 +628,7 @@ struct futurize {
 template <>
 struct futurize<void> {
     using type = future<>;
+    using promise_type = promise<>;
     using value_type = std::tuple<>;
 
     template<typename Func, typename... FuncArgs>
@@ -644,6 +647,7 @@ struct futurize<void> {
 template <typename... Args>
 struct futurize<future<Args...>> {
     using type = future<Args...>;
+    using promise_type = promise<Args...>;
     using value_type = std::tuple<Args...>;
 
     template<typename Func, typename... FuncArgs>
