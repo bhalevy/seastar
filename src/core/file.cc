@@ -810,7 +810,7 @@ append_challenged_posix_file_impl::close() noexcept {
     // Caller should have drained all pending I/O
     _closing_state = state::draining;
     // FIXME: just have process_queue return a future<>?
-    auto fut = _completed.get_future();
+    auto fut = _completed.get_future2();
     process_queue();
     return fut.then([this] {
         if (_logical_size != _committed_size) {

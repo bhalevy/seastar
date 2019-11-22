@@ -109,7 +109,7 @@ public:
               _socket(factory, inject_error ? &_error_injector : nullptr) {
     }
     virtual future<connected_socket> connect(socket_address sa, socket_address local, transport proto = transport::TCP) override {
-        return _connect ? _socket.connect(sa, local, proto) : _p.get_future();
+        return _connect ? _socket.connect(sa, local, proto) : _p.get_future2();
     }
     virtual void set_reuseaddr(bool reuseaddr) override {}
     virtual bool get_reuseaddr() const override { return false; };

@@ -51,7 +51,7 @@ future<> sleep(std::chrono::duration<Rep, Period> dur) {
         }
     };
     sleeper *s = new sleeper(dur);
-    future<> fut = s->done.get_future();
+    future<> fut = s->done.get_future2();
     return fut.then([s] { delete s; });
 }
 

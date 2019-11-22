@@ -233,7 +233,7 @@ template <typename... T>
 inline
 future<>
 subscription<T...>::done() {
-    return _stream->_done.get_future();
+    return _stream->_done.get_future2();
 }
 
 }

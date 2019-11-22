@@ -244,7 +244,7 @@ public:
     shared_promise(const shared_promise&) = delete;
     shared_promise(shared_promise&&) = default;
     shared_promise& operator=(shared_promise&&) = default;
-    shared_promise() : _promise(), _shared_future(_promise.get_future()) {
+    shared_promise() : _promise(), _shared_future(_promise.get_future2()) {
     }
 
     /// \brief Gets new future associated with this promise.

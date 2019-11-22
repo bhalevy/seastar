@@ -247,7 +247,7 @@ public:
         }
 
         auto p = new promise_wrap(std::move(name));
-        auto f = p->get_future();
+        auto f = p->get_future2();
 
         dns_call call(*this);
 
@@ -290,7 +290,7 @@ public:
         dns_log.debug("Query addr {}", addr);
 
         auto p = new promise_wrap(std::move(addr));
-        auto f = p->get_future();
+        auto f = p->get_future2();
 
         dns_call call(*this);
 

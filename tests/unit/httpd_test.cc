@@ -435,7 +435,7 @@ public:
                             return make_ready_future<std::unique_ptr<reply>>(std::move(rep));
                         }
                         future<> wait_for_message() {
-                            return _all_message_sent.get_future();
+                            return _all_message_sent.get_future2();
                         }
                     };
                     auto handler = new test_handler(*server, std::move(write_func));
@@ -505,7 +505,7 @@ public:
                             return make_ready_future<std::unique_ptr<reply>>(std::move(rep));
                         }
                         future<> wait_for_message() {
-                            return _all_message_sent.get_future();
+                            return _all_message_sent.get_future2();
                         }
                     };
                     auto handler = new test_handler(*server, tests);

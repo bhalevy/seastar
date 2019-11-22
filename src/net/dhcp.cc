@@ -351,7 +351,7 @@ public:
     future<compat::optional<lease>> run(const lease & l,
             const steady_clock_type::duration & timeout) {
 
-        auto fut = _result.get_future();
+        auto fut = _result.get_future2();
         _state = state::NONE;
         _timer.set_callback([this]() {
             _state = state::FAIL;

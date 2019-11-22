@@ -293,7 +293,7 @@ public:
         _queue.emplace_back(std::move(args)...);
         _empty = false;
         _stats.function_calls_enqueued++;
-        auto f = _queue.back()._ready.get_future();
+        auto f = _queue.back()._ready.get_future2();
         flush();
         return f;
     }

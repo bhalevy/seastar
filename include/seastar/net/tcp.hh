@@ -464,7 +464,7 @@ private:
             }
         }
         future<> connect_done() {
-            return _connect_done.get_future();
+            return _connect_done.get_future2();
         }
         tcp_state& state() {
             return _state;

@@ -260,7 +260,7 @@ async(thread_attributes attr, Func&& func, Args&&... args) {
         thread th;
     };
     return do_with(work{std::move(attr), std::forward<Func>(func), std::forward_as_tuple(std::forward<Args>(args)...)}, [] (work& w) mutable {
-        auto ret = w.pr.get_future();
+        auto ret = w.pr.get_future2();
         w.th = thread(std::move(w.attr), [&w] {
             futurize<return_type>::apply(std::move(w.func), std::move(w.args)).forward_to(std::move(w.pr));
         });

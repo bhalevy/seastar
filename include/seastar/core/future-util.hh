@@ -276,7 +276,7 @@ public:
     repeater(stop_iteration si, AsyncAction action) : repeater(std::move(action)) {
         _state.set(std::make_tuple(si));
     }
-    future<> get_future() { return _promise.get_future(); }
+    future<> get_future() { return _promise.get_future2(); }
     virtual void run_and_dispose() noexcept override {
         std::unique_ptr<repeater> zis{this};
         if (_state.failed()) {
@@ -393,7 +393,7 @@ public:
     repeat_until_value_state(compat::optional<T> st, AsyncAction action) : repeat_until_value_state(std::move(action)) {
         this->_state.set(std::make_tuple(std::move(st)));
     }
-    future<T> get_future() { return _promise.get_future(); }
+    future<T> get_future() { return _promise.get_future2(); }
     virtual void run_and_dispose() noexcept override {
         std::unique_ptr<repeat_until_value_state> zis{this};
         if (this->_state.failed()) {
@@ -496,7 +496,7 @@ class do_until_state final : public continuation_base<> {
     AsyncAction _action;
 public:
     explicit do_until_state(StopCondition stop, AsyncAction action) : _stop(std::move(stop)), _action(std::move(action)) {}
-    future<> get_future() { return _promise.get_future(); }
+    future<> get_future() { return _promise.get_future2(); }
     virtual void run_and_dispose() noexcept override {
         std::unique_ptr<do_until_state> zis{this};
         if (_state.available()) {
@@ -799,7 +799,7 @@ public:
             memory::disable_failure_guard dfg;
             return new when_all_state(std::move(futures)...);
         }();
-        auto ret = state->p.get_future();
+        auto ret = state->p.get_future2();
         state->do_wait_all();
         return ret;
     }

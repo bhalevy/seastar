@@ -209,7 +209,7 @@ namespace rpc {
               _outgoing_queue.back().pcancel = cancel;
           }
           _outgoing_queue_cond.signal();
-          return _outgoing_queue.back().p->get_future();
+          return _outgoing_queue.back().p->get_future2();
       } else {
           return make_exception_future<>(closed_error());
       }

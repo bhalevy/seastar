@@ -69,7 +69,7 @@ struct test_env {
         auto req = std::make_unique<request>();
         req->fqdesc.weight = weight;
         req->fqdesc.size  = 0;
-        inflight.push_back(req->pr.get_future());
+        inflight.push_back(req->pr.get_future2());
         auto fqdesc = req->fqdesc;
 
         fq.queue(cl, fqdesc, [this, index, req = std::move(req)] () mutable noexcept {
