@@ -719,7 +719,6 @@ protected:
             detach_promise();
         }
     }
-
     promise_base* detach_promise() noexcept {
         _promise->_state = nullptr;
         _promise->_future = nullptr;
@@ -811,13 +810,6 @@ private:
         this->check_deprecation();
     }
 
-public:
-    promise<T...> get_promise() noexcept {
-        assert(!_promise);
-        return promise<T...>(*this);
-    }
-
-private:
     promise<T...>* detach_promise() {
         return static_cast<promise<T...>*>(future_base::detach_promise());
     }
@@ -888,6 +880,11 @@ public:
         return *this;
     }
     void operator=(const future&) = delete;
+
+    promise<T...> get_promise() noexcept {
+        assert(!_promise);
+        return promise<T...>(*this);
+    }
 
     static future for_promise() noexcept {
         return future(future_for_get_promise_marker{});
@@ -1120,6 +1117,8 @@ public:
         }
     }
 
+
+
     /**
      * Finally continuation for statements that require waiting for the result.
      * I.e. you need to "finally" call a function that returns a possibly
@@ -1296,8 +1295,6 @@ private:
     /// \cond internal
     template <typename... U>
     friend class future;
-    template <typename... U>
-    friend class promise;
     template <typename... U>
     friend class promise;
     template <typename... U, typename... A>
