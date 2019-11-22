@@ -495,16 +495,19 @@ protected:
 ///           \c promise<std::tuple<T...>> instead.
 template <typename... T>
 class promise : protected internal::promise_base {
-protected:
     future_state<T...>* get_state() {
         return static_cast<future_state<T...>*>(_state);
     }
-    static constexpr bool copy_noexcept = future_state<T...>::copy_noexcept;
+
 public:
+    /// \brief Constructs an empty \c promise.
+    ///
+    /// Creates promise with no associated future yet (see get_future()).
     promise() noexcept : promise_base(nullptr) { }
-    promise(future_state_base* state) noexcept : promise_base(state) { }
-    promise(future<T...>& future) noexcept : promise_base(&future, &future._state) { }
+
+    /// \brief Moves a \c promise object.
     promise(promise&& x) noexcept : promise_base(std::move(x)) { }
+    promise(future<T...>& future) noexcept : promise_base(&future, &future._state) { }
     promise(const promise&) = delete;
     promise& operator=(promise&& x) noexcept {
         this->~promise();
