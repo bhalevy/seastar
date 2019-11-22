@@ -223,14 +223,13 @@ parallel_for_each(Iterator begin, Iterator end, Func&& func) noexcept {
         // s->start() takes ownership of s (and chains it to one of the futures it contains)
         // so this isn't a leak
         s->start();
+        return fut;
     } else {
         if (__builtin_expect(bool(ex), false)) {
-            fut.set_exception(std::move(*ex));
-        } else {
-            fut.set_value();
+            return make_exception_future<>(std::move(*ex));
         }
+        return make_ready_future<>();
     }
-    return fut;
 }
 
 /// Run tasks in parallel (range version).
