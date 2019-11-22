@@ -340,7 +340,7 @@ private:
             std::deque<packet> unsent;
             uint32_t unsent_len = 0;
             bool closed = false;
-            promise<> _window_opened;
+            promise_base_with_type<> _window_opened;
             // Wait for all data are acked
             compat::optional<promise_base_with_type<>> _all_data_acked_promise;
             // Limit number of data queued into send queue
