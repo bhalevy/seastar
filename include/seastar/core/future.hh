@@ -486,7 +486,6 @@ protected:
     template <typename... U> friend class seastar::future;
 };
 }
-
 /// \endcond
 
 /// \brief promise - allows a future value to be made available at a later time.
@@ -514,6 +513,12 @@ public:
     }
     void operator=(const promise&) = delete;
 
+    /// \brief Gets the promise's associated future.
+    ///
+    /// The future and promise will be remember each other, even if either or
+    /// both are moved.  When \c set_value() or \c set_exception() are called
+    /// on the promise, the future will be become ready, and if a continuation
+    /// was attached to the future, it will run.
     future<T...> get_future() noexcept;
 
     void set_urgent_state(future_state<T...>&& state) noexcept {
@@ -523,6 +528,17 @@ public:
         }
     }
 
+    /// \brief Sets the promises value
+    ///
+    /// Forwards the arguments and makes them available to the associated
+    /// future.  May be called either before or after \c get_future().
+    ///
+    /// The arguments can have either the types the promise is
+    /// templated with, or a corresponding std::tuple. That is, given
+    /// a promise<int, double>, both calls are valid:
+    ///
+    /// pr.set_value(42, 43.0);
+    /// pr.set_value(std::tuple<int, double>(42, 43.0))
     template <typename... A>
     void set_value(A&&... a) {
         if (auto *s = get_state()) {
@@ -531,7 +547,26 @@ public:
         }
     }
 
-    using internal::promise_base::set_exception;
+    /// \brief Marks the promise as failed
+    ///
+    /// Forwards the exception argument to the future and makes it
+    /// available.  May be called either before or after \c get_future().
+    void set_exception(std::exception_ptr&& ex) noexcept {
+        internal::promise_base::set_exception(std::move(ex));
+    }
+
+    void set_exception(const std::exception_ptr& ex) noexcept {
+        internal::promise_base::set_exception(ex);
+    }
+
+    /// \brief Marks the promise as failed
+    ///
+    /// Forwards the exception argument to the future and makes it
+    /// available.  May be called either before or after \c get_future().
+    template<typename Exception>
+    std::enable_if_t<!std::is_same<std::remove_reference_t<Exception>, std::exception_ptr>::value, void> set_exception(Exception&& e) noexcept {
+        internal::promise_base::set_exception(std::forward<Exception>(e));
+    }
 
 #if SEASTAR_COROUTINES_TS
     void set_coroutine(future_state<T...>& state, task& coroutine) noexcept {
