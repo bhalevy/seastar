@@ -44,14 +44,14 @@ future<> sleep(std::chrono::duration<Rep, Period> dur) {
     struct sleeper {
         promise<> done;
         timer<Clock> tmr;
-        sleeper(std::chrono::duration<Rep, Period> dur)
-            : tmr([this] { done.set_value(); })
+        sleeper(future<>& fut, std::chrono::duration<Rep, Period> dur)
+            : done(fut), tmr([this] { done.set_value(); })
         {
             tmr.arm(dur);
         }
     };
-    sleeper *s = new sleeper(dur);
-    future<> fut = s->done.get_future2();
+    auto fut = future<>::for_promise();
+    sleeper *s = new sleeper(fut, dur);
     return fut.then([s] { delete s; });
 }
 
