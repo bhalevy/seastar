@@ -177,7 +177,8 @@ class smp_message_queue {
         compat::optional<value_type> _result;
         std::exception_ptr _ex; // if !_result
         typename futurator::promise_type _promise; // used on local side
-        async_work_item(smp_message_queue& queue, smp_service_group ssg, Func&& func) : work_item(ssg), _queue(queue), _func(std::move(func)) {}
+        async_work_item(future_type& fut, smp_message_queue& queue, smp_service_group ssg, Func&& func)
+            : work_item(ssg), _queue(queue), _func(std::move(func)), _promise(fut) {}
         virtual void process() override {
             try {
               // Run _func asynchronously and set either _result or _ex.
@@ -206,7 +207,6 @@ class smp_message_queue {
                 _promise.set_exception(std::move(_ex));
             }
         }
-        future_type get_future() { return _promise.get_future2(); }
     };
     union tx_side {
         tx_side() {}
@@ -222,8 +222,8 @@ public:
     ~smp_message_queue();
     template <typename Func>
     futurize_t<std::result_of_t<Func()>> submit(shard_id t, smp_service_group ssg, Func&& func) {
-        auto wi = std::make_unique<async_work_item<Func>>(*this, ssg, std::forward<Func>(func));
-        auto fut = wi->get_future();
+        auto fut = futurize_t<std::result_of_t<Func()>>::for_promise();
+        auto wi = std::make_unique<async_work_item<Func>>(fut, *this, ssg, std::forward<Func>(func));
         submit_item(t, std::move(wi));
         return fut;
     }
