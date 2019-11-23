@@ -222,7 +222,8 @@ class concrete_execution_stage final : public execution_stage {
         input_type _in;
         promise_type _ready;
 
-        work_item(typename internal::wrap_for_es<Args>::type... args) : _in(std::move(args)...) { }
+        work_item(return_type& fut, typename internal::wrap_for_es<Args>::type... args)
+            : _in(std::move(args)...), _ready(fut) {}
 
         work_item(work_item&& other) = delete;
         work_item(const work_item&) = delete;
@@ -290,10 +291,10 @@ public:
         if (_queue.size() >= max_queue_length) {
             do_flush();
         }
-        _queue.emplace_back(std::move(args)...);
+        auto f = return_type::for_promise();
+        _queue.emplace_back(f, std::move(args)...);
         _empty = false;
         _stats.function_calls_enqueued++;
-        auto f = _queue.back()._ready.get_future2();
         flush();
         return f;
     }
