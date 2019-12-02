@@ -237,6 +237,9 @@ public:
     constexpr scheduling_group() noexcept : _id(0) {} // must be constexpr for current_scheduling_group_holder
     bool active() const;
     const sstring& name() const;
+    unsigned id() const {
+        return _id;
+    }
     bool operator==(scheduling_group x) const { return _id == x._id; }
     bool operator!=(scheduling_group x) const { return _id != x._id; }
     bool is_main() const { return _id == 0; }
