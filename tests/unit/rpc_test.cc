@@ -144,6 +144,7 @@ class rpc_test_env {
     struct rpc_test_service {
         std::unique_ptr<test_rpc_proto> proto;
         std::unique_ptr<test_rpc_proto::server> server;
+        std::vector<MsgType> _handlers;
 
         future<> init(rpc_test_config& cfg, loopback_connection_factory& lcf) {
             proto = std::make_unique<test_rpc_proto>(serializer());
@@ -152,6 +153,9 @@ class rpc_test_env {
         }
 
         future<> stop() {
+            for (auto t : _handlers) {
+                proto->unregister_handler(t);
+            }
             auto sptr = server.get();
             return sptr->stop().finally([s = std::move(server)] {});
         }
@@ -159,6 +163,7 @@ class rpc_test_env {
         template<typename Func>
         future<> register_handler(MsgType t, scheduling_group sg, Func func) {
             (void)proto->register_handler(t, sg, std::move(func));
+            _handlers.emplace_back(t);
             return make_ready_future<>();
         }
     };
