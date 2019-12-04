@@ -684,6 +684,25 @@ auto protocol<Serializer, MsgType>::register_handler(MsgType t, Func&& func) {
 }
 
 template<typename Serializer, typename MsgType>
+future<> protocol<Serializer, MsgType>::unregister_handler(MsgType t) {
+    auto it = _handlers.find(t);
+    if (it != _handlers.end()) {
+        auto& h = it->second;
+        // no need to engage the unregistered promise
+        // if the handler is unused
+        if (h.use_count() == 1) {
+            _handlers.erase(it);
+            return make_ready_future<>();
+        }
+        h->unregistered.emplace();
+        auto fut = h->unregistered->get_future();
+        _handlers.erase(it);
+        return fut;
+    }
+    return make_ready_future<>();
+}
+
+template<typename Serializer, typename MsgType>
 lw_shared_ptr<rpc_handler> protocol<Serializer, MsgType>::get_handler(uint64_t msg_id) {
     auto it = _handlers.find(MsgType(msg_id));
     if (it != _handlers.end()) {

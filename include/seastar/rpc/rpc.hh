@@ -552,7 +552,24 @@ using rpc_handler_func = std::function<future<> (shared_ptr<server::connection>,
 struct rpc_handler {
     scheduling_group sg;
     rpc_handler_func func;
-    bool unregistered = false;
+    compat::optional<promise<>> unregistered = {};
+
+    rpc_handler(scheduling_group sg, rpc_handler_func&& func)
+        : sg(std::move(sg))
+        , func(std::move(func))
+    { }
+
+    rpc_handler(rpc_handler&& o)
+        : sg(std::move(o.sg))
+        , func(std::move(o.func))
+        , unregistered(std::move(o.unregistered))
+    { }
+
+    ~rpc_handler() {
+        if (unregistered) {
+            unregistered->set_value();
+        }
+    }
 };
 
 class protocol_base {
@@ -629,9 +646,7 @@ public:
     template <typename Func>
     auto register_handler(MsgType t, scheduling_group sg, Func&& func);
 
-    void unregister_handler(MsgType t) {
-        _handlers.erase(t);
-    }
+    future<> unregister_handler(MsgType t);
 
     void set_logger(std::function<void(const sstring&)> logger) {
         _logger.set(std::move(logger));
