@@ -336,13 +336,16 @@ inline std::tuple<T...> unmarshall(connection& c, rcv_buf input) {
     return do_unmarshall<Serializer, decltype(in), T...>(c, in);
 }
 
-inline std::exception_ptr unmarshal_exception(rcv_buf& d) {
+inline std::exception_ptr unmarshal_exception(rcv_buf& d, exception_type* get_ex_type = nullptr) {
     std::exception_ptr ex;
     auto data = make_deserializer_stream(d);
 
     uint32_t v32;
     data.read(reinterpret_cast<char*>(&v32), 4);
     exception_type ex_type = exception_type(le_to_cpu(v32));
+    if (get_ex_type) {
+        *get_ex_type = ex_type;
+    }
     data.read(reinterpret_cast<char*>(&v32), 4);
     uint32_t ex_len = le_to_cpu(v32);
 
@@ -417,7 +420,12 @@ inline auto wait_for_reply(wait_type, compat::optional<rpc_clock_type::time_poin
         } else {
             dst.get_stats_internal().exception_received++;
             r.done = true;
-            r.p.set_exception(unmarshal_exception(data));
+            exception_type ex_type;
+            auto ep = unmarshal_exception(data, &ex_type);
+            if (ex_type == exception_type::UNKNOWN_VERB) {
+                dst.get_stats_internal().unknown_verbs++;
+            }
+            r.p.set_exception(ep);
         }
     };
     using handler_type = typename rpc::client::template reply_handler<reply_type, decltype(lambda)>;
