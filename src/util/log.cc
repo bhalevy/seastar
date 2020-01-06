@@ -81,33 +81,30 @@ std::ostream& operator<<(std::ostream& os, logger_timestamp_style lts) {
     return os;
 }
 
-void validate(boost::any& v,
-              const std::vector<std::string>& values,
-              logger_ostream_type* target_type, int) {
-    using namespace boost::program_options;
-    validators::check_first_occurrence(v);
-    auto s = validators::get_single_string(values);
-    if (s == "none") {
-        v = logger_ostream_type::none;
-        return;
-    } else if (s == "stdout") {
-        v = logger_ostream_type::stdout;
-        return;
-    } else if (s == "stderr") {
-        v = logger_ostream_type::stderr;
-        return;
-    }
-    throw validation_error(validation_error::invalid_option_value);
+const std::map<logger_ostream_type, sstring> logger_ostream_type_names = {
+        { logger_ostream_type::none, "none" },
+        { logger_ostream_type::stdout, "stdout" },
+        { logger_ostream_type::stderr, "stderr" },
+};
+
+std::ostream& operator<<(std::ostream& out, logger_ostream_type type) {
+    return out << logger_ostream_type_names.at(type);
 }
 
-std::ostream& operator<<(std::ostream& os, logger_ostream_type lot) {
-    switch (lot) {
-    case logger_ostream_type::none: return os << "none";
-    case logger_ostream_type::stdout: return os << "stdout";
-    case logger_ostream_type::stderr: return os << "stderr";
-    default: abort();
+std::istream& operator>>(std::istream& in, logger_ostream_type& type) {
+    sstring s;
+    in >> s;
+    if (!in) {
+        return in;
     }
-    return os;
+    for (auto&& x : logger_ostream_type_names) {
+        if (s == x.second) {
+            type = x.first;
+            return in;
+        }
+    }
+    in.setstate(std::ios::failbit);
+    return in;
 }
 
 struct timestamp_tag {};
@@ -413,6 +410,14 @@ log_level parse_log_level(const sstring& s) {
     }
 }
 
+logger_ostream_type parse_logger_ostream_type(const sstring& s) {
+    try {
+        return boost::lexical_cast<logger_ostream_type>(s.c_str());
+    } catch (const boost::bad_lexical_cast&) {
+        throw std::runtime_error(format("Unknown logger ostream type '{}'", s));
+    }
+}
+
 bpo::options_description get_options_description() {
     bpo::options_description opts("Logging options");
 
@@ -430,7 +435,7 @@ bpo::options_description get_options_description() {
             )
             ("logger-stdout-timestamps", bpo::value<logger_timestamp_style>()->default_value(logger_timestamp_style::real),
                     "Select timestamp style for stdout logs: none|boot|real")
-            ("log-to-stdout", bpo::value<logger_ostream_type>()->default_value(logger_ostream_type::stderr), "Send log output to: none|stdout|stderr")
+            ("log-to-stdout", bpo::value<sstring>()->default_value("stderr"), "Send log output to: none|stdout|stderr")
             ("log-to-syslog", bpo::value<bool>()->default_value(false), "Send log output to syslog.")
             ("help-loggers", bpo::bool_switch(), "Print a list of logger names and exit.");
 
@@ -458,7 +463,7 @@ logging_settings extract_settings(const boost::program_options::variables_map& v
     return logging_settings{
         std::move(levels),
         parse_log_level(vars["default-log-level"].as<sstring>()),
-        vars["log-to-stdout"].as<logger_ostream_type>(),
+        parse_logger_ostream_type(vars["log-to-stdout"].as<sstring>()),
         vars["log-to-syslog"].as<bool>(),
         vars["logger-stdout-timestamps"].as<logger_timestamp_style>()
     };
@@ -478,6 +483,15 @@ seastar::log_level lexical_cast(const std::string& source) {
     return level;
 }
 
+template<>
+seastar::logger_ostream_type lexical_cast(const std::string& source) {
+    std::istringstream in(source);
+    seastar::logger_ostream_type type;
+    if (!(in >> type)) {
+        throw boost::bad_lexical_cast();
+    }
+    return type;
+}
 }
 
 namespace std {
