@@ -69,6 +69,12 @@ void parse_logger_levels(const program_options::string_map& levels, OutputIter o
 }
 
 ///
+/// \brief Parse a logger_ostream_type ({none, stdout, stderr}) string,
+/// throwing \c std::runtime_error for an invalid value.
+///
+logger_ostream_type parse_logger_ostream_type(const sstring&);
+
+///
 /// \brief Extract CLI options into a logging configuration.
 //
 logging_settings extract_settings(const boost::program_options::variables_map&);
