@@ -69,8 +69,16 @@ void parse_logger_levels(const program_options::string_map& levels, OutputIter o
 }
 
 ///
-/// \brief Extract CLI options into a logging configuration.
-//
+/// The following options are supported:
+///   default-log-level: Default log level: trace|debug|info|warn|error (default=info)
+///   logger-log-level: Map of logger name to log level. The format is "NAME0=LEVEL0[:NAME1=LEVEL1:...]".
+///   logger-stdout-timestamps: Select timestamp style for stdout logs: none|boot|real (default=real)
+///   log-to-stdout: Send log output to output stream, as selected by --logger-ostream-type (default=true)
+///   logger-ostream-type: Send log output to: none|stdout|stderr (default=stderr)
+///   log-to-syslog: Send log output to syslog (default=false)
+///
+
+logging_settings extract_settings(std::unordered_map<sstring, sstring> options);
 logging_settings extract_settings(const boost::program_options::variables_map&);
 
 }

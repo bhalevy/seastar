@@ -473,6 +473,32 @@ void print_available_loggers(std::ostream& os) {
     }
 }
 
+logging_settings extract_settings(std::unordered_map<sstring, sstring> options)
+{
+    std::unordered_map<sstring, log_level> levels;
+
+    auto opt = options.find("logger-log-level");
+    if (opt != options.end()) {
+        program_options::string_map logger_levels_map;
+        std::istringstream(opt->second) >> logger_levels_map;
+        parse_logger_levels(logger_levels_map, std::inserter(levels, levels.begin()));
+    }
+
+    auto value_or = [&options] (sstring key, sstring alt_val) {
+        auto opt = options.find(key);
+        return opt != options.end() ? opt->second : alt_val;
+    };
+
+    return logging_settings{
+        std::move(levels),
+        parse_log_level(value_or("default-log-level", "info")),
+        parse_bool(value_or("log-to-stdout", "true")),
+        parse_bool(value_or("log-to-syslog", "false")),
+        parse_logger_timestamp_style(value_or("logger-stdout-timestamps", "real")),
+        parse_logger_ostream_type(value_or("logger-ostream-type", "stderr")),
+    };
+}
+
 logging_settings extract_settings(const boost::program_options::variables_map& vars) {
     const auto& raw_levels = vars["logger-log-level"].as<program_options::string_map>();
 
