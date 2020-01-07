@@ -72,7 +72,7 @@ void parse_logger_levels(const program_options::string_map& levels, OutputIter o
 /// \brief Extract CLI options into a logging configuration.
 //
 logging_settings extract_settings(
-        const program_options::string_map& logger_levels,
+        const sstring& logger_levels,
         const sstring& default_log_level,
         const sstring& logger_ostream_type,
         bool log_to_syslog,

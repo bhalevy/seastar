@@ -42,6 +42,10 @@ sstring get_or_default(const string_map& ss, const sstring& key, const sstring& 
 static void parse_map_associations(const std::string& v, string_map& ss) {
     static const std::regex colon(":");
 
+    if (v.empty()) {
+        return;
+    }
+
     std::sregex_token_iterator s(v.begin(), v.end(), colon, -1);
     const std::sregex_token_iterator e;
     while (s != e) {

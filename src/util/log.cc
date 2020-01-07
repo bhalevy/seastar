@@ -432,7 +432,7 @@ bpo::options_description get_options_description() {
              "Default log level for log messages. Valid values are trace, debug, info, warn, error."
             )
             ("logger-log-level",
-             bpo::value<program_options::string_map>()->default_value({}),
+             bpo::value<sstring>()->default_value(""),
              "Map of logger name to log level. The format is \"NAME0=LEVEL0[:NAME1=LEVEL1:...]\". "
              "Valid logger names can be queried with --help-logging. "
              "Valid values for levels are trace, debug, info, warn, error. "
@@ -460,14 +460,16 @@ void print_available_loggers(std::ostream& os) {
 }
 
 logging_settings extract_settings(
-        const program_options::string_map& logger_levels,
+        const sstring& logger_levels,
         const sstring& default_log_level,
         const sstring& logger_ostream_type,
         bool log_to_syslog,
         const sstring& logger_stdout_timestamps)
 {
+    program_options::string_map logger_levels_map;
+    std::istringstream(logger_levels) >> logger_levels_map;
     std::unordered_map<sstring, log_level> levels;
-    parse_logger_levels(logger_levels, std::inserter(levels, levels.begin()));
+    parse_logger_levels(logger_levels_map, std::inserter(levels, levels.begin()));
 
     return logging_settings{
         std::move(levels),
@@ -480,7 +482,7 @@ logging_settings extract_settings(
 
 logging_settings extract_settings(const boost::program_options::variables_map& vars) {
     return extract_settings(
-            vars["logger-log-level"].as<program_options::string_map>(),
+            vars["logger-log-level"].as<sstring>(),
             vars["default-log-level"].as<sstring>(),
             vars["log-to-stdout"].as<sstring>(),
             vars["log-to-syslog"].as<bool>(),
