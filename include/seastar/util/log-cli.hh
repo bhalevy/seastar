@@ -75,6 +75,12 @@ void parse_logger_levels(const program_options::string_map& levels, OutputIter o
 logger_ostream_type parse_logger_ostream_type(const sstring&);
 
 ///
+/// \brief Parse a logger_timestamp_style ({none, boot, real}) string,
+/// throwing \c std::runtime_error for an invalid value.
+///
+logger_timestamp_style parse_logger_timestamp_style(const sstring&);
+
+///
 /// \brief Extract CLI options into a logging configuration.
 //
 logging_settings extract_settings(const boost::program_options::variables_map&);

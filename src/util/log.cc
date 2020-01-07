@@ -52,33 +52,30 @@ namespace seastar {
 
 thread_local uint64_t logging_failures = 0;
 
-void validate(boost::any& v,
-              const std::vector<std::string>& values,
-              logger_timestamp_style* target_type, int) {
-    using namespace boost::program_options;
-    validators::check_first_occurrence(v);
-    auto s = validators::get_single_string(values);
-    if (s == "none") {
-        v = logger_timestamp_style::none;
-        return;
-    } else if (s == "boot") {
-        v = logger_timestamp_style::boot;
-        return;
-    } else if (s == "real") {
-        v = logger_timestamp_style::real;
-        return;
-    }
-    throw validation_error(validation_error::invalid_option_value);
+const std::map<logger_timestamp_style, sstring> logger_timestamp_style_names = {
+        { logger_timestamp_style::none, "none" },
+        { logger_timestamp_style::boot, "boot" },
+        { logger_timestamp_style::real, "real" },
+};
+
+std::ostream& operator<<(std::ostream& out, logger_timestamp_style style) {
+    return out << logger_timestamp_style_names.at(style);
 }
 
-std::ostream& operator<<(std::ostream& os, logger_timestamp_style lts) {
-    switch (lts) {
-    case logger_timestamp_style::none: return os << "none";
-    case logger_timestamp_style::boot: return os << "boot";
-    case logger_timestamp_style::real: return os << "real";
-    default: abort();
+std::istream& operator>>(std::istream& in, logger_timestamp_style& style) {
+    sstring s;
+    in >> s;
+    if (!in) {
+        return in;
     }
-    return os;
+    for (auto&& x : logger_timestamp_style_names) {
+        if (s == x.second) {
+            style = x.first;
+            return in;
+        }
+    }
+    in.setstate(std::ios::failbit);
+    return in;
 }
 
 const std::map<logger_ostream_type, sstring> logger_ostream_type_names = {
@@ -419,6 +416,14 @@ logger_ostream_type parse_logger_ostream_type(const sstring& s) {
     }
 }
 
+logger_timestamp_style parse_logger_timestamp_style(const sstring& s) {
+    try {
+        return boost::lexical_cast<logger_timestamp_style>(s.c_str());
+    } catch (const boost::bad_lexical_cast&) {
+        throw std::runtime_error(format("Unknown logger timestamp style '{}'", s));
+    }
+}
+
 bpo::options_description get_options_description() {
     bpo::options_description opts("Logging options");
 
@@ -494,6 +499,16 @@ seastar::logger_ostream_type lexical_cast(const std::string& source) {
         throw boost::bad_lexical_cast();
     }
     return type;
+}
+
+template<>
+seastar::logger_timestamp_style lexical_cast(const std::string& source) {
+    std::istringstream in(source);
+    seastar::logger_timestamp_style style;
+    if (!(in >> style)) {
+        throw boost::bad_lexical_cast();
+    }
+    return style;
 }
 }
 
