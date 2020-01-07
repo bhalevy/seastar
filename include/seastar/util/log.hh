@@ -53,6 +53,10 @@ std::istream& operator>>(std::istream& in, log_level& level);
 enum class logger_ostream_type;
 std::ostream& operator<<(std::ostream& out, logger_ostream_type level);
 std::istream& operator>>(std::istream& in, logger_ostream_type& level);
+
+enum class logger_timestamp_style;
+std::ostream& operator<<(std::ostream& out, logger_timestamp_style style);
+std::istream& operator>>(std::istream& in, logger_timestamp_style& style);
 }
 
 // Boost doesn't auto-deduce the existence of the streaming operators for some reason
@@ -63,6 +67,9 @@ seastar::log_level lexical_cast(const std::string& source);
 
 template<>
 seastar::logger_ostream_type lexical_cast(const std::string& source);
+
+template<>
+seastar::logger_timestamp_style lexical_cast(const std::string& source);
 }
 
 namespace seastar {
