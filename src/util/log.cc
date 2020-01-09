@@ -36,6 +36,7 @@
 #include <boost/any.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/range/adaptor/map.hpp>
+#include <boost/algorithm/string/case_conv.hpp>
 #include <cxxabi.h>
 #include <syslog.h>
 
@@ -421,6 +422,17 @@ logger_timestamp_style parse_logger_timestamp_style(const sstring& s) {
         return boost::lexical_cast<logger_timestamp_style>(s.c_str());
     } catch (const boost::bad_lexical_cast&) {
         throw std::runtime_error(format("Unknown logger timestamp style '{}'", s));
+    }
+}
+
+bool parse_bool(const sstring& s) {
+    auto ls = boost::algorithm::to_lower_copy(s);
+    if (ls == "1" || ls == "true" || ls == "yes" || ls == "on") {
+        return true;
+    } else if (ls == "0" || ls == "false" || ls == "no" || ls == "off") {
+        return false;
+    } else {
+        throw std::runtime_error(format("Unknown boolean value '{}'. Valid choices are '1|0', 'true|false', 'yes|no', and 'on|off'", s));
     }
 }
 
