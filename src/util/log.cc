@@ -424,6 +424,14 @@ logger_timestamp_style parse_logger_timestamp_style(const sstring& s) {
     }
 }
 
+std::unordered_map<sstring, log_level> parse_logger_levels(const sstring& s) {
+    program_options::string_map logger_levels_map;
+    std::istringstream(s) >> logger_levels_map;
+    std::unordered_map<sstring, log_level> levels;
+    log_cli::parse_logger_levels(logger_levels_map, std::inserter(levels, levels.begin()));
+    return levels;
+}
+
 bpo::options_description get_options_description() {
     bpo::options_description opts("Logging options");
 

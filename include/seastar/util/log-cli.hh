@@ -57,6 +57,15 @@ void print_available_loggers(std::ostream& os);
 log_level parse_log_level(const sstring&);
 
 //
+// \brief Parse associations from loggers to log-levels and return the resulting pairs as
+// std::unordered_map<sstring, log_level>
+//
+// \throws \c std::runtime_error for an invalid log-level or string map format (NAME0=LEVEL0[:NAME1=LEVEL1:...]).
+//
+std::unordered_map<sstring, log_level> parse_logger_levels(const sstring&);
+
+
+//
 // \brief Parse associations from loggers to log-levels and write the resulting pairs to the output iterator.
 //
 // \throws \c std::runtime_error for an invalid log-level.
