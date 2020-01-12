@@ -336,6 +336,60 @@ logger_registry::moved(logger* from, logger* to) {
     _loggers[from->name()] = to;
 }
 
+logging_settings::logging_settings(std::unordered_map<sstring, log_level> logger_levels,
+                                   log_level default_level,
+                                   bool stdout_enabled,
+                                   bool syslog_enabled,
+                                   logger_timestamp_style stdout_timestamp_style,
+                                   logger_ostream_type logger_ostream)
+        : logger_levels(logger_levels)
+        , default_level(default_level)
+        , stdout_enabled(stdout_enabled)
+        , syslog_enabled(syslog_enabled)
+        , stdout_timestamp_style(stdout_timestamp_style)
+        , logger_ostream(logger_ostream)
+{
+    if (!stdout_enabled) {
+        set_logger_ostream(logger_ostream_type::none);
+    } else if (logger_ostream == logger_ostream_type::none) {
+        stdout_enabled = false;
+    }
+}
+
+void logging_settings::set_logger_levels(const program_options::string_map& raw_levels) {
+    std::unordered_map<sstring, log_level> levels;
+    log_cli::parse_logger_levels(raw_levels, std::inserter(levels, levels.begin()));
+    set_logger_levels(std::move(levels));
+}
+void logging_settings::set_logger_levels(const sstring& svalue) {
+    set_logger_levels(log_cli::parse_logger_levels(svalue));
+}
+
+void logging_settings::set_default_level(const sstring& svalue) {
+    set_default_level(log_cli::parse_log_level(svalue));
+}
+
+void logging_settings::set_stdout_enabled(bool value) {
+    stdout_enabled = value;
+    if (!stdout_enabled) {
+        logger_ostream = logger_ostream_type::none;
+    } else if (logger_ostream == logger_ostream_type::none) {
+        logger_ostream = logger_ostream_type::stderr;
+    }
+}
+
+void logging_settings::set_stdout_timestamp_style(const sstring& svalue) {
+    set_stdout_timestamp_style(log_cli::parse_logger_timestamp_style(svalue));
+}
+
+void logging_settings::set_logger_ostream(logger_ostream_type value) {
+    logger_ostream = value;
+    stdout_enabled = (logger_ostream != logger_ostream_type::none);
+}
+void logging_settings::set_logger_ostream(const sstring& svalue) {
+    set_logger_ostream(log_cli::parse_logger_ostream_type(svalue));
+}
+
 void apply_logging_settings(const logging_settings& s) {
     global_logger_registry().set_all_loggers_level(s.default_level);
 

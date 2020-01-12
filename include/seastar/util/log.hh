@@ -21,6 +21,7 @@
 #pragma once
 
 #include <seastar/core/sstring.hh>
+#include <seastar/util/program-options.hh>
 #include <unordered_map>
 #include <exception>
 #include <iosfwd>
@@ -313,6 +314,33 @@ struct logging_settings final {
     bool syslog_enabled = false;
     logger_timestamp_style stdout_timestamp_style = logger_timestamp_style::real;
     logger_ostream_type logger_ostream = logger_ostream_type::stderr;
+
+    logging_settings() = default;
+
+    // for backward compatibility only
+    [[deprecated("Use default constructor and then set_* methods")]]
+    logging_settings(std::unordered_map<sstring, log_level> logger_levels,
+                     log_level default_level,
+                     bool stdout_enabled,
+                     bool syslog_enabled,
+                     logger_timestamp_style stdout_timestamp_style = logger_timestamp_style::real,
+                     logger_ostream_type logger_ostream = logger_ostream_type::stderr);
+
+    void set_logger_levels(std::unordered_map<sstring, log_level> value) { logger_levels = value; }
+    void set_logger_levels(const program_options::string_map& levels);
+    void set_logger_levels(const sstring& svalue);
+
+    void set_default_level(log_level value) { default_level = value; }
+    void set_default_level(const sstring& svalue);
+
+    [[deprecated("set_stdout_enabled is deprecated. Use set_logger_ostream instead.")]] void set_stdout_enabled(bool value);
+    void set_syslog_enabled(bool value) { syslog_enabled = value; }
+
+    void set_stdout_timestamp_style(logger_timestamp_style value) { stdout_timestamp_style = value; }
+    void set_stdout_timestamp_style(const sstring& svalue);
+
+    void set_logger_ostream(logger_ostream_type value);
+    void set_logger_ostream(const sstring& svalue);
 };
 
 /// Shortcut for configuring the logging system all at once.
