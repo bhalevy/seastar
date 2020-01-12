@@ -307,10 +307,10 @@ enum class logger_ostream_type {
 };
 
 struct logging_settings final {
-    std::unordered_map<sstring, log_level> logger_levels;
-    log_level default_level;
-    bool stdout_enabled;
-    bool syslog_enabled;
+    std::unordered_map<sstring, log_level> logger_levels = {};
+    log_level default_level = log_level::info;
+    bool stdout_enabled = true;
+    bool syslog_enabled = false;
     logger_timestamp_style stdout_timestamp_style = logger_timestamp_style::real;
     logger_ostream_type logger_ostream = logger_ostream_type::stderr;
 };
