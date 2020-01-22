@@ -92,8 +92,9 @@ extern thread_local jmp_buf_link g_unthreaded_context;
 class thread_context final : private task {
     struct stack_deleter {
         void operator()(char *ptr) const noexcept;
+        size_t stack_size;
         int valgrind_id;
-        stack_deleter(int valgrind_id);
+        stack_deleter(size_t stack_size, int valgrind_id);
     };
     using stack_holder = std::unique_ptr<char[], stack_deleter>;
 

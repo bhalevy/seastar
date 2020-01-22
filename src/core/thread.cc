@@ -183,22 +183,24 @@ thread_context::~thread_context() {
     _all_threads.erase(_all_threads.iterator_to(*this));
 }
 
-thread_context::stack_deleter::stack_deleter(int valgrind_id) : valgrind_id(valgrind_id) {}
+thread_context::stack_deleter::stack_deleter(size_t stack_size, int valgrind_id) : stack_size(stack_size), valgrind_id(valgrind_id) {}
 
 thread_context::stack_holder
 thread_context::make_stack(size_t stack_size) {
 #ifdef SEASTAR_THREAD_STACK_GUARDS
     size_t page_size = getpagesize();
-    size_t alignment = page_size;
+    auto map = mmap_anonymous(nullptr, stack_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_NORESERVE);
+    auto* mem = map.release();
 #else
     size_t alignment = 16; // ABI requirement on x86_64
-#endif
     void* mem = ::aligned_alloc(alignment, stack_size);
+#endif
+
     if (mem == nullptr) {
         throw std::bad_alloc();
     }
     int valgrind_id = VALGRIND_STACK_REGISTER(mem, reinterpret_cast<char*>(mem) + stack_size);
-    auto stack = stack_holder(new (mem) char[stack_size], stack_deleter(valgrind_id));
+    auto stack = stack_holder(new (mem) char[stack_size], stack_deleter(stack_size, valgrind_id));
 #ifdef SEASTAR_ASAN_ENABLED
     // Avoid ASAN false positive due to garbage on stack
     std::fill_n(stack.get(), stack_size, 0);
@@ -214,7 +216,12 @@ thread_context::make_stack(size_t stack_size) {
 
 void thread_context::stack_deleter::operator()(char* ptr) const noexcept {
     VALGRIND_STACK_DEREGISTER(valgrind_id);
+#ifdef SEASTAR_THREAD_STACK_GUARDS
+    int r = ::munmap(ptr, stack_size);
+    assert(r == 0);
+#else
     free(ptr);
+#endif
 }
 
 void
