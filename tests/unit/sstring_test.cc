@@ -180,3 +180,39 @@ BOOST_AUTO_TEST_CASE(test_nul_termination) {
         BOOST_REQUIRE(!strncmp(s1.c_str(), s2.c_str(), std::min(s1.size(), s2.size())));
     }
 }
+
+BOOST_AUTO_TEST_CASE(test_char_concat) {
+    using stype = basic_sstring<char, uint32_t, 15, true>;
+
+    stype s1("x");
+    auto s2 = s1;
+    BOOST_REQUIRE_EQUAL(s2.c_str()[1], '\0');
+    s2 += ']';
+    BOOST_REQUIRE_EQUAL(s2.c_str()[2], '\0');
+    BOOST_REQUIRE_EQUAL(s2.c_str(), "x]");
+    s2 = s1 + ']';
+    BOOST_REQUIRE_EQUAL(s2.c_str()[2], '\0');
+    BOOST_REQUIRE_EQUAL(s2.c_str(), "x]");
+    s2 = '[' + s1;
+    BOOST_REQUIRE_EQUAL(s2.c_str()[2], '\0');
+    BOOST_REQUIRE_EQUAL(s2.c_str(), "[x");
+    s2 = '[' + s1 + ']';
+    BOOST_REQUIRE_EQUAL(s2.c_str()[3], '\0');
+    BOOST_REQUIRE_EQUAL(s2.c_str(), "[x]");
+
+    s1 = "012345678901234";
+    s2 = s1;
+    BOOST_REQUIRE_EQUAL(s2.c_str()[15], '\0');
+    s2 += ']';
+    BOOST_REQUIRE_EQUAL(s2.c_str()[16], '\0');
+    BOOST_REQUIRE_EQUAL(s2.c_str(), "012345678901234]");
+    s2 = s1 + ']';
+    BOOST_REQUIRE_EQUAL(s2.c_str()[16], '\0');
+    BOOST_REQUIRE_EQUAL(s2.c_str(), "012345678901234]");
+    s2 = '[' + s1;
+    BOOST_REQUIRE_EQUAL(s2.c_str()[16], '\0');
+    BOOST_REQUIRE_EQUAL(s2.c_str(), "[012345678901234");
+    s2 = '[' + s1 + ']';
+    BOOST_REQUIRE_EQUAL(s2.c_str()[17], '\0');
+    BOOST_REQUIRE_EQUAL(s2.c_str(), "[012345678901234]");
+}

@@ -615,8 +615,17 @@ public:
         std::copy(x.begin(), x.end(), ret.begin() + size());
         return ret;
     }
+    basic_sstring operator+(char_type c) {
+        basic_sstring ret(initialized_later(), size() + 1);
+        std::copy(begin(), end(), ret.begin());
+        ret.begin()[size()] = c;
+        return ret;
+    }
     basic_sstring& operator+=(const basic_sstring& x) {
         return append(x);
+    }
+    basic_sstring& operator+=(char_type c) {
+        return append(1, c);
     }
     char_type& operator[](size_type pos) {
         return str()[pos];
@@ -712,6 +721,18 @@ operator+(const char(&s)[N], const basic_sstring<char_type, size_type, Max, NulT
     // don't copy the terminating NUL character
     sstring ret(typename sstring::initialized_later(), N-1 + t.size());
     auto p = std::copy(std::begin(s), std::end(s)-1, ret.begin());
+    std::copy(t.begin(), t.end(), p);
+    return ret;
+}
+
+template <typename char_type, typename size_type, size_type Max, bool NulTerminate>
+inline
+basic_sstring<char_type, size_type, Max, NulTerminate>
+operator+(char c, const basic_sstring<char_type, size_type, Max, NulTerminate>& t) {
+    using sstring = basic_sstring<char_type, size_type, Max, NulTerminate>;
+    sstring ret(typename sstring::initialized_later(), 1 + t.size());
+    auto* p = ret.begin();
+    *p++ = static_cast<char_type>(c);
     std::copy(t.begin(), t.end(), p);
     return ret;
 }
