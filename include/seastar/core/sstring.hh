@@ -350,10 +350,9 @@ public:
      *  @return  Reference to this string.
      */
     basic_sstring& append (const char_type* s, size_t n) {
-        basic_sstring ret(initialized_later(), size() + n);
-        std::copy(begin(), end(), ret.begin());
-        std::copy(s, s + n, ret.begin() + size());
-        *this = std::move(ret);
+        extend_with(n, [s, n] (char_type* p) {
+            std::copy(s, s + n, p);
+        });
         return *this;
     }
 
@@ -605,12 +604,52 @@ public:
     friend inline string_type to_sstring(T value);
 private:
     /*
+     *  Extend string and use function to populate the additional area.
+     *  @param count  number of characters to add.
+     *  @param func   function to fill newly allocated space with.
+     */
+    void extend_with(Size count, std::function<void (char_type*)> func) {
+        auto cur_size = size();
+        auto n = cur_size + count;
+        if (n + padding() <= sizeof(u.internal.str)) {
+            func(u.internal.str + cur_size);
+            if (NulTerminate) {
+                u.internal.str[n] = '\0';
+            }
+            u.internal.size = n;
+        } else {
+            char_type* new_str;
+            if (is_internal()) {
+                new_str = reinterpret_cast<char_type*>(std::malloc(n + padding()));
+                if (!new_str) {
+                    throw std::bad_alloc();
+                }
+                std::copy(u.internal.str, u.internal.str + cur_size, new_str);
+                u.internal.size = -1;
+            } else {
+                new_str = reinterpret_cast<char_type*>(std::realloc(u.external.str, n + padding()));
+                if (!new_str) {
+                    throw std::bad_alloc();
+                }
+            }
+            func(new_str + cur_size);
+            u.external.str = new_str;
+            u.external.size = n;
+            if (NulTerminate) {
+                u.external.str[n] = '\0';
+            }
+        }
+    }
+
+    /*
      *  Extend string.
      *  @param count  number of characters to add.
      *  @param c  character to fill newly allocated space with.
      */
     void extend(size_t count, const char_type c) {
-        *this += basic_sstring(count, c);
+        extend_with(count, [c, count] (char_type* p) {
+            memset(p, c, count);
+        });
     }
 
     /**
