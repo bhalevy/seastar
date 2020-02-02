@@ -239,6 +239,27 @@ public:
             }
         }
     }
+    basic_sstring(char_type c) {
+        constexpr size_type size = 1;
+        if (size + padding() <= sizeof(u.internal.str)) {
+            u.internal.str[0] = c;
+            if (NulTerminate) {
+                u.internal.str[size] = '\0';
+            }
+            u.internal.size = size;
+        } else {
+            u.internal.size = -1;
+            u.external.str = reinterpret_cast<char_type*>(std::malloc(size + padding()));
+            if (!u.external.str) {
+                throw std::bad_alloc();
+            }
+            u.external.size = size;
+            u.external.str[0] = c;
+            if (NulTerminate) {
+                u.external.str[size] = '\0';
+            }
+        }
+    }
 
     basic_sstring(size_t size, char_type x) : basic_sstring(initialized_later(), size) {
         memset(begin(), x, size);
@@ -618,6 +639,19 @@ public:
 };
 template <typename char_type, typename Size, Size max_size, bool NulTerminate>
 constexpr Size basic_sstring<char_type, Size, max_size, NulTerminate>::npos;
+
+template <typename char_type, typename size_type, size_type Max, bool NulTerminate>
+inline
+basic_sstring<char_type, size_type, Max, NulTerminate>
+operator+(const char c, const basic_sstring<char_type, size_type, Max, NulTerminate>& t) {
+    using sstring = basic_sstring<char_type, size_type, Max, NulTerminate>;
+    // don't copy the terminating NUL character
+    sstring ret(typename sstring::initialized_later(), 1 + t.size());
+    auto p = ret.begin();
+    *p++ = c;
+    std::copy(t.begin(), t.end(), p);
+    return ret;
+}
 
 template <typename char_type, typename size_type, size_type Max, size_type N, bool NulTerminate>
 inline
