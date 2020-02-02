@@ -364,21 +364,9 @@ public:
      */
     void resize(size_t n, const char_type c  = '\0') {
         if (n > size()) {
-            *this += basic_sstring(n - size(), c);
+            extend(n - size(), c);
         } else if (n < size()) {
-            if (is_internal()) {
-                u.internal.size = n;
-                if (NulTerminate) {
-                    u.internal.str[n] = '\0';
-                }
-            } else if (n + padding() <= sizeof(u.internal.str)) {
-                *this = basic_sstring(u.external.str, n);
-            } else {
-                u.external.size = n;
-                if (NulTerminate) {
-                    u.external.str[n] = '\0';
-                }
-            }
+            shrink(n);
         }
     }
 
@@ -615,6 +603,35 @@ public:
 
     template <typename string_type, typename T>
     friend inline string_type to_sstring(T value);
+private:
+    /*
+     *  Extend string.
+     *  @param count  number of characters to add.
+     *  @param c  character to fill newly allocated space with.
+     */
+    void extend(size_t count, const char_type c) {
+        *this += basic_sstring(count, c);
+    }
+
+    /**
+     *  Shrink string.
+     *  @param n  new size.
+     */
+    void shrink(size_t n) {
+        if (is_internal()) {
+            u.internal.size = n;
+            if (NulTerminate) {
+                u.internal.str[n] = '\0';
+            }
+        } else if (n + padding() <= sizeof(u.internal.str)) {
+            *this = basic_sstring(u.external.str, n);
+        } else {
+            u.external.size = n;
+            if (NulTerminate) {
+                u.external.str[n] = '\0';
+            }
+        }
+    }
 };
 template <typename char_type, typename Size, Size max_size, bool NulTerminate>
 constexpr Size basic_sstring<char_type, Size, max_size, NulTerminate>::npos;
