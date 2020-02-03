@@ -357,6 +357,35 @@ public:
     }
 
     /**
+     *  Append a C substring.
+     *  @param s The C string to append.
+     *  @return  Reference to this string.
+     */
+    basic_sstring& append(const char_type* s) {
+        return append(s, strlen(s));
+    }
+
+    /**
+     *  Append a sstring.
+     *  @param s The sstring to append.
+     *  @return  Reference to this string.
+     */
+    basic_sstring& append(const basic_sstring& s) {
+        return append(s.str(), s.size());
+    }
+
+    /**
+     *  Append number of copies of a character.
+     *  @param n The number of characters to append.
+     *  @param c The character to append.
+     *  @return  Reference to this string.
+     */
+    basic_sstring& append(Size n, char_type c) {
+        extend(n, c);
+        return *this;
+    }
+
+    /**
      *  Resize string.
      *  @param n  new size.
      *  @param c  if n greater than current size character to fill newly allocated space with.
@@ -587,7 +616,7 @@ public:
         return ret;
     }
     basic_sstring& operator+=(const basic_sstring& x) {
-        return *this = *this + x;
+        return append(x);
     }
     char_type& operator[](size_type pos) {
         return str()[pos];

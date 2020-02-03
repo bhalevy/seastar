@@ -96,6 +96,9 @@ BOOST_AUTO_TEST_CASE(test_append) {
     BOOST_REQUIRE_EQUAL(sstring("aba").append("1234", 3), "aba123");
     BOOST_REQUIRE_EQUAL(sstring("aba").append("1234", 4), "aba1234");
     BOOST_REQUIRE_EQUAL(sstring("aba").append("1234", 0), "aba");
+    BOOST_REQUIRE_EQUAL(sstring("aba").append("1234"), "aba1234");
+    BOOST_REQUIRE_EQUAL(sstring("aba").append(3, '.'), "aba...");
+    BOOST_REQUIRE_EQUAL(sstring("aba").append(sstring("dad")), "abadad");
 }
 
 BOOST_AUTO_TEST_CASE(test_replace) {
