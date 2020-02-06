@@ -116,6 +116,34 @@ SEASTAR_TEST_CASE(same_file_test) {
     });
 }
 
+SEASTAR_TEST_CASE(file_link_test) {
+    return seastar::async([] {
+        sstring f1 = "testfile1.tmp";
+        sstring f2 = "testfile2.tmp";
+
+        remove_file(f1).handle_exception([] (auto ep) {}).get();
+        remove_file(f2).handle_exception([] (auto ep) {}).get();
+
+        BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: No such file or directory"));
+
+        open_file_dma(f1, open_flags::rw | open_flags::create).then([] (file f) {
+            return f.close().finally([f] {});
+        }).get();
+
+        BOOST_REQUIRE_NO_THROW(link_file(f1, f2).get());
+
+        BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: File exists"));
+
+        remove_file(f1).handle_exception([] (auto ep) {}).get();
+        BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: No such file or directory"));
+
+        remove_file(f2).handle_exception([] (auto ep) {}).get();
+    });
+}
+
 struct file_test {
     file_test(file&& f) : f(std::move(f)) {}
     file f;
