@@ -356,13 +356,16 @@ future<bool> file_exists(sstring name) noexcept;
 ///      other errors.
 future<compat::optional<directory_entry_type>> file_type(sstring name, follow_symlink = follow_symlink::yes) noexcept;
 
+struct allow_same_tag { };
+using allow_same = bool_class<allow_same_tag>;
 
 /// Creates a hard link for a file
 ///
 /// \param oldpath existing file name
 /// \param newpath name of link
+/// \param allow_same allow the function to succeed if oldpath and newpath are already linked to the same file.
 ///
-future<> link_file(sstring oldpath, sstring newpath) noexcept;
+future<> link_file(sstring oldpath, sstring newpath, allow_same flag = allow_same::no) noexcept;
 
 /// Changes the permissions mode of a file or directory
 ///
