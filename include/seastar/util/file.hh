@@ -49,4 +49,21 @@ future<> recursive_remove_directory(compat::filesystem::path path);
 ///
 future<bool> same_file(sstring path1, sstring path2, follow_symlink fs = follow_symlink::no);
 
+struct allow_same_tag { };
+using allow_same = bool_class<allow_same_tag>;
+
+/// Creates a hard link for a file with extended overwrite semantics.
+///
+/// \param oldpath existing file name
+/// \param newpath name of link
+/// \param allow_same allow the function to succeed if oldpath and newpath are already linked to the same file.
+///
+/// \note
+/// directories are not allowed to be hard linked.
+///
+/// The links are not guaranteed to be stable on disk, unless the
+/// containing directories are sync'ed.
+///
+future<> link_file_ext(sstring oldpath, sstring newpath, allow_same allow_same);
+
 } // namespace seastar

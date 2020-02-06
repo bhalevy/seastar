@@ -164,4 +164,30 @@ future<bool> same_file(sstring path1, sstring path2, follow_symlink fs) {
     });
 }
 
+future<> link_file_ext(sstring oldpath, sstring newpath, allow_same allow_same) {
+    return link_file(oldpath, newpath)
+            .handle_exception([oldpath = std::move(oldpath), newpath = std::move(newpath), allow_same] (std::exception_ptr eptr) {
+        try {
+            std::rethrow_exception(eptr);
+        } catch (const std::system_error& e) {
+            int error = e.code().value();
+            future<int> process_error = make_ready_future<int>(error);
+
+            if (error == EEXIST && allow_same) {
+                process_error = same_file(oldpath, newpath, follow_symlink::no).then([error] (bool same) {
+                    return make_ready_future<int>(same ? 0 : error);
+                });
+            };
+
+            return process_error.then([oldpath = std::move(oldpath), newpath = std::move(newpath)] (int error) {
+                if (error) {
+                    return make_exception_future<>(make_filesystem_error("link failed", fs::path(oldpath), fs::path(newpath), error));
+                } else {
+                    return make_ready_future<>();
+                }
+            });
+        }
+    });
+}
+
 } //namespace seastar
