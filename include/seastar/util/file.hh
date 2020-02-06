@@ -50,5 +50,4 @@ future<> recursive_remove_directory(compat::filesystem::path path) noexcept;
 /// The function does not follow symbolic links.
 ///
 future<bool> same_file(sstring path1, sstring path2) noexcept;
-
 } // namespace seastar
