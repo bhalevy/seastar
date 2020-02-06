@@ -176,3 +176,39 @@ SEASTAR_TEST_CASE(same_file_test) {
                 testing::exception_predicate::message_contains("filesystem error: stat failed: No such file or directory"));
     });
 }
+
+SEASTAR_TEST_CASE(link_file_test) {
+    return tmp_dir::do_with_thread([&] (fs::path p) {
+        sstring f1 = (p / "testfile1.tmp").native();
+        sstring f2 = (p / "testfile2.tmp").native();
+
+        // link_file should fail when both f1 and f2 do not exist
+        BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: No such file or directory"));
+
+        // link_file should succeed in the trivial case when f1 exists f2 does not exist
+        touch_file(f1).get();
+        BOOST_REQUIRE_NO_THROW(link_file(f1, f2).get());
+        BOOST_REQUIRE(same_file(f1, f2).get0());
+
+        // link_file should fail when f2 exists and same file
+        BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: File exists"));
+        BOOST_REQUIRE(same_file(f1, f2).get0());
+
+        // link_file should fail when f2 exists and is different from f1
+        remove_file(f2).get();
+        touch_file(f2).get();
+        BOOST_REQUIRE(!same_file(f1, f2).get0());
+        BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: File exists"));
+        BOOST_REQUIRE(!same_file(f1, f2).get0());
+
+        // link_file should fail when f1 does not exist
+        remove_file(f1).get();
+        BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: No such file or directory"));
+
+        remove_file(f2).get();
+    });
+}
