@@ -200,4 +200,19 @@ future<> recursive_remove_directory(fs::path path) noexcept {
     });
 }
 
+static bool is_same_file(const stat_data& sd1, const stat_data& sd2) {
+    return sd1.device_id == sd2.device_id && sd1.inode_number == sd2.inode_number;
+}
+
+static auto stat_files(sstring path1, sstring path2) noexcept {
+    return when_all_succeed(file_stat(std::move(path1), follow_symlink::no),
+                            file_stat(std::move(path2), follow_symlink::no));
+}
+
+future<bool> same_file(sstring path1, sstring path2) noexcept {
+    return stat_files(std::move(path1), std::move(path2)).then([] (stat_data sd1, stat_data sd2) {
+        return make_ready_future<bool>(is_same_file(sd1, sd2));
+    });
+}
+
 } //namespace seastar

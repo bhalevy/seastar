@@ -42,4 +42,13 @@ namespace seastar {
 ///
 future<> recursive_remove_directory(compat::filesystem::path path) noexcept;
 
+/// Check if two path names refer to the same file on storage
+///
+/// \param path1, path2 names to check.
+///
+/// \note
+/// The function does not follow symbolic links.
+///
+future<bool> same_file(sstring path1, sstring path2) noexcept;
+
 } // namespace seastar
