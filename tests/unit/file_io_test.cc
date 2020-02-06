@@ -136,6 +136,8 @@ SEASTAR_TEST_CASE(file_link_test) {
         BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
                 testing::exception_predicate::message_contains("filesystem error: link failed: File exists"));
 
+        BOOST_REQUIRE_NO_THROW(link_file(f1, f2, exclusive_link::no).get0());
+
         remove_file(f1).handle_exception([] (auto ep) {}).get();
         BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
                 testing::exception_predicate::message_contains("filesystem error: link failed: No such file or directory"));

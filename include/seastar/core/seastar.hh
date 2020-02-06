@@ -323,12 +323,16 @@ future<bool> file_exists(sstring name);
 ///
 future<bool> same_file(sstring path1, sstring path2, follow_symlink fs = follow_symlink::yes);
 
+struct exclusive_link_tag { };
+using exclusive_link = bool_class<exclusive_link_tag>;
+
 /// Creates a hard link for a file
 ///
 /// \param oldpath existing file name
 /// \param newpath name of link
+/// \param exclusive_link (optional) always fail if newpath already exists, otherwise succeed if they refer to the same file.
 ///
-future<> link_file(sstring oldpath, sstring newpath);
+future<> link_file(sstring oldpath, sstring newpath, exclusive_link ex = exclusive_link::yes);
 
 /// Changes the permissions mode of a file or directory
 ///

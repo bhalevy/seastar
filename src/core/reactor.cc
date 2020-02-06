@@ -1700,11 +1700,22 @@ reactor::rename_file(sstring old_pathname, sstring new_pathname) {
 }
 
 future<>
-reactor::link_file(sstring oldpath, sstring newpath) {
+reactor::link_file(sstring oldpath, sstring newpath, exclusive_link ex) {
     return engine()._thread_pool->submit<syscall_result<int>>([oldpath, newpath] {
         return wrap_syscall<int>(::link(oldpath.c_str(), newpath.c_str()));
-    }).then([oldpath, newpath] (syscall_result<int> sr) {
-        sr.throw_fs_exception_if_error("link failed", oldpath, newpath);
+    }).then([this, oldpath, newpath, ex] (syscall_result<int> sr) {
+        if (__builtin_expect(sr.result == -1, false)) {
+            if (ex || sr.error != EEXIST) {
+                sr.throw_fs_exception("link failed", fs::path(oldpath), fs::path(newpath));
+            } else {
+                return same_file(oldpath, newpath, follow_symlink::no).then([oldpath, newpath, sr] (bool same) {
+                    if (!same) {
+                        sr.throw_fs_exception("link failed", fs::path(oldpath), fs::path(newpath));
+                    }
+                    return make_ready_future<>();
+                });
+            }
+        }
         return make_ready_future<>();
     });
 }
@@ -4148,8 +4159,8 @@ future<bool> same_file(sstring path1, sstring path2, follow_symlink fs) {
     return engine().same_file(path1, path2, fs);
 }
 
-future<> link_file(sstring oldpath, sstring newpath) {
-    return engine().link_file(std::move(oldpath), std::move(newpath));
+future<> link_file(sstring oldpath, sstring newpath, exclusive_link ex) {
+    return engine().link_file(std::move(oldpath), std::move(newpath), ex);
 }
 
 future<> chmod(sstring name, file_permissions permissions) {
