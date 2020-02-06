@@ -27,6 +27,7 @@
 #include <seastar/core/reactor.hh>
 #include <seastar/core/seastar.hh>
 #include <seastar/util/file.hh>
+#include <seastar/util/exceptions.hh>
 
 namespace seastar {
 
@@ -131,8 +132,27 @@ future<bool> file_exists(sstring name) noexcept {
     return engine().file_exists(std::move(name));
 }
 
-future<> link_file(sstring oldpath, sstring newpath) noexcept {
-    return engine().link_file(std::move(oldpath), std::move(newpath));
+future<> link_file(sstring oldpath, sstring newpath, allow_same allow_same) noexcept {
+    if (!allow_same) {
+        return engine().link_file(std::move(oldpath), std::move(newpath));
+    }
+    return engine().link_file(oldpath, newpath)
+            .handle_exception_type([oldpath = std::move(oldpath), newpath = std::move(newpath)] (std::system_error& e) mutable {
+        int error = e.code().value();
+        future<int> process_error = (error == EEXIST ?
+                same_file(oldpath, newpath).then([error] (bool same) {
+                    return make_ready_future<int>(same ? 0 : error);
+                }) :
+                make_ready_future<int>(error));
+
+        return process_error.then([oldpath = std::move(oldpath), newpath = std::move(newpath)] (int error) mutable {
+            if (error) {
+                return make_exception_future<>(make_filesystem_error("link failed", fs::path(oldpath), fs::path(newpath), error));
+            } else {
+                return make_ready_future<>();
+            }
+        });
+    });
 }
 
 future<> chmod(sstring name, file_permissions permissions) noexcept {
