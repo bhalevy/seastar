@@ -37,4 +37,11 @@ namespace seastar {
 /// This function fsyncs each component created, and is therefore guaranteed to be stable on disk.
 future<> recursive_remove_directory(compat::filesystem::path path);
 
+/// Check if two path names refer to the same file on storage
+///
+/// \param path1, path2 names to check.
+/// \param follow_symlink follow symbolic links.
+///
+future<bool> same_file(sstring path1, sstring path2, follow_symlink fs = follow_symlink::no);
+
 } // namespace seastar

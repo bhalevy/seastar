@@ -25,8 +25,11 @@
 
 #include <seastar/core/file.hh>
 #include <seastar/util/tmp_file.hh>
+#include <seastar/util/std-compat.hh>
+#include <seastar/util/file.hh>
 
 using namespace seastar;
+namespace fs = compat::filesystem;
 
 SEASTAR_THREAD_TEST_CASE(make_tmp_file_test) {
     auto filename1 = make_tmp_file().get0().native();
@@ -127,5 +130,49 @@ SEASTAR_TEST_CASE(tmp_dir_with_leftovers_test) {
     return tmp_dir::do_with_thread([&] (compat::filesystem::path p) {
         auto tmp = make_tmp_file(p).get0();
         BOOST_REQUIRE(file_exists(tmp.native()).get0());
+    });
+}
+
+static future<> touch_file(const sstring& filename, open_flags oflags = open_flags::rw | open_flags::create) {
+    return open_file_dma(filename, oflags).then([] (file f) {
+        return f.close().finally([f] {});
+    });
+}
+
+SEASTAR_TEST_CASE(same_file_test) {
+    return tmp_dir::do_with_thread([&] (fs::path p) {
+        sstring f1 = (p / "testfile1.tmp").native();
+        sstring f2 = (p / "testfile2.tmp").native();
+
+        // same_file should fail when f1 does not exist
+        BOOST_REQUIRE_EXCEPTION(same_file(f1, f1).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: stat failed: No such file or directory"));
+
+        // f1 is same file as itself
+        touch_file(f1).get();
+        BOOST_REQUIRE(same_file(f1, f1).get0());
+
+        // same_file should fail when f2 does not exist
+        BOOST_REQUIRE_EXCEPTION(same_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: stat failed: No such file or directory"));
+
+        // f1 is not same file as newly created f2
+        touch_file(f2).get();
+        BOOST_REQUIRE(!same_file(f1, f2).get0());
+
+        // f1 and f2 refer to same file when hard-linked
+        remove_file(f2).get();
+        link_file(f1, f2).get();
+        BOOST_REQUIRE(same_file(f1, f2).get0());
+
+        // same_file should fail when f1 does not exist
+        remove_file(f1).get();
+        BOOST_REQUIRE_EXCEPTION(same_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: stat failed: No such file or directory"));
+
+        // same_file should fail when both f1 and f2 do not exist
+        remove_file(f2).get();
+        BOOST_REQUIRE_EXCEPTION(same_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: stat failed: No such file or directory"));
     });
 }
