@@ -316,6 +316,17 @@ future<bool> file_accessible(sstring name, access_flags flags);
 /// \param name name of the file to check
 future<bool> file_exists(sstring name);
 
+/// Check if two path names refer to the same file on storage
+///
+/// \param path1, path2 names to check.
+/// \param follow_symlink follow symbolic links.
+///
+future<bool> same_file(sstring path1, sstring path2, follow_symlink fs);
+
+inline future<bool> same_file(sstring path1, sstring path2) {
+    return same_file(std::move(path1), std::move(path2), follow_symlink::yes);
+}
+
 /// Creates a hard link for a file
 ///
 /// \param oldpath existing file name

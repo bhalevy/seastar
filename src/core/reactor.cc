@@ -1834,6 +1834,26 @@ reactor::file_accessible(sstring pathname, access_flags flags) {
     });
 }
 
+future<bool>
+reactor::same_file(sstring path1, sstring path2, follow_symlink fs) {
+    return when_all(file_stat(std::move(path1), fs), file_stat(std::move(path2), fs))
+            .then([] (std::tuple<future<stat_data>, future<stat_data>> res) {
+        auto& f1 = std::get<0>(res);
+        auto& f2 = std::get<1>(res);
+        if (f1.failed()) {
+            f2.ignore_ready_future();
+            return make_exception_future<bool>(f1.get_exception());
+        }
+        if (f2.failed()) {
+            f1.ignore_ready_future();
+            return make_exception_future<bool>(f2.get_exception());
+        }
+        stat_data sd1 = f1.get0();
+        stat_data sd2 = f2.get0();
+        return make_ready_future<bool>(sd1.device_id == sd2.device_id && sd1.inode_number == sd2.inode_number);
+    });
+}
+
 future<fs_type>
 reactor::file_system_at(sstring pathname) {
     return _thread_pool->submit<syscall_result_extra<struct statfs>>([pathname] {
@@ -4128,6 +4148,10 @@ future<bool> file_accessible(sstring name, access_flags flags) {
 
 future<bool> file_exists(sstring name) {
     return engine().file_exists(name);
+}
+
+future<bool> same_file(sstring path1, sstring path2, follow_symlink fs) {
+    return engine().same_file(path1, path2, fs);
 }
 
 future<> link_file(sstring oldpath, sstring newpath) {

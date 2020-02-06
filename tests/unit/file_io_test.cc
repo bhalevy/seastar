@@ -80,6 +80,53 @@ SEASTAR_TEST_CASE(file_access_test) {
     });
 }
 
+static future<> touch_file(const sstring& filename, open_flags oflags = open_flags::rw | open_flags::create) {
+    return open_file_dma(filename, oflags).then([] (file f) {
+        return f.close().finally([f] {});
+    });
+}
+
+SEASTAR_TEST_CASE(same_file_test) {
+    return seastar::async([] {
+        sstring f1 = "testfile1.tmp";
+        sstring f2 = "testfile2.tmp";
+
+        remove_file(f1).handle_exception([] (auto ep) {}).get();
+        remove_file(f2).handle_exception([] (auto ep) {}).get();
+
+        // same_file should fail when f1 does not exist
+        BOOST_REQUIRE_EXCEPTION(same_file(f1, f1).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: stat failed: No such file or directory"));
+
+        // f1 is same file as itself
+        touch_file(f1).get();
+        BOOST_REQUIRE(same_file(f1, f1).get0());
+
+        // same_file should fail when f2 does not exist
+        BOOST_REQUIRE_EXCEPTION(same_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: stat failed: No such file or directory"));
+
+        // f1 is not same file as newly created f2
+        touch_file(f2).get();
+        BOOST_REQUIRE(!same_file(f1, f2).get0());
+
+        // f1 and f2 refer to same file when hard-linked
+        remove_file(f2).get();
+        link_file(f1, f2).get();
+        BOOST_REQUIRE(same_file(f1, f2).get0());
+
+        // same_file should fail when f1 does not exist
+        remove_file(f1).get();
+        BOOST_REQUIRE_EXCEPTION(same_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: stat failed: No such file or directory"));
+
+        // same_file should fail when both f1 and f2 do not exist
+        remove_file(f2).get();
+        BOOST_REQUIRE_EXCEPTION(same_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: stat failed: No such file or directory"));
+    });
+}
+
 struct file_test {
     file_test(file&& f) : f(std::move(f)) {}
     file f;
