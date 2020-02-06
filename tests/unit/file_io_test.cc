@@ -127,6 +127,45 @@ SEASTAR_TEST_CASE(same_file_test) {
     });
 }
 
+SEASTAR_TEST_CASE(link_file_test) {
+    return seastar::async([] {
+        sstring f1 = "testfile1.tmp";
+        sstring f2 = "testfile2.tmp";
+
+        remove_file(f1).handle_exception([] (auto ep) {}).get();
+        remove_file(f2).handle_exception([] (auto ep) {}).get();
+
+        // link_fail should fail when both f1 and f2 do not exist
+        BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: No such file or directory"));
+
+        // link_fail should succeed in the trivial case when f1 exists f2 does not exist
+        touch_file(f1).get();
+        BOOST_REQUIRE_NO_THROW(link_file(f1, f2).get());
+        BOOST_REQUIRE(same_file(f1, f2).get0());
+
+        // link_fail should fail when f2 exists and same file
+        BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: File exists"));
+        BOOST_REQUIRE(same_file(f1, f2).get0());
+
+        // link_fail should fail when f2 exists and is different from f1
+        remove_file(f2).get();
+        touch_file(f2).get();
+        BOOST_REQUIRE(!same_file(f1, f2).get0());
+        BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: File exists"));
+        BOOST_REQUIRE(!same_file(f1, f2).get0());
+
+        // link_fail should fail when f1 does not exist
+        remove_file(f1).get();
+        BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: No such file or directory"));
+
+        remove_file(f2).get();
+    });
+}
+
 struct file_test {
     file_test(file&& f) : f(std::move(f)) {}
     file f;
