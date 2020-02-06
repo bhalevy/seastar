@@ -263,6 +263,13 @@ future<> sync_directory(sstring name);
 /// containing directory is sync'ed.
 future<> remove_file(sstring name);
 
+enum class allow_overwrite {
+    never,
+    always,
+    if_same,
+    if_not_same,
+};
+
 /// Renames (moves) a file.
 ///
 /// \param old_name existing file name
@@ -331,8 +338,27 @@ inline future<bool> same_file(sstring path1, sstring path2) {
 ///
 /// \param oldpath existing file name
 /// \param newpath name of link
+/// \param allow_overwrite determine whether new_name is overwritten if it exists.
+///                        never - never overwrite new_name
+///                        always - always overwrite new_name
+///                        if_same - allow overwriting new_name only if it is linked to the same file as old_name.
+///                                  link_file_ext does nothing in this case.
+///                        if_not_same - allow overwriting new_name only if it is not linked to the same file as old_name.
 ///
-future<> link_file(sstring oldpath, sstring newpath);
+/// \note
+/// link_file_ext is guaranteed to be atomic only for the following allow_overwrite values:
+///     allow_overwrite::never, allow_overwrite::if_same.
+///
+future<> link_file_ext(sstring oldpath, sstring newpath, allow_overwrite flag);
+
+/// Creates a hard link for a file
+///
+/// \param oldpath existing file name
+/// \param newpath name of link
+///
+inline future<> link_file(sstring oldpath, sstring newpath) {
+    return link_file_ext(std::move(oldpath), std::move(newpath), allow_overwrite::never);
+}
 
 /// Changes the permissions mode of a file or directory
 ///

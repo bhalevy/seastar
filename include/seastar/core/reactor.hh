@@ -525,7 +525,7 @@ public:
     future<struct statvfs> statvfs(sstring pathname);
     future<> remove_file(sstring pathname);
     future<> rename_file(sstring old_pathname, sstring new_pathname);
-    future<> link_file(sstring oldpath, sstring newpath);
+    future<> link_file(sstring oldpath, sstring newpath, allow_overwrite flag);
     future<> chmod(sstring name, file_permissions permissions);
 
     // In the following three methods, prepare_io is not guaranteed to execute in the same processor

@@ -1704,12 +1704,44 @@ reactor::rename_file(sstring old_pathname, sstring new_pathname) {
 }
 
 future<>
-reactor::link_file(sstring oldpath, sstring newpath) {
+reactor::link_file(sstring oldpath, sstring newpath, allow_overwrite flag) {
     return engine()._thread_pool->submit<syscall_result<int>>([oldpath, newpath] {
         return wrap_syscall<int>(::link(oldpath.c_str(), newpath.c_str()));
-    }).then([oldpath, newpath] (syscall_result<int> sr) {
-        sr.throw_fs_exception_if_error("link failed", oldpath, newpath);
-        return make_ready_future<>();
+    }).then([this, oldpath, newpath, flag] (syscall_result<int> sr) {
+        if (__builtin_expect(sr.result != -1, true)) {
+            return make_ready_future<>();
+        }
+        if (sr.error != EEXIST || flag == allow_overwrite::never) {
+            sr.throw_fs_exception("link failed", fs::path(oldpath), fs::path(newpath));
+        }
+        return same_file(oldpath, newpath, follow_symlink::no)
+                .then_wrapped([this, oldpath, newpath, flag, sr = std::move(sr)] (future<bool> f) {
+            if (f.failed()) {
+                try {
+                    std::rethrow_exception(f.get_exception());
+                } catch (const fs::filesystem_error& e) {
+                    return make_exception_future<>(fs::filesystem_error("link failed", e.path1(), e.code()));
+                }
+            }
+            auto same = f.get0();
+            if ((same && flag == allow_overwrite::if_not_same) || (!same && flag == allow_overwrite::if_same)) {
+                sr.throw_fs_exception("link failed", fs::path(oldpath), fs::path(newpath));
+            } else if (!same) {
+                // retry after removing new_file as permitted by allow_overwrite
+                return remove_file(newpath).then_wrapped([this, oldpath, newpath, flag] (future<> f) {
+                    if (f.failed()) {
+                        try {
+                            std::rethrow_exception(f.get_exception());
+                        } catch (const fs::filesystem_error& e) {
+                            throw fs::filesystem_error("link failed", e.path1(), e.code());
+                        }
+                    } else {
+                        return link_file(oldpath, newpath, flag);
+                    };
+                });
+            }
+            return make_ready_future<>();
+        });
     });
 }
 
@@ -4154,8 +4186,8 @@ future<bool> same_file(sstring path1, sstring path2, follow_symlink fs) {
     return engine().same_file(path1, path2, fs);
 }
 
-future<> link_file(sstring oldpath, sstring newpath) {
-    return engine().link_file(std::move(oldpath), std::move(newpath));
+future<> link_file_ext(sstring oldpath, sstring newpath, allow_overwrite flag) {
+    return engine().link_file(std::move(oldpath), std::move(newpath), flag);
 }
 
 future<> chmod(sstring name, file_permissions permissions) {
