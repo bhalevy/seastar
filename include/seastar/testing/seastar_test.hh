@@ -47,6 +47,14 @@ public:
 
 const std::vector<seastar_test*>& known_tests();
 
+// BOOST_REQUIRE_EXCEPTION predicates
+namespace exception_predicate {
+
+std::function<bool(const std::exception&)> message_equals(std::string expected_message);
+std::function<bool(const std::exception&)> message_contains(std::string expected_message);
+
+} // exception_predicate
+
 }
 
 }
