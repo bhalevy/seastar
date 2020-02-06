@@ -29,6 +29,13 @@
 
 namespace seastar {
 
+enum class allow_overwrite {
+    never,
+    always,
+    if_same,
+    if_not_same,
+};
+
 /// Recursively removes a directory and all of its contents.
 ///
 /// \param path path of the directory to recursively remove
@@ -47,5 +54,30 @@ future<bool> same_file(sstring path1, sstring path2, follow_symlink fs);
 inline future<bool> same_file(sstring path1, sstring path2) {
     return same_file(std::move(path1), std::move(path2), follow_symlink::yes);
 }
+
+/// Creates a hard link for a file
+///
+/// \param oldpath existing file name
+/// \param newpath name of link
+/// \param allow_overwrite determine whether newpath is overwritten if it exists.
+///                        never - never overwrite newpath
+///                        always - allow overwriting newpath (see details below).
+///                        if_same - allow "overwriting" newpath if it is linked to the same file as oldpath.
+///                                  link_file_ext does nothing in this case and just results in success,
+///                                  in contrast to link_file (see link(2)).
+///                        if_not_same - allow overwriting newpath only if it is not linked to the same file as oldpath
+///                                      (see details below).
+///
+/// \note
+/// directories are not allowed to be hard linked.
+/// When overwriting newpath is allowed, it must not be a directory either.
+/// It is first removed and the operation is retried one more time.
+/// Therefore, link_file_ext is guaranteed to be atomic only for:
+///     allow_overwrite::never and allow_overwrite::if_same.
+///
+/// The links are not guaranteed to be stable on disk, unless the
+/// containing directories are sync'ed.
+///
+future<> link_file_ext(sstring oldpath, sstring newpath, allow_overwrite flag);
 
 } // namespace seastar

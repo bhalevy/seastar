@@ -215,14 +215,30 @@ SEASTAR_TEST_CASE(link_file_test) {
     return tmp_dir::do_with_thread([&] (fs::path p) {
         sstring f1 = (p / "testfile1.tmp").native();
         sstring f2 = (p / "testfile2.tmp").native();
+        std::vector<allow_overwrite> all_flags = {
+                allow_overwrite::never,
+                allow_overwrite::always,
+                allow_overwrite::if_same,
+                allow_overwrite::if_not_same
+        };
 
         // link_file should fail when both f1 and f2 do not exist
         BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
                 testing::exception_predicate::message_contains("filesystem error: link failed: No such file or directory"));
+        for (auto flag : all_flags) {
+            BOOST_REQUIRE_EXCEPTION(link_file_ext(f1, f2, flag).get0(), std::system_error,
+                    testing::exception_predicate::message_contains("filesystem error: link failed: No such file or directory"));
+        }
 
         // link_file should succeed in the trivial case when f1 exists f2 does not exist
         touch_file(f1).get();
         BOOST_REQUIRE_NO_THROW(link_file(f1, f2).get());
+        BOOST_REQUIRE_EXCEPTION(link_file_ext(f1, f2, allow_overwrite::never).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: File exists"));
+        BOOST_REQUIRE_EXCEPTION(link_file_ext(f1, f2, allow_overwrite::if_not_same).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: File exists"));
+        BOOST_REQUIRE_NO_THROW(link_file_ext(f1, f2, allow_overwrite::always).get0());
+        BOOST_REQUIRE_NO_THROW(link_file_ext(f1, f2, allow_overwrite::if_same).get0());
         BOOST_REQUIRE(same_file(f1, f2).get0());
 
         // link_file should fail when f2 exists and same file
@@ -236,12 +252,29 @@ SEASTAR_TEST_CASE(link_file_test) {
         BOOST_REQUIRE(!same_file(f1, f2).get0());
         BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
                 testing::exception_predicate::message_contains("filesystem error: link failed: File exists"));
+        BOOST_REQUIRE_EXCEPTION(link_file_ext(f1, f2, allow_overwrite::never).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: File exists"));
+        BOOST_REQUIRE_EXCEPTION(link_file_ext(f1, f2, allow_overwrite::if_same).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: link failed: File exists"));
         BOOST_REQUIRE(!same_file(f1, f2).get0());
+
+        // link_file_ext should succeed with appropriate flags when f2 exists and is different from f1
+        BOOST_REQUIRE_NO_THROW(link_file_ext(f1, f2, allow_overwrite::always).get0());
+        BOOST_REQUIRE(same_file(f1, f2).get0());
+        remove_file(f2).get();
+        touch_file(f2).get();
+        BOOST_REQUIRE(!same_file(f1, f2).get0());
+        BOOST_REQUIRE_NO_THROW(link_file_ext(f1, f2, allow_overwrite::if_not_same).get0());
+        BOOST_REQUIRE(same_file(f1, f2).get0());
 
         // link_file should fail when f1 does not exist
         remove_file(f1).get();
         BOOST_REQUIRE_EXCEPTION(link_file(f1, f2).get0(), std::system_error,
                 testing::exception_predicate::message_contains("filesystem error: link failed: No such file or directory"));
+        for (auto flag : all_flags) {
+            BOOST_REQUIRE_EXCEPTION(link_file_ext(f1, f2, flag).get0(), std::system_error,
+                    testing::exception_predicate::message_contains("filesystem error: link failed: No such file or directory"));
+        }
 
         remove_file(f2).get();
     });
