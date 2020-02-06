@@ -519,6 +519,7 @@ public:
     future<bool> file_exists(sstring pathname) {
         return file_accessible(pathname, access_flags::exists);
     }
+    future<bool> same_file(sstring path1, sstring path2, follow_symlink fs);
     future<fs_type> file_system_at(sstring pathname);
     future<struct statvfs> statvfs(sstring pathname);
     future<> remove_file(sstring pathname);
