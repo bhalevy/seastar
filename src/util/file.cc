@@ -104,4 +104,35 @@ future<bool> same_file(sstring path1, sstring path2, follow_symlink fs) {
     });
 }
 
+future<> link_file_ext(sstring oldpath, sstring newpath, allow_overwrite flag) {
+    return link_file(oldpath, newpath)
+            .handle_exception([oldpath = std::move(oldpath), newpath = std::move(newpath), flag] (std::exception_ptr eptr) {
+        try {
+            std::rethrow_exception(eptr);
+        } catch (const std::system_error& e) {
+            auto error = e.code().value();
+            // Any error other than EEXIST is returned
+            // allow_overwrite::never provides exactly the same semantics as link(2)
+            if (error != EEXIST || flag == allow_overwrite::never) {
+                return make_exception_future<>(make_filesystem_error("link failed", fs::path(oldpath), fs::path(newpath), error));
+            }
+            // See if oldpath and newpath are hard links to the same file
+            return same_file(oldpath, newpath, follow_symlink::no).then([oldpath = std::move(oldpath), newpath = std::move(newpath), flag] (bool same) {
+                if ((flag == allow_overwrite::if_same && !same) ||
+                    (flag == allow_overwrite::if_not_same && same)) {
+                    return make_exception_future<>(make_filesystem_error("link failed", fs::path(oldpath), fs::path(newpath), EEXIST));
+                }
+                if (same) {
+                    // if newpath is already linked to the same inode as oldpath, we're done
+                    return make_ready_future<>();
+                }
+                // retry after removing new_file as permitted by allow_overwrite
+                return remove_file(newpath).then([oldpath = std::move(oldpath), newpath = std::move(newpath), flag] {
+                    return link_file(std::move(oldpath), std::move(newpath));
+                });
+            });
+        }
+    });
+}
+
 } //namespace seastar
