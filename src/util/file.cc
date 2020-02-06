@@ -129,4 +129,39 @@ future<> recursive_remove_directory(fs::path path) {
     });
 }
 
+static future<std::tuple<stat_data, stat_data>> stat_files(sstring path1, sstring path2, follow_symlink fs) {
+    // Until file_stat is made noexcept, use the when_all variant that takes lambdas.
+    auto fstat1 = [p = std::move(path1), fs] {
+        return file_stat(std::move(p), fs);
+    };
+    auto fstat2 = [p = std::move(path2), fs] {
+        return file_stat(std::move(p), fs);
+    };
+    return when_all(std::move(fstat1), std::move(fstat2)).then([] (std::tuple<future<stat_data>, future<stat_data>> res) {
+        auto& f1 = std::get<0>(res);
+        auto& f2 = std::get<1>(res);
+        if (f1.failed()) {
+            f2.ignore_ready_future();
+            return make_exception_future<std::tuple<stat_data, stat_data>>(f1.get_exception());
+        }
+        if (f2.failed()) {
+            f1.ignore_ready_future();
+            return make_exception_future<std::tuple<stat_data, stat_data>>(f2.get_exception());
+        }
+        auto ret = std::tuple<stat_data, stat_data>(f1.get0(), f2.get0());
+        return make_ready_future<std::tuple<stat_data, stat_data>>(std::move(ret));
+    });
+}
+
+static bool is_same_file(const stat_data& sd1, const stat_data& sd2) {
+    return sd1.device_id == sd2.device_id && sd1.inode_number == sd2.inode_number;
+}
+
+future<bool> same_file(sstring path1, sstring path2, follow_symlink fs) {
+    return stat_files(std::move(path1), std::move(path2), fs)
+            .then([] (std::tuple<stat_data, stat_data> res) {
+        return make_ready_future<bool>(is_same_file(std::get<0>(res), std::get<1>(res)));
+    });
+}
+
 } //namespace seastar
