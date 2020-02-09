@@ -259,8 +259,21 @@ SEASTAR_TEST_CASE(link_file_test) {
     });
 }
 
+static future<> overwrite_link(sstring oldpath, sstring newpath) {
+    return file_exists(newpath).then([oldpath, newpath] (bool exists) {
+        future<> fut = make_ready_future<>();
+        if (exists) {
+            fut = remove_file(newpath);
+        }
+        return fut.then([oldpath, newpath] {
+            return link_file(oldpath, newpath);
+        });
+    });
+}
+
 SEASTAR_TEST_CASE(rename_file_test) {
-    return tmp_dir::do_with_thread([&] (fs::path p) {
+    return tmp_dir::do_with_thread([] (tmp_dir& t) {
+        auto& p = t.get_path();
         sstring f1 = (p / "testfile1.tmp").native();
         sstring f2 = (p / "testfile2.tmp").native();
         sstring f3 = (p / "testfile3.tmp").native();
@@ -278,17 +291,47 @@ SEASTAR_TEST_CASE(rename_file_test) {
 
         // rename(2): If newpath already exists, it will be atomically replaced
         touch_file(f1).get();
-        link_file_ext(f1, f3, allow_overwrite::always).get();
+        overwrite_link(f1, f3).get();
         BOOST_REQUIRE(!same_file(f1, f2).get0());
         BOOST_REQUIRE_NO_THROW(rename_file(f1, f2).get());
+        BOOST_REQUIRE(!file_exists(f1).get0());
+        BOOST_REQUIRE(same_file(f2, f3).get0());
+
+        // rename_file_ext should succeed if newpath exists, depending on allow_overwrite flag
+        touch_file(f1).get();
+        overwrite_link(f1, f3).get();
+        BOOST_REQUIRE(!same_file(f1, f2).get0());
+        BOOST_REQUIRE_EXCEPTION(rename_file_ext(f1, f2, allow_overwrite::never).get(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: rename failed: File exists"));
+        BOOST_REQUIRE_EXCEPTION(rename_file_ext(f1, f2, allow_overwrite::if_same).get(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: rename failed: File exists"));
+        BOOST_REQUIRE(!same_file(f1, f2).get0());
+        BOOST_REQUIRE(same_file(f1, f3).get0());
+
+        BOOST_REQUIRE_NO_THROW(rename_file_ext(f1, f2, allow_overwrite::always).get());
         BOOST_REQUIRE(!file_exists(f1).get0());
         BOOST_REQUIRE(same_file(f2, f3).get0());
 
         // rename(2): If oldpath and newpath are existing hard links referring to the same file,
         // then rename() does nothing, and returns a success status.
         touch_file(f1).get();
-        link_file_ext(f1, f2, allow_overwrite::always).get();
+        overwrite_link(f1, f2).get();
         BOOST_REQUIRE_NO_THROW(rename_file(f1, f2).get());
         BOOST_REQUIRE(same_file(f1, f2).get0());
+
+        // rename_file_ext should succeed if newpath exists and same file, depending on allow_overwrite flag
+        BOOST_REQUIRE_EXCEPTION(rename_file_ext(f1, f2, allow_overwrite::never).get(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: rename failed: File exists"));
+        BOOST_REQUIRE(same_file(f1, f2).get0());
+
+        overwrite_link(f1, f3).get();
+        BOOST_REQUIRE_NO_THROW(rename_file_ext(f1, f2, allow_overwrite::always).get());
+        BOOST_REQUIRE(!file_exists(f1).get0());
+        BOOST_REQUIRE(same_file(f2, f3).get0());
+
+        overwrite_link(f2, f1).get();
+        BOOST_REQUIRE_NO_THROW(rename_file_ext(f1, f2, allow_overwrite::if_same).get());
+        BOOST_REQUIRE(!file_exists(f1).get0());
+        BOOST_REQUIRE(same_file(f2, f3).get0());
     });
 }
