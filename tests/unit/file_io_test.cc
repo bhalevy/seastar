@@ -199,6 +199,48 @@ SEASTAR_TEST_CASE(link_file_test) {
     });
 }
 
+SEASTAR_TEST_CASE(rename_file_test) {
+    return seastar::async([] {
+        sstring f1 = "testfile1.tmp";
+        sstring f2 = "testfile2.tmp";
+        sstring f3 = "testfile3.tmp";
+
+        remove_file(f1).handle_exception([] (auto ep) {}).get();
+        remove_file(f2).handle_exception([] (auto ep) {}).get();
+        remove_file(f3).handle_exception([] (auto ep) {}).get();
+
+        // rename_file should fail if both f1 and f2 do not exist
+        BOOST_REQUIRE_EXCEPTION(rename_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: rename failed: No such file or directory"));
+
+        // rename_file should succeed in the trivial case when f1 exist and f2 does not exist
+        touch_file(f1).get();
+        link_file(f1, f3).get();
+        BOOST_REQUIRE_NO_THROW(rename_file(f1, f2).get());
+        BOOST_REQUIRE(!file_exists(f1).get0());
+        BOOST_REQUIRE(same_file(f2, f3).get0());
+
+        // rename(2): If newpath already exists, it will be atomically replaced
+        touch_file(f1).get();
+        link_file_ext(f1, f3, allow_overwrite::always).get();
+        BOOST_REQUIRE(!same_file(f1, f2).get0());
+        BOOST_REQUIRE_NO_THROW(rename_file(f1, f2).get());
+        BOOST_REQUIRE(!file_exists(f1).get0());
+        BOOST_REQUIRE(same_file(f2, f3).get0());
+
+        // rename(2): If oldpath and newpath are existing hard links referring to the same file,
+        // then rename() does nothing, and returns a success status.
+        touch_file(f1).get();
+        link_file_ext(f1, f2, allow_overwrite::always).get();
+        BOOST_REQUIRE_NO_THROW(rename_file(f1, f2).get());
+        BOOST_REQUIRE(same_file(f1, f2).get0());
+
+        remove_file(f1).handle_exception([] (auto ep) {}).get();
+        remove_file(f2).handle_exception([] (auto ep) {}).get();
+        remove_file(f3).handle_exception([] (auto ep) {}).get();
+    });
+}
+
 struct file_test {
     file_test(file&& f) : f(std::move(f)) {}
     file f;
