@@ -258,3 +258,37 @@ SEASTAR_TEST_CASE(link_file_test) {
         remove_file(f2).get();
     });
 }
+
+SEASTAR_TEST_CASE(rename_file_test) {
+    return tmp_dir::do_with_thread([&] (fs::path p) {
+        sstring f1 = (p / "testfile1.tmp").native();
+        sstring f2 = (p / "testfile2.tmp").native();
+        sstring f3 = (p / "testfile3.tmp").native();
+
+        // rename_file should fail if both f1 and f2 do not exist
+        BOOST_REQUIRE_EXCEPTION(rename_file(f1, f2).get0(), std::system_error,
+                testing::exception_predicate::message_contains("filesystem error: rename failed: No such file or directory"));
+
+        // rename_file should succeed in the trivial case when f1 exist and f2 does not exist
+        touch_file(f1).get();
+        link_file(f1, f3).get();
+        BOOST_REQUIRE_NO_THROW(rename_file(f1, f2).get());
+        BOOST_REQUIRE(!file_exists(f1).get0());
+        BOOST_REQUIRE(same_file(f2, f3).get0());
+
+        // rename(2): If newpath already exists, it will be atomically replaced
+        touch_file(f1).get();
+        link_file_ext(f1, f3, allow_overwrite::always).get();
+        BOOST_REQUIRE(!same_file(f1, f2).get0());
+        BOOST_REQUIRE_NO_THROW(rename_file(f1, f2).get());
+        BOOST_REQUIRE(!file_exists(f1).get0());
+        BOOST_REQUIRE(same_file(f2, f3).get0());
+
+        // rename(2): If oldpath and newpath are existing hard links referring to the same file,
+        // then rename() does nothing, and returns a success status.
+        touch_file(f1).get();
+        link_file_ext(f1, f2, allow_overwrite::always).get();
+        BOOST_REQUIRE_NO_THROW(rename_file(f1, f2).get());
+        BOOST_REQUIRE(same_file(f1, f2).get0());
+    });
+}
