@@ -135,4 +135,37 @@ future<> link_file_ext(sstring oldpath, sstring newpath, allow_overwrite flag) {
     });
 }
 
+future<> rename_file_ext(sstring oldpath, sstring newpath, allow_overwrite flag) {
+    return stat_files(oldpath, newpath, follow_symlink::no)
+            .then([oldpath = std::move(oldpath), newpath = std::move(newpath), flag] (std::tuple<stat_data, stat_data> res) {
+        const stat_data& sd1 = std::get<0>(res);
+        const stat_data& sd2 = std::get<1>(res);
+        auto same = is_same_file(sd1, sd2);
+        int error = 0;
+        if (sd1.type == directory_entry_type::directory) {
+            if (sd2.type != directory_entry_type::directory) {
+                error = ENOTDIR;
+            }
+        } else {
+            if (sd2.type == directory_entry_type::directory) {
+                error = EISDIR;
+            } else if (flag == allow_overwrite::never ||
+                    (flag == allow_overwrite::if_same && !same) ||
+                    (flag == allow_overwrite::if_not_same && same)) {
+                error = EEXIST;
+            }
+        }
+        if (error) {
+            return make_exception_future<>(make_filesystem_error("rename failed", fs::path(oldpath), fs::path(newpath), error));
+        }
+        if (same) {
+            // if newpath refers to the same file as oldpath,
+            // just remove oldpath to complete the operation.
+            return remove_file(oldpath);
+        }
+        // otherwise retry the rename (that will overwrite newpath using the regular rename(2) semantics)
+        return rename_file(std::move(oldpath), std::move(newpath));
+    });
+}
+
 } //namespace seastar
