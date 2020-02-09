@@ -1703,6 +1703,66 @@ reactor::rename_file(sstring old_pathname, sstring new_pathname) {
     });
 }
 
+static future<syscall_result_extra<struct stat>> _file_stat(thread_pool& tp, sstring pathname, follow_symlink follow) {
+    return tp.submit<syscall_result_extra<struct stat>>([pathname = std::move(pathname), follow] {
+        struct stat st;
+        auto stat_syscall = follow ? stat : lstat;
+        auto ret = stat_syscall(pathname.c_str(), &st);
+        return wrap_syscall(ret, st);
+    });
+}
+
+future<>
+reactor::rename_file(sstring old_pathname, sstring new_pathname, allow_overwrite flag) {
+    return when_all(_file_stat(*_thread_pool, old_pathname, follow_symlink::no),
+                    _file_stat(*_thread_pool, new_pathname, follow_symlink::no))
+            .then([this, old_pathname = std::move(old_pathname), new_pathname = std::move(new_pathname), flag]
+                   (std::tuple<future<syscall_result_extra<struct stat>>, future<syscall_result_extra<struct stat>>> res) {
+        auto& f1 = std::get<0>(res);
+        auto& f2 = std::get<1>(res);
+        if (f1.failed()) {
+            f2.ignore_ready_future();
+            return make_exception_future<>(f1.get_exception());
+        }
+        if (f2.failed()) {
+            f1.ignore_ready_future();
+            return make_exception_future<>(f2.get_exception());
+        }
+        const auto& sr1 = f1.get0();
+        const auto& sr2 = f2.get0();
+        if (sr1.result < 0) {
+            sr1.throw_fs_exception("rename failed", fs::path(std::move(old_pathname)));
+        }
+        if (sr2.result < 0) {
+            if (sr2.error != ENOENT) {
+                sr2.throw_fs_exception("rename failed", fs::path(std::move(new_pathname)));
+            }
+            return rename_file(std::move(old_pathname), std::move(new_pathname));
+        }
+        const auto& st1 = sr1.extra;
+        const auto& st2 = sr2.extra;
+        bool same = (st1.st_dev == st2.st_dev && st1.st_ino == st2.st_ino);
+        if (flag == allow_overwrite::never ||
+            (flag == allow_overwrite::if_same && !same) ||
+            (flag == allow_overwrite::if_not_same && same)) {
+            throw fs::filesystem_error("rename failed", fs::path(std::move(new_pathname)), std::error_code(EEXIST, std::system_category()));
+        }
+        if (same) {
+            return remove_file(old_pathname).then_wrapped([old_pathname = std::move(old_pathname)] (future<> f) {
+                if (f.failed()) {
+                    try {
+                        std::rethrow_exception(f.get_exception());
+                    } catch (const fs::filesystem_error& e) {
+                        throw fs::filesystem_error("rename failed", fs::path(std::move(old_pathname)), e.code());
+                    }
+                }
+                return make_ready_future<>();
+            });
+        }
+        return rename_file(std::move(old_pathname), std::move(new_pathname));
+    });
+}
+
 future<>
 reactor::link_file(sstring oldpath, sstring newpath, allow_overwrite flag) {
     return engine()._thread_pool->submit<syscall_result<int>>([oldpath, newpath] {
@@ -1813,12 +1873,8 @@ timespec_to_time_point(const timespec& ts) {
 
 future<stat_data>
 reactor::file_stat(sstring pathname, follow_symlink follow) {
-    return _thread_pool->submit<syscall_result_extra<struct stat>>([pathname, follow] {
-        struct stat st;
-        auto stat_syscall = follow ? stat : lstat;
-        auto ret = stat_syscall(pathname.c_str(), &st);
-        return wrap_syscall(ret, st);
-    }).then([pathname = std::move(pathname)] (syscall_result_extra<struct stat> sr) {
+    return _file_stat(*_thread_pool, pathname, follow)
+            .then([pathname = std::move(pathname)] (syscall_result_extra<struct stat> sr) {
         sr.throw_fs_exception_if_error("stat failed", pathname);
         struct stat& st = sr.extra;
         stat_data sd;
@@ -4144,6 +4200,10 @@ future<> recursive_touch_directory(sstring name, file_permissions permissions) {
 
 future<> remove_file(sstring pathname) {
     return engine().remove_file(std::move(pathname));
+}
+
+future<> rename_file_ext(sstring old_pathname, sstring new_pathname, allow_overwrite flag) {
+    return engine().rename_file(std::move(old_pathname), std::move(new_pathname), flag);
 }
 
 future<> rename_file(sstring old_pathname, sstring new_pathname) {

@@ -270,6 +270,30 @@ enum class allow_overwrite {
     if_not_same,
 };
 
+/// Safely renames (moves) a file.
+///
+/// \param old_name existing file name
+/// \param new_name new file name
+/// \param allow_overwrite determine whether new_name is overwritten if it exists.
+///                        never - never overwrite new_name
+///                        always - always overwrite new_name
+///                        if_same - allow overwriting new_name only if it is linked to the same file as old_name.
+///                        if_not_same - allow overwriting new_name only if it is not linked to the same file as old_name.
+///
+/// \note
+///
+/// rename_file_ext is not guaranteed to be atomic unless it is passed the allow_overwrite::never flag.
+/// Otherwise it may use link and remove to provide the required allow_overwrite semantics.
+///
+/// rename_file_ext's handles the case when old_name new_name are linked to the same file
+/// differently than rename_file and the rename(2) system call. In this case, rename_file_ext
+/// removes old_name with allow_overwrite::{always,if_same} or returns an error with allow_overwrite::if_not_same,
+/// while the latter return success but have no effect, keeping both old_name and new_name in place.
+///
+/// The rename is not guaranteed to be stable on disk, unless the
+/// both containing directories are sync'ed.
+future<> rename_file_ext(sstring old_name, sstring new_name, allow_overwrite);
+
 /// Renames (moves) a file.
 ///
 /// \param old_name existing file name

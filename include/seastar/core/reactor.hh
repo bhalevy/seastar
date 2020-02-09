@@ -525,6 +525,7 @@ public:
     future<struct statvfs> statvfs(sstring pathname);
     future<> remove_file(sstring pathname);
     future<> rename_file(sstring old_pathname, sstring new_pathname);
+    future<> rename_file(sstring old_pathname, sstring new_pathname, allow_overwrite flag);
     future<> link_file(sstring oldpath, sstring newpath, allow_overwrite flag);
     future<> chmod(sstring name, file_permissions permissions);
 
