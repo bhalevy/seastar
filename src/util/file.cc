@@ -234,4 +234,38 @@ future<bool> same_file(sstring path1, sstring path2) noexcept {
     });
 }
 
+future<> rename_file_ext(sstring oldpath, sstring newpath, allow_overwrite flag) noexcept {
+    try {
+        return stat_files(oldpath, newpath)
+                .then([oldpath = std::move(oldpath), newpath = std::move(newpath), flag] (stat_data sd1, stat_data sd2) {
+            auto same = is_same_file(sd1, sd2);
+            int error = 0;
+            if (sd1.type == directory_entry_type::directory) {
+                if (sd2.type != directory_entry_type::directory) {
+                    error = ENOTDIR;
+                }
+            } else {
+                if (sd2.type == directory_entry_type::directory) {
+                    error = EISDIR;
+                } else if (flag == allow_overwrite::never ||
+                           (flag == allow_overwrite::if_same && !same)) {
+                    error = EEXIST;
+                }
+            }
+            if (error) {
+                return make_exception_future<>(make_filesystem_error("rename failed", fs::path(oldpath), fs::path(newpath), error));
+            }
+            if (same) {
+                // if newpath refers to the same file as oldpath,
+                // just remove oldpath to complete the operation.
+                return remove_file(oldpath);
+            }
+            // otherwise retry the rename (that will overwrite newpath using the regular rename(2) semantics)
+            return rename_file(std::move(oldpath), std::move(newpath));
+        });
+    } catch (...) {
+        return make_exception_future<>(std::current_exception());
+    }
+}
+
 } //namespace seastar
