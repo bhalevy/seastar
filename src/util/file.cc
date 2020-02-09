@@ -168,4 +168,59 @@ link_file_ext(sstring oldpath, sstring newpath, allow_overwrite flag) {
     });
 }
 
+future<>
+rename_file_ext(sstring oldpath, sstring newpath, allow_overwrite flag) {
+    return when_all(file_stat(oldpath, follow_symlink::no), file_stat(newpath, follow_symlink::no))
+            .then([oldpath = std::move(oldpath), newpath = std::move(newpath), flag] (std::tuple<future<stat_data>, future<stat_data>> res) {
+        auto& f1 = std::get<0>(res);
+        auto& f2 = std::get<1>(res);
+        if (f1.failed()) {
+            // pass any error to stat oldpath
+            f2.ignore_ready_future();
+            return make_exception_future<>(f1.get_exception());
+        }
+        if (f2.failed()) {
+            f1.ignore_ready_future();
+            auto eptr = f2.get_exception();
+            try {
+                std::rethrow_exception(eptr);
+            } catch (const std::system_error& e) {
+                if (__builtin_expect(e.code().value() == ENOENT, true)) {
+                    // call rename_file in the trivial case where newpath does not exist
+                    return rename_file(std::move(oldpath), std::move(newpath));
+                }
+            }
+            // and pass any other error to stat newpath
+            return make_exception_future<>(eptr);
+        }
+        const stat_data& sd1 = f1.get0();
+        const stat_data& sd2 = f2.get0();
+        auto same = _is_same_file(sd1, sd2);
+        int error = 0;
+        if (sd1.type == directory_entry_type::directory) {
+            if (sd2.type != directory_entry_type::directory) {
+                error = ENOTDIR;
+            }
+        } else {
+            if (sd2.type == directory_entry_type::directory) {
+                error = EISDIR;
+            } else if (flag == allow_overwrite::never ||
+                    (flag == allow_overwrite::if_same && !same) ||
+                    (flag == allow_overwrite::if_not_same && same)) {
+                error = EEXIST;
+            }
+        }
+        if (error) {
+            return make_exception_future<>(make_filesystem_error("rename failed", fs::path(oldpath), fs::path(newpath), error));
+        }
+        if (same) {
+            // if newpath refers to the same file as oldpath,
+            // just remove oldpath to complete the operation.
+            return remove_file(oldpath);
+        }
+        // otherwise retry the rename (that will overwrite newpath using the regular rename(2) semantics)
+        return rename_file(std::move(oldpath), std::move(newpath));
+    });
+}
+
 } //namespace seastar

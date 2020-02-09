@@ -76,4 +76,39 @@ future<bool> same_file(sstring path1, sstring path2, follow_symlink fs = follow_
 ///
 future<> link_file_ext(sstring oldpath, sstring newpath, allow_overwrite flag);
 
+/// Renames (moves) a file with extended overwrite semantics.
+///
+/// \param oldpath existing file name
+/// \param newpath new file name
+/// \param allow_overwrite determine whether new_name is overwritten if it exists.
+///                        never - never overwrite newpath
+///                        always - allow overwriting newpath (see details below).
+///                        if_same - allow "overwriting" newpath if it is linked to the same file as oldpath.
+///                                  link_file_ext just removes oldpath in this case, in contrast to
+///                                  rename_file that has no effect in this case (see rename(2)).
+///                        if_not_same - allow overwriting newpath only if it is not linked to the same file as oldpath.
+///                                      if they are the same, an (EEXIST) error is returned, in contrast to
+///                                      rename_file that has no effect in this case (see rename(2)).
+///
+/// \note
+///
+/// oldpath can specify a directory. In this case, newpath must either not exist, or it must specify an empty directory.
+/// If oldpath is not a directory, newpath must not be a directory either.
+///
+/// If oldpath refers to a symbolic link, the link is renamed; if newpath refers to a symbolic link,
+/// the link may be overwritten, based on allow_overwrite.
+///
+/// When overwriting newpath, it is first removed and the operation is retried one more time.
+/// Therefore, rename_file_ext is not guaranteed to be atomic unless it is passed the allow_overwrite::never flag.
+///
+/// rename_file_ext's handles the case when old_name new_name are linked to the same file
+/// differently than rename_file and the rename(2) system call. In this case, rename_file_ext
+/// removes oldpath with allow_overwrite::{always,if_same} or returns an error with allow_overwrite::if_not_same;
+/// while rename_file returns success but has no effect, keeping both oldpath and newpath in place.
+///
+/// The rename is not guaranteed to be stable on disk, unless the
+/// containing directories are sync'ed.
+///
+future<> rename_file_ext(sstring oldpath, sstring newpath, allow_overwrite);
+
 } // namespace seastar
