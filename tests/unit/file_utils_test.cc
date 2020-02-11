@@ -67,3 +67,46 @@ SEASTAR_THREAD_TEST_CASE(tmp_name_with_path_test) {
     remove_file(filename1).get();
     remove_file(filename2).get();
 }
+
+SEASTAR_THREAD_TEST_CASE(make_tmp_file_test) {
+    auto filename1 = make_tmp_file().get0().native();
+    BOOST_REQUIRE(file_exists(filename1).get0());
+
+    auto filename2 = make_tmp_file().get0().native();
+    BOOST_REQUIRE(file_exists(filename2).get0());
+
+    remove_file(filename1).get();
+    remove_file(filename2).get();
+}
+
+SEASTAR_THREAD_TEST_CASE(tmp_file_test) {
+    size_t expected = ~0;
+    size_t actual = 0;
+
+    tmp_file::do_with([&] (file f) {
+        return do_with(temporary_buffer<char>::aligned(f.memory_dma_alignment(), f.memory_dma_alignment()), [&, f] (auto& buf) mutable {
+            expected = buf.size();
+            return f.dma_write(0, buf.get(), buf.size()).then([&] (size_t written) {
+                actual = written;
+                return make_ready_future<>();
+            });
+        });
+    }).get();
+    BOOST_REQUIRE_EQUAL(expected , actual);
+}
+
+SEASTAR_THREAD_TEST_CASE(tmp_file_test_with_path) {
+    size_t expected = ~0;
+    size_t actual = 0;
+
+    tmp_file::do_with("/tmp", [&] (file f) {
+        return do_with(temporary_buffer<char>::aligned(f.memory_dma_alignment(), f.memory_dma_alignment()), [&, f] (auto& buf) mutable {
+            expected = buf.size();
+            return f.dma_write(0, buf.get(), buf.size()).then([&] (size_t written) {
+                actual = written;
+                return make_ready_future<>();
+            });
+        });
+    }).get();
+    BOOST_REQUIRE_EQUAL(expected , actual);
+}
