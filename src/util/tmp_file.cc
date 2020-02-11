@@ -74,4 +74,57 @@ tmp_name(const fs::path path_template) {
     });
 }
 
+static future<std::tuple<file, fs::path>>
+open_tmp_file(const fs::path path_template, open_flags oflags, const file_open_options options) {
+    oflags |= open_flags::create | open_flags::exclusive;
+    return generate_tmp_name(std::move(path_template)).then([oflags, options = std::move(options)] (fs::path path) {
+        return open_file_dma(path.native(), oflags, std::move(options)).then([path = std::move(path)] (file f) mutable {
+            auto res = std::make_tuple<file, fs::path>(std::move(f), std::move(path));
+            return make_ready_future<std::tuple<file, fs::path>>(std::move(res));
+        });
+    });
+}
+
+future<fs::path>
+make_tmp_file(const fs::path path_template, open_flags oflags, const file_open_options options) {
+    return open_tmp_file(std::move(path_template), oflags, std::move(options)).then([] (std::tuple<file, fs::path> r) {
+        return std::get<0>(r).close().then([r = std::move(r)] {
+            return make_ready_future<fs::path>(std::get<1>(r));
+        });
+    });
+}
+
+tmp_file::~tmp_file() {
+    assert(!opened());
+    assert(!has_path());
+}
+
+future<file> tmp_file::open(const fs::path path_template, open_flags oflags, const file_open_options options) {
+    assert(!opened());
+    return open_tmp_file(std::move(path_template), oflags, std::move(options)).then([this] (std::tuple<file, fs::path> r) {
+        _path = std::get<1>(r);
+        auto& f = std::get<0>(r);
+        _file.emplace(f);
+        return make_ready_future<file>(f);
+    });
+}
+
+future<> tmp_file::close() {
+    if (!opened()) {
+        return make_ready_future<>();
+    }
+    return _file->close().then([this] {
+        _file = compat::nullopt;
+    });
+}
+
+future<> tmp_file::remove() {
+    if (!has_path()) {
+        return make_ready_future<>();
+    }
+    return remove_file(get_path().native()).then([this] {
+        _path.clear();
+    });
+}
+
 } //namespace seastar
