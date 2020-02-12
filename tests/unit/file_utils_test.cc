@@ -131,3 +131,30 @@ SEASTAR_THREAD_TEST_CASE(test_tmp_dir_with_non_existing_path) {
     BOOST_REQUIRE_EXCEPTION(tmp_dir::do_with("/tmp/this_name_should_not_exist", [] (tmp_dir&) {}).get(),
             std::system_error, testing::exception_predicate::message_contains("No such file or directory"));
 }
+
+SEASTAR_TEST_CASE(tmp_dir_with_thread_test) {
+    return tmp_dir::do_with_thread([] (tmp_dir& td) {
+        tmp_file tf = make_tmp_file(td.get_path()).get0();
+        auto& f = tf.get_file();
+        auto buf = temporary_buffer<char>::aligned(f.memory_dma_alignment(), f.memory_dma_alignment());
+        auto expected = buf.size();
+        auto actual = f.dma_write(0, buf.get(), buf.size()).get0();
+        BOOST_REQUIRE_EQUAL(expected, actual);
+        tf.close().get();
+        tf.remove().get();
+    });
+}
+
+static future<> touch_file(const sstring& filename, open_flags oflags = open_flags::rw | open_flags::create) {
+    return open_file_dma(filename, oflags).then([] (file f) {
+        return f.close().finally([f] {});
+    });
+}
+
+SEASTAR_TEST_CASE(tmp_dir_with_leftovers_test) {
+    return tmp_dir::do_with_thread([] (tmp_dir& td) {
+        fs::path path = td.get_path() / "testfile.tmp";
+        touch_file(path.native()).get();
+        BOOST_REQUIRE(file_exists(path.native()).get0());
+    });
+}
