@@ -121,3 +121,29 @@ SEASTAR_THREAD_TEST_CASE(tmp_dir_test_with_non_existing_path) {
     BOOST_REQUIRE_EXCEPTION(tmp_dir::do_with("/tmp/this_name_should_not_exist", [] (compat::filesystem::path p) {}).get(),
             std::system_error, testing::exception_predicate::message_contains("No such file or directory"));
 }
+
+SEASTAR_TEST_CASE(tmp_dir_with_thread_test) {
+    return tmp_dir::do_with_thread([&] (compat::filesystem::path p) {
+        auto tmp = tmp_file();
+        auto f = tmp.open(p).get0();
+        auto buf = temporary_buffer<char>::aligned(f.memory_dma_alignment(), f.memory_dma_alignment());
+        auto expected = buf.size();
+        auto actual = f.dma_write(0, buf.get(), buf.size()).get0();
+        BOOST_REQUIRE_EQUAL(expected, actual);
+        tmp.close().get();
+        // Removing the tmp_file is not strictly needed.
+        // Leaving it around is explicitly tested in
+        // tmp_dir_with_leftovers_test
+        tmp.remove().get();
+    });
+}
+
+SEASTAR_TEST_CASE(tmp_dir_with_leftovers_test) {
+    return tmp_dir::do_with_thread([&] (compat::filesystem::path p) {
+        std::tuple<file, fs::path> res = make_tmp_file(p).get0();
+        auto f = std::get<0>(res);
+        auto path = std::get<1>(res);
+        f.close().get();
+        BOOST_REQUIRE(file_exists(path.native()).get0());
+    });
+}
