@@ -142,6 +142,15 @@ public:
         return do_with(default_tmp_path, std::move(func));
     }
 
+    template <typename Func>
+    static future<> do_with_thread(Func&& func) {
+        return do_with("/tmp", [func = std::move(func)] (tmp_dir& td) {
+            return async([&td, func = std::move(func)] () mutable {
+                func(td);
+            });
+        });
+    }
+
     bool has_path() const {
         return !_path.empty();
     }
