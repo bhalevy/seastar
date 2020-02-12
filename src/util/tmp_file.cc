@@ -27,6 +27,7 @@
 #include <seastar/util/exceptions.hh>
 #include <seastar/util/std-compat.hh>
 #include <seastar/util/tmp_file.hh>
+#include <seastar/util/file.hh>
 
 namespace seastar {
 
@@ -104,6 +105,34 @@ make_tmp_file(const fs::path path_template, open_flags oflags, const file_open_o
     return do_with(tmp_file(), [path_template = std::move(path_template), oflags, options = std::move(options)] (tmp_file& t) {
         return t.open(std::move(path_template), oflags, std::move(options)).then([&t] {
             return make_ready_future<tmp_file>(std::move(t));
+        });
+    });
+}
+
+tmp_dir::~tmp_dir() {
+    assert(!has_path());
+}
+
+future<> tmp_dir::create(const fs::path path_template, file_permissions create_permissions) {
+    assert(!has_path());
+    auto path = generate_tmp_name(std::move(path_template));
+    return touch_directory(path.native(), create_permissions).then([this, path = std::move(path)] {
+        _path = path;
+        return make_ready_future<>();
+    });
+}
+
+future<> tmp_dir::remove() {
+    if (!has_path()) {
+        return make_ready_future<>();
+    }
+    return recursive_remove_directory(std::move(_path));
+}
+
+future<tmp_dir> make_tmp_dir(const compat::filesystem::path path_template, file_permissions create_permissions) {
+    return do_with(tmp_dir(), [path_template = std::move(path_template), create_permissions] (tmp_dir& t) {
+        return t.create(std::move(path_template), create_permissions).then([&t] {
+            return make_ready_future<tmp_dir>(std::move(t));
         });
     });
 }
