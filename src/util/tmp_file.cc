@@ -27,6 +27,7 @@
 #include <seastar/util/exceptions.hh>
 #include <seastar/util/std-compat.hh>
 #include <seastar/util/tmp_file.hh>
+#include <seastar/util/file.hh>
 
 namespace seastar {
 
@@ -123,6 +124,29 @@ future<> tmp_file::remove() {
         return make_ready_future<>();
     }
     return remove_file(get_path().native()).then([this] {
+        _path.clear();
+    });
+}
+
+tmp_dir::~tmp_dir() {
+    assert(!has_path());
+}
+
+future<fs::path> tmp_dir::create(const fs::path path_template, file_permissions create_permissions) {
+    assert(!has_path());
+    return generate_tmp_name(std::move(path_template)).then([this, create_permissions] (fs::path path) {
+        return touch_directory(path.native(), create_permissions).then([this, path = std::move(path)] {
+            _path = path;
+            return make_ready_future<fs::path>(std::move(path));
+        });
+    });
+}
+
+future<> tmp_dir::remove() {
+    if (!has_path()) {
+        return make_ready_future<>();
+    }
+    return recursive_remove_directory(get_path()).then([this] {
         _path.clear();
     });
 }
