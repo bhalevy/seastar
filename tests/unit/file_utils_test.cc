@@ -149,3 +149,23 @@ SEASTAR_THREAD_TEST_CASE(tmp_dir_test_with_non_existing_path) {
     BOOST_REQUIRE_EXCEPTION(tmp_dir::do_with(tmp_name("/tmp/XXXXXX").get0(), [] (compat::filesystem::path p) {}).get(),
             std::system_error, testing::exception_predicate::message_contains("No such file or directory"));
 }
+
+SEASTAR_TEST_CASE(tmp_dir_with_thread_test) {
+    return tmp_dir::do_with_thread([&] (compat::filesystem::path p) {
+        auto tmp = tmp_file();
+        auto f = tmp.open(p).get0();
+        auto buf = temporary_buffer<char>::aligned(f.memory_dma_alignment(), f.memory_dma_alignment());
+        auto expected = buf.size();
+        auto actual = f.dma_write(0, buf.get(), buf.size()).get0();
+        BOOST_REQUIRE_EQUAL(expected, actual);
+        tmp.close().get();
+        tmp.remove().get();
+    });
+}
+
+SEASTAR_TEST_CASE(tmp_dir_with_leftovers_test) {
+    return tmp_dir::do_with_thread([&] (compat::filesystem::path p) {
+        auto tmp = make_tmp_file(p).get0();
+        BOOST_REQUIRE(file_exists(tmp.native()).get0());
+    });
+}
