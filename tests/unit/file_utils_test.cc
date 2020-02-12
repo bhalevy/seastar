@@ -82,3 +82,42 @@ SEASTAR_THREAD_TEST_CASE(tmp_file_test_with_path) {
     }).get();
     BOOST_REQUIRE_EQUAL(expected , actual);
 }
+
+SEASTAR_THREAD_TEST_CASE(tmp_dir_test) {
+    size_t expected;
+    size_t actual;
+    tmp_dir::do_with([&] (compat::filesystem::path p) {
+        return tmp_file::do_with(p, [&] (file f) {
+            return do_with(temporary_buffer<char>::aligned(f.memory_dma_alignment(), f.memory_dma_alignment()), [&, f] (auto& buf) mutable {
+                expected = buf.size();
+                return f.dma_write(0, buf.get(), buf.size()).then([&] (size_t written) {
+                    actual = written;
+                    return make_ready_future<>();
+                });
+            });
+        });
+    }).get();
+    BOOST_REQUIRE_EQUAL(expected , actual);
+}
+
+SEASTAR_THREAD_TEST_CASE(tmp_dir_test_with_path) {
+    size_t expected;
+    size_t actual;
+    tmp_dir::do_with(".", [&] (compat::filesystem::path p) {
+        return tmp_file::do_with(p, [&] (file f) {
+            return do_with(temporary_buffer<char>::aligned(f.memory_dma_alignment(), f.memory_dma_alignment()), [&, f] (auto& buf) mutable {
+                expected = buf.size();
+                return f.dma_write(0, buf.get(), buf.size()).then([&] (size_t written) {
+                    actual = written;
+                    return make_ready_future<>();
+                });
+            });
+        });
+    }).get();
+    BOOST_REQUIRE_EQUAL(expected , actual);
+}
+
+SEASTAR_THREAD_TEST_CASE(tmp_dir_test_with_non_existing_path) {
+    BOOST_REQUIRE_EXCEPTION(tmp_dir::do_with("/tmp/this_name_should_not_exist", [] (compat::filesystem::path p) {}).get(),
+            std::system_error, testing::exception_predicate::message_contains("No such file or directory"));
+}
