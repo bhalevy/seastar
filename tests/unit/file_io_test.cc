@@ -28,12 +28,14 @@
 #include <seastar/core/reactor.hh>
 #include <seastar/core/thread.hh>
 #include <seastar/core/stall_sampler.hh>
+#include <seastar/util/tmp_file.hh>
 #include <boost/range/adaptor/transformed.hpp>
 #include <iostream>
 
 #include "core/file-impl.hh"
 
 using namespace seastar;
+namespace fs = compat::filesystem;
 
 SEASTAR_TEST_CASE(open_flags_test) {
     open_flags flags = open_flags::rw | open_flags::create  | open_flags::exclusive;
@@ -57,8 +59,8 @@ SEASTAR_TEST_CASE(access_flags_test) {
 }
 
 SEASTAR_TEST_CASE(file_exists_test) {
-    return seastar::async([] {
-        sstring filename = "testfile.tmp";
+    return tmp_dir::do_with_thread([] (fs::path p) {
+        sstring filename = (p / "testfile.tmp").native();
         auto f = open_file_dma(filename, open_flags::rw | open_flags::create).get0();
         f.close().get();
         auto exists = file_exists(filename).get0();
@@ -70,13 +72,28 @@ SEASTAR_TEST_CASE(file_exists_test) {
 }
 
 SEASTAR_TEST_CASE(file_access_test) {
-    return seastar::async([] {
-        sstring filename = "testfile.tmp";
+    return tmp_dir::do_with_thread([] (fs::path p) {
+        sstring filename = (p / "testfile.tmp").native();
         auto f = open_file_dma(filename, open_flags::rw | open_flags::create).get0();
         f.close().get();
         auto is_accessible = file_accessible(filename, access_flags::read | access_flags::write).get0();
         BOOST_REQUIRE(is_accessible);
         remove_file(filename).get();
+    });
+}
+
+SEASTAR_TEST_CASE(file_access_test1) {
+    return tmp_dir::do_with([] (fs::path p) {
+        sstring filename = (p / "testfile.tmp").native();
+        return open_file_dma(filename, open_flags::rw | open_flags::create).then([] (file f) {
+            return f.close().finally([f] {});
+        }).then([filename] {
+            return file_accessible(filename, access_flags::read | access_flags::write).then([filename] (auto is_accessible) {
+                BOOST_REQUIRE(is_accessible);
+            });
+        }).finally([filename] {
+            return remove_file(filename);
+        });
     });
 }
 
@@ -89,8 +106,10 @@ struct file_test {
 
 SEASTAR_TEST_CASE(test1) {
     // Note: this tests generates a file "testfile.tmp" with size 4096 * max (= 40 MB).
+  return tmp_dir::do_with([] (fs::path p) {
     static constexpr auto max = 10000;
-    return open_file_dma("testfile.tmp", open_flags::rw | open_flags::create).then([] (file f) {
+    auto filename = (p / "testfile.tmp").native();
+    return open_file_dma(filename, open_flags::rw | open_flags::create).then([filename] (file f) {
         auto ft = new file_test{std::move(f)};
         for (size_t i = 0; i < max; ++i) {
             // Don't wait for future, use semaphore to signal when done instead.
@@ -118,17 +137,19 @@ SEASTAR_TEST_CASE(test1) {
         }).then([ft] {
             return ft->f.close();
         }).then([ft] () mutable {
-            std::cout << "done\n";
             delete ft;
+        }).then([filename] {
+            return remove_file(filename);
         });
     });
+  });
 }
 
 SEASTAR_TEST_CASE(parallel_write_fsync) {
     return internal::report_reactor_stalls([] {
-        return async([] {
+        return tmp_dir::do_with_thread([] (fs::path p) {
             // Plan: open a file and write to it like crazy. In parallel fsync() it all the time.
-            auto fname = "testfile.tmp";
+            auto fname = (p / "testfile.tmp").native();
             auto sz = uint64_t(32*1024*1024);
             auto buffer_size = 32768;
             auto write_concurrency = 16;
@@ -181,7 +202,8 @@ SEASTAR_TEST_CASE(parallel_write_fsync) {
     });
 }
 
-SEASTAR_THREAD_TEST_CASE(test_iov_max) {
+SEASTAR_TEST_CASE(test_iov_max) {
+  return tmp_dir::do_with_thread([] (fs::path p) {
     static constexpr size_t buffer_size = 4096;
     static constexpr size_t buffer_count = IOV_MAX * 2 + 1;
 
@@ -193,7 +215,8 @@ SEASTAR_THREAD_TEST_CASE(test_iov_max) {
         iovecs.emplace_back(iovec { original_buffers.back().get_write(), buffer_size });
     }
 
-    auto f = open_file_dma("testfile.tmp", open_flags::rw | open_flags::create).get0();
+    auto filename = (p / "testfile.tmp").native();
+    auto f = open_file_dma(filename, open_flags::rw | open_flags::create).get0();
     size_t left = buffer_size * buffer_count;
     size_t position = 0;
     while (left) {
@@ -229,6 +252,7 @@ SEASTAR_THREAD_TEST_CASE(test_iov_max) {
     }
 
     f.close().get();
+  });
 }
 
 SEASTAR_THREAD_TEST_CASE(test_sanitize_iovecs) {
@@ -294,9 +318,10 @@ SEASTAR_THREAD_TEST_CASE(test_sanitize_iovecs) {
     }
 }
 
-SEASTAR_THREAD_TEST_CASE(test_chmod) {
+SEASTAR_TEST_CASE(test_chmod) {
+  return tmp_dir::do_with_thread([] (fs::path p) {
     auto oflags = open_flags::rw | open_flags::create;
-    sstring filename = "testfile.tmp";
+    sstring filename = (p / "testfile.tmp").native();
     if (file_exists(filename).get0()) {
         remove_file(filename).get();
     }
@@ -319,11 +344,13 @@ SEASTAR_THREAD_TEST_CASE(test_chmod) {
     remove_file(filename).get();
 
     umask(orig_umask);
+  });
 }
 
-SEASTAR_THREAD_TEST_CASE(test_open_file_dma_permissions) {
+SEASTAR_TEST_CASE(test_open_file_dma_permissions) {
+  return tmp_dir::do_with_thread([] (fs::path p) {
     auto oflags = open_flags::rw | open_flags::create;
-    sstring filename = "testfile.tmp";
+    sstring filename = (p / "testfile.tmp").native();
     if (file_exists(filename).get0()) {
         remove_file(filename).get();
     }
@@ -348,14 +375,12 @@ SEASTAR_THREAD_TEST_CASE(test_open_file_dma_permissions) {
     remove_file(filename).get();
 
     umask(orig_umask);
+  });
 }
 
-SEASTAR_THREAD_TEST_CASE(test_make_directory_permissions) {
-    sstring dirname = "testdir.tmp";
-    if (file_exists(dirname).get0()) {
-        remove_file(dirname).get();
-    }
-
+SEASTAR_TEST_CASE(test_make_directory_permissions) {
+  return tmp_dir::do_with_thread([] (fs::path p) {
+    sstring dirname = (p / "testdir.tmp").native();
     auto orig_umask = umask(0);
 
     // test default_dir_permissions with make_directory
@@ -373,14 +398,12 @@ SEASTAR_THREAD_TEST_CASE(test_make_directory_permissions) {
     remove_file(dirname).get();
 
     umask(orig_umask);
+  });
 }
 
-SEASTAR_THREAD_TEST_CASE(test_touch_directory_permissions) {
-    sstring dirname = "testdir.tmp";
-    if (file_exists(dirname).get0()) {
-        remove_file(dirname).get();
-    }
-
+SEASTAR_TEST_CASE(test_touch_directory_permissions) {
+  return tmp_dir::do_with_thread([] (fs::path p) {
+    sstring dirname = (p / "testdir.tmp").native();
     auto orig_umask = umask(0);
 
     // test default_dir_permissions with touch_directory
@@ -405,12 +428,13 @@ SEASTAR_THREAD_TEST_CASE(test_touch_directory_permissions) {
     remove_file(dirname).get();
 
     umask(orig_umask);
+  });
 }
 
-SEASTAR_THREAD_TEST_CASE(test_recursive_touch_directory_permissions) {
-    sstring base_dirname = "testbasedir.tmp";
-    sstring sub_dirname = "testsubdir.tmp";
-    sstring dirpath = base_dirname + "/" + sub_dirname;
+SEASTAR_TEST_CASE(test_recursive_touch_directory_permissions) {
+  return tmp_dir::do_with_thread([] (fs::path p) {
+    sstring base_dirname = (p / "testbasedir.tmp").native();
+    sstring dirpath = base_dirname + "/" + "testsubdir.tmp";
     if (file_exists(dirpath).get0()) {
         remove_file(dirpath).get();
     }
@@ -450,4 +474,5 @@ SEASTAR_THREAD_TEST_CASE(test_recursive_touch_directory_permissions) {
     remove_file(base_dirname).get();
 
     umask(orig_umask);
+  });
 }
