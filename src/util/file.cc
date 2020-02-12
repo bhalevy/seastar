@@ -58,7 +58,11 @@ static future<> do_recursive_remove_directory(const fs::path path) {
 
 future<> recursive_remove_directory(fs::path path) {
     return do_recursive_remove_directory(path).then([path = std::move(path)] {
-        return sync_directory((path / "..").native());
+        if (path.has_parent_path()) {
+            return sync_directory(path.parent_path().native());
+        } else {
+            return make_ready_future<>();
+        }
     });
 }
 
