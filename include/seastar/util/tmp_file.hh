@@ -1,0 +1,112 @@
+/*
+ * This file is open source software, licensed to you under the terms
+ * of the Apache License, Version 2.0 (the "License").  See the NOTICE file
+ * distributed with this work for additional information regarding copyright
+ * ownership.  You may not use this file except in compliance with the License.
+ *
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+/*
+ * Copyright 2020 ScyllaDB
+ */
+
+#pragma once
+
+#include <seastar/core/future.hh>
+#include <seastar/core/file.hh>
+#include <seastar/util/std-compat.hh>
+
+namespace seastar {
+
+static constexpr const char* default_tmp_name_template = "XXXXXX.tmp";
+static constexpr const char* default_tmp_path = "/tmp";
+
+class tmp_file {
+    compat::filesystem::path _path;
+    file _file;
+    bool _opened = false;
+
+public:
+    tmp_file() = default;
+    tmp_file(const tmp_file&) = delete;
+    tmp_file(tmp_file&& x) noexcept;
+
+    tmp_file& operator=(tmp_file&&) noexcept = default;
+
+    ~tmp_file();
+
+    future<> open(const compat::filesystem::path path_template = default_tmp_path,
+            open_flags oflags = open_flags::rw,
+            const file_open_options options = {});
+    future<> close();
+    future<> remove();
+
+    template <typename Func>
+    static future<> do_with(const compat::filesystem::path path_template, Func&& func,
+            open_flags oflags = open_flags::rw,
+            const file_open_options options = {}) {
+        return seastar::do_with(tmp_file(), [func = std::move(func), path_template = std::move(path_template), oflags, options = std::move(options)] (tmp_file& t) {
+            return t.open(std::move(path_template), oflags, std::move(options)).then([&t, func = std::move(func)] () mutable {
+                return func(t);
+            }).finally([&t] {
+                return t.close().finally([&t] {
+                    return t.remove();
+                });
+            });
+        });
+    }
+
+    template <typename Func>
+    static future<> do_with(Func&& func) {
+        return do_with(default_tmp_path, std::move(func));
+    }
+
+    bool has_path() const {
+        return !_path.empty();
+    }
+
+    bool opened() const {
+        return _opened;
+    }
+
+    const compat::filesystem::path& get_path() const {
+        return _path;
+    }
+
+    file& get_file() {
+        return _file;
+    }
+};
+
+/// Returns a future for an opened tmp_file exclusively created by the function.
+///
+/// \param path_template - path where the file is to be created,
+///                        optionally including a template for the file name.
+/// \param open_flags - optional open flags (open_flags::create | open_flags::exclusive are added to those by default)
+/// \param file_open_options - additional options, e.g. for setting the created file permission.
+///
+/// \note
+///    path_template may optionally include a filename template in the last component of the path.
+///    The template is indicated by two or more consecutive XX's.
+///    Those will be replaced in the result path by a unique string.
+///
+///    If no filename template is found, then path_template is assumed to refer to the directory where
+///    the temporary file is to be created at (a.k.a. the parent directory) and `default_tmp_name_template`
+///    is appended to the path as the filename template.
+///
+///    The parent directory must exist and be writable to the current process.
+///
+future<tmp_file> make_tmp_file(const compat::filesystem::path path_template = default_tmp_path,
+        open_flags oflags = open_flags::rw, const file_open_options options = {});
+
+} // namespace seastar
