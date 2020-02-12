@@ -113,4 +113,46 @@ public:
     }
 };
 
+class tmp_dir {
+    compat::filesystem::path _path;
+
+public:
+    tmp_dir() = default;
+    tmp_dir(const tmp_dir&) = delete;
+    tmp_dir(tmp_dir&& x) : _path() {
+        std::swap(x._path, _path);
+    }
+
+    ~tmp_dir();
+
+    future<compat::filesystem::path> create(const compat::filesystem::path path_template = "/tmp",
+            file_permissions create_permissions = file_permissions::default_dir_permissions);
+    future<> remove();
+
+    template <typename Func>
+    static future<> do_with(const compat::filesystem::path path_template, Func&& func,
+            file_permissions create_permissions = file_permissions::default_dir_permissions) {
+        return seastar::do_with(tmp_dir(), [func = std::move(func), path_template = std::move(path_template), create_permissions] (tmp_dir& t) {
+            return t.create(std::move(path_template), create_permissions).then([func = std::move(func)] (compat::filesystem::path p) {
+                return func(std::move(p));
+            }).finally([&t] {
+                return t.remove();
+            });
+        });
+    }
+
+    template <typename Func>
+    static future<> do_with(Func&& func) {
+        return do_with("/tmp", std::move(func));
+    }
+
+    bool has_path() const {
+        return !_path.empty();
+    }
+
+    const compat::filesystem::path& get_path() const {
+        return _path;
+    }
+};
+
 } // namespace seastar
