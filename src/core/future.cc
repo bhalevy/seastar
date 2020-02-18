@@ -81,15 +81,13 @@ promise_base::promise_base(promise_base&& x) noexcept {
 }
 
 void promise_base::clear() noexcept {
-    if (__builtin_expect(bool(_task), false)) {
-        assert(_state && !_state->available());
+    if (_state && !_state->available()) {
         set_to_broken_promise(*_state);
+    }
+    if (__builtin_expect(bool(_task), false)) {
         ::seastar::schedule(std::exchange(_task, nullptr));
     }
     if (_future) {
-        if (_state && !_state->available()) {
-            set_to_broken_promise(*_state);
-        }
         _future->detach_promise();
     }
 }
