@@ -53,12 +53,10 @@ struct reader {
 };
 
 SEASTAR_TEST_CASE(test_fstream) {
-    auto sem = make_lw_shared<semaphore>(0);
-    return tmp_dir::do_with([sem] (fs::path p) {
-        // Run in background, signal when done.
+    return tmp_dir::do_with([] (fs::path p) {
         auto filename = (p / "testfile.tmp").native();
-        (void)open_file_dma(filename,
-                      open_flags::rw | open_flags::create | open_flags::truncate).then([sem, filename] (file f) {
+        return open_file_dma(filename,
+                      open_flags::rw | open_flags::create | open_flags::truncate).then([filename] (file f) {
             auto w = make_shared<writer>(std::move(f));
             auto buf = static_cast<char*>(::malloc(4096));
             memset(buf, 0, 4096);
@@ -101,13 +99,9 @@ SEASTAR_TEST_CASE(test_fstream) {
                 }).then([r] {
                     return r->in.close();
                 }).finally([r] {});
-            }).finally([sem] () {
-                sem->signal();
             });
         });
     });
-
-    return sem->wait();
 }
 
 SEASTAR_TEST_CASE(test_consume_skip_bytes) {
@@ -180,12 +174,11 @@ SEASTAR_TEST_CASE(test_consume_skip_bytes) {
 }
 
 SEASTAR_TEST_CASE(test_fstream_unaligned) {
-    auto sem = make_lw_shared<semaphore>(0);
-  return tmp_dir::do_with([sem] (fs::path p) {
+  return tmp_dir::do_with([] (fs::path p) {
     // Run in background, signal when done.
     auto filename = (p / "testfile.tmp").native();
-    (void)open_file_dma(filename,
-                  open_flags::rw | open_flags::create | open_flags::truncate).then([sem, filename] (file f) {
+    return open_file_dma(filename,
+                  open_flags::rw | open_flags::create | open_flags::truncate).then([filename] (file f) {
         auto w = make_shared<writer>(std::move(f));
         auto buf = static_cast<char*>(::malloc(40));
         memset(buf, 0, 40);
@@ -216,13 +209,9 @@ SEASTAR_TEST_CASE(test_fstream_unaligned) {
             }).then([r] {
                 return r->in.close();
             }).finally([r] {});
-        }).finally([sem] () {
-            sem->signal();
         });
     });
   });
-
-    return sem->wait();
 }
 
 future<> test_consume_until_end(uint64_t size) {
