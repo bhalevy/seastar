@@ -26,6 +26,7 @@
 #include <seastar/core/seastar.hh>
 #include <seastar/core/sstring.hh>
 #include <seastar/core/file.hh>
+#include <seastar/core/semaphore.hh>
 #include <seastar/util/file.hh>
 #include <seastar/util/exceptions.hh>
 #include <seastar/util/std-compat.hh>
@@ -38,26 +39,35 @@ static future<> do_recursive_remove_directory(const fs::path path) {
     struct work_entry {
         const fs::path path;
         bool listed;
+        lw_shared_ptr<semaphore> parent;
+        lw_shared_ptr<semaphore> sem;
 
-        work_entry(const fs::path path, bool listed)
+        work_entry(const fs::path path, bool listed, lw_shared_ptr<semaphore> parent = nullptr)
                 : path(std::move(path))
                 , listed(listed)
+                , parent(parent)
+                , sem(listed ? nullptr : make_lw_shared<semaphore>(0))
         {
+            if (parent) {
+                parent->consume();
+            }
         }
 
         work_entry(const work_entry& x) = delete;
         work_entry(work_entry&& x) = default;
 
-        ~work_entry() = default;
+        ~work_entry() {
+            assert(!sem || !sem->available_units());
+        }
 
         future<> list(std::deque<work_entry>& work_queue) {
             return open_directory(path.native()).then([this, &work_queue] (file dir) mutable {
                 return do_with(std::move(dir), [this, &work_queue] (file& dir) mutable {
                     return dir.list_directory([this, &work_queue] (directory_entry de) mutable {
                         if (de.type && *de.type == directory_entry_type::directory) {
-                            work_queue.emplace_back(path / de.name.c_str(), false);
+                            work_queue.emplace_back(path / de.name.c_str(), false, sem);
                         } else {
-                            work_queue.emplace_back(path / de.name.c_str(), true);
+                            work_queue.emplace_back(path / de.name.c_str(), true, sem);
                         }
                         return make_ready_future<>();
                     }).done().then([&dir] () mutable {
@@ -67,8 +77,22 @@ static future<> do_recursive_remove_directory(const fs::path path) {
             });
         }
 
+        future<> wait_for_children() {
+            return sem ? sem->wait(0) : make_ready_future<>();
+        }
+
+        void signal_parent() {
+            if (parent) {
+                parent->signal();
+            }
+        }
+
         future<> remove() {
-            return remove_file(path.native());
+            return wait_for_children().then([this] {
+                return remove_file(path.native());
+            }).then([this] {
+                signal_parent();
+            });
         }
     };
 
@@ -77,7 +101,7 @@ static future<> do_recursive_remove_directory(const fs::path path) {
         auto is_done = [&work_queue] { return work_queue.empty(); };
         return do_until(std::move(is_done), [&work_queue] () mutable {
             return do_with(std::move(work_queue), [&work_queue] (std::deque<work_entry>& work) mutable {
-                return do_for_each(work, [&work_queue] (work_entry& ent) {
+                return parallel_for_each(work, [&work_queue] (work_entry& ent) {
                     if (ent.listed) {
                         return ent.remove();
                     } else {
