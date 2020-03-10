@@ -209,10 +209,8 @@ public:
         return *this;
     }
     basic_sstring& operator=(basic_sstring&& x) noexcept {
-        if (this != &x) {
-            this->~basic_sstring();
-            new (this) basic_sstring(std::move(x));
-        }
+        this->~basic_sstring();
+        new (this) basic_sstring(std::move(x));
         return *this;
     }
     operator std::basic_string<char_type>() const {
