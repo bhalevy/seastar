@@ -160,7 +160,24 @@ private:
     void optimize_queue() noexcept;
     void process_queue() noexcept;
     bool may_quit() const noexcept;
-    void enqueue(op&& op);
+    void enqueue_op(op&& op);
+    template <typename... T, typename Func>
+    future<T...> enqueue(opcode type, uint64_t pos, size_t len, Func&& func) noexcept {
+        try {
+            auto pr = make_lw_shared(promise<T...>());
+            enqueue_op({
+                type, pos, len,
+                [pr, func] () mutable {
+                    return futurize_apply(func).then_wrapped([pr] (future<T...> f) mutable {
+                        f.forward_to(std::move(*pr));
+                    });
+                }
+            });
+            return pr->get_future();
+        } catch (...) {
+            return make_exception_future<T...>(std::current_exception());
+        }
+    }
 public:
     append_challenged_posix_file_impl(int fd, open_flags, file_open_options options, unsigned max_size_changing_ops, bool fsync_is_exclusive, io_queue* ioq);
     ~append_challenged_posix_file_impl() override;
