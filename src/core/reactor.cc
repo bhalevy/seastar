@@ -1554,7 +1554,8 @@ size_t sanitize_iovecs(std::vector<iovec>& iov, size_t disk_alignment) noexcept 
 }
 
 future<file>
-reactor::open_file_dma(sstring name, open_flags flags, file_open_options options) {
+reactor::open_file_dma(sstring name, open_flags flags, file_open_options options) noexcept {
+  try {
     return _thread_pool->submit<syscall_result<int>>([name, flags, options, strict_o_direct = _strict_o_direct, bypass_fsync = _bypass_fsync] {
         // We want O_DIRECT, except in two cases:
         //   - tmpfs (which doesn't support it, but works fine anyway)
@@ -1599,6 +1600,9 @@ reactor::open_file_dma(sstring name, open_flags flags, file_open_options options
         sr.throw_fs_exception_if_error("open failed", name);
         return make_ready_future<file>(file(sr.result, options));
     });
+  } catch (...) {
+      return make_exception_future<file>(std::current_exception());
+  }
 }
 
 future<>
@@ -1792,7 +1796,7 @@ reactor::statvfs(sstring pathname) {
 }
 
 future<file>
-reactor::open_directory(sstring name) {
+reactor::open_directory(sstring name) noexcept {
     return _thread_pool->submit<syscall_result<int>>([name] {
         return wrap_syscall<int>(::open(name.c_str(), O_DIRECTORY | O_CLOEXEC | O_RDONLY));
     }).then([name] (syscall_result<int> sr) {
@@ -3950,18 +3954,6 @@ future<> check_direct_io_support(sstring path) {
             }
         });
     });
-}
-
-future<file> open_file_dma(sstring name, open_flags flags) {
-    return engine().open_file_dma(std::move(name), flags, file_open_options());
-}
-
-future<file> open_file_dma(sstring name, open_flags flags, file_open_options options) {
-    return engine().open_file_dma(std::move(name), flags, options);
-}
-
-future<file> open_directory(sstring name) {
-    return engine().open_directory(std::move(name));
 }
 
 future<> make_directory(sstring name, file_permissions permissions) {
