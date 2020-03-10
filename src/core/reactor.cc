@@ -1511,17 +1511,25 @@ const io_priority_class& default_priority_class() {
 }
 
 future<size_t>
-reactor::submit_io_read(io_queue* ioq, const io_priority_class& pc, size_t len, io_request req) {
+reactor::submit_io_read(io_queue* ioq, const io_priority_class& pc, size_t len, io_request req) noexcept {
+  try {
     ++_io_stats.aio_reads;
     _io_stats.aio_read_bytes += len;
     return ioq->queue_request(pc, len, std::move(req));
+  } catch (...) {
+      return make_exception_future<size_t>(std::current_exception());
+  }
 }
 
 future<size_t>
-reactor::submit_io_write(io_queue* ioq, const io_priority_class& pc, size_t len, io_request req) {
+reactor::submit_io_write(io_queue* ioq, const io_priority_class& pc, size_t len, io_request req) noexcept {
+  try {
     ++_io_stats.aio_writes;
     _io_stats.aio_write_bytes += len;
     return ioq->queue_request(pc, len, std::move(req));
+  } catch (...) {
+      return make_exception_future<size_t>(std::current_exception());
+  }
 }
 
 namespace internal {
@@ -1817,7 +1825,8 @@ reactor::touch_directory(sstring name, file_permissions permissions) {
 }
 
 future<>
-reactor::fdatasync(int fd) {
+reactor::fdatasync(int fd) noexcept {
+  try {
     ++_fsyncs;
     if (_bypass_fsync) {
         return make_ready_future<>();
@@ -1859,6 +1868,9 @@ reactor::fdatasync(int fd) {
         sr.throw_if_error();
         return make_ready_future<>();
     });
+  } catch (...) {
+      return make_exception_future<>(std::current_exception());
+  }
 }
 
 void reactor::enable_timer(steady_clock_type::time_point when)
@@ -4099,7 +4111,7 @@ reactor::calculate_poll_time() {
     return virtualized() ? 2000us : 200us;
 }
 
-future<> later() {
+future<> later() noexcept {
     promise<> p;
     auto f = p.get_future();
     engine().force_poll();

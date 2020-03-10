@@ -536,11 +536,11 @@ public:
     future<size_t> submit_io_read(io_queue* ioq,
             const io_priority_class& priority_class,
             size_t len,
-            internal::io_request req);
+            internal::io_request req) noexcept;
     future<size_t> submit_io_write(io_queue* ioq,
             const io_priority_class& priority_class,
             size_t len,
-            internal::io_request req);
+            internal::io_request req) noexcept;
 
     inline void handle_io_result(ssize_t res) {
         if (res < 0) {
@@ -640,7 +640,7 @@ private:
     void register_metrics();
     future<> write_all_part(pollable_fd_state& fd, const void* buffer, size_t size, size_t completed);
 
-    future<> fdatasync(int fd);
+    future<> fdatasync(int fd) noexcept;
 
     void add_timer(timer<steady_clock_type>*);
     bool queue_timer(timer<steady_clock_type>*);
