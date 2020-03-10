@@ -69,7 +69,7 @@ file_handle::to_file() && {
     return file(std::move(*_impl).to_file());
 }
 
-posix_file_impl::posix_file_impl(int fd, open_flags f, file_open_options options, io_queue* ioq)
+posix_file_impl::posix_file_impl(int fd, open_flags f, file_open_options options, io_queue* ioq) noexcept
         : _io_queue(ioq)
         , _open_flags(f)
         , _fd(fd)
@@ -111,7 +111,7 @@ posix_file_impl::dup() {
     return ret;
 }
 
-posix_file_impl::posix_file_impl(int fd, open_flags f, std::atomic<unsigned>* refcount, io_queue *ioq)
+posix_file_impl::posix_file_impl(int fd, open_flags f, std::atomic<unsigned>* refcount, io_queue *ioq) noexcept
         : _refcount(refcount), _io_queue(ioq), _open_flags(f), _fd(fd) {
 }
 
@@ -448,7 +448,7 @@ posix_file_impl::read_maybe_eof(uint64_t pos, size_t len, const io_priority_clas
     });
 }
 
-blockdev_file_impl::blockdev_file_impl(int fd, open_flags f, file_open_options options, io_queue *ioq)
+blockdev_file_impl::blockdev_file_impl(int fd, open_flags f, file_open_options options, io_queue *ioq) noexcept
         : posix_file_impl(fd, f, options, ioq) {
 }
 
@@ -475,7 +475,7 @@ blockdev_file_impl::allocate(uint64_t position, uint64_t length) noexcept {
 }
 
 append_challenged_posix_file_impl::append_challenged_posix_file_impl(int fd, open_flags f, file_open_options options,
-        unsigned max_size_changing_ops, bool fsync_is_exclusive, io_queue* ioq)
+        unsigned max_size_changing_ops, bool fsync_is_exclusive, io_queue* ioq) noexcept
         : posix_file_impl(fd, f, options, ioq)
         , _max_size_changing_ops(max_size_changing_ops)
         , _fsync_is_exclusive(fsync_is_exclusive) {
