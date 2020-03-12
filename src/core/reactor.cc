@@ -4094,13 +4094,19 @@ reactor::calculate_poll_time() {
     return virtualized() ? 2000us : 200us;
 }
 
-future<> later() {
+future<> later() noexcept {
     promise<> p;
     auto f = p.get_future();
+    try {
     engine().force_poll();
     schedule(make_task(default_scheduling_group(), [p = std::move(p)] () mutable {
         p.set_value();
     }));
+    } catch (...) {
+        // force_poll/request_preemption may throw
+        // or make_task may fail to allocate memory
+        p.set_exception(std::current_exception());
+    }
     return f;
 }
 
