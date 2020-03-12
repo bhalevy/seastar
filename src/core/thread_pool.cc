@@ -49,7 +49,9 @@ void thread_pool::work(sstring name) {
         });
         for (auto p = tmp_buf.data(); p != end; ++p) {
             auto wi = *p;
-            wi->process();
+            if (!wi->available()) {
+                wi->process();
+            }
             inter_thread_wq._completed.push(wi);
         }
         if (_main_thread_idle.load(std::memory_order_seq_cst)) {
