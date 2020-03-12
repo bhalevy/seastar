@@ -789,7 +789,7 @@ xfs_concurrency_from_kernel_version() {
 }
 
 future<shared_ptr<file_impl>>
-make_file_impl(int fd, file_open_options options, int flags) {
+make_file_impl(int fd, file_open_options options, int flags) noexcept {
     return engine().fstat(fd).then([fd, options = std::move(options), flags] (struct stat st) mutable {
         auto r = ::ioctl(fd, BLKGETSIZE);
         auto st_dev = st.st_dev;
