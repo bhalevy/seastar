@@ -585,6 +585,14 @@ protected:
         set_exception(make_exception_ptr(std::forward<Exception>(e)));
     }
 
+    bool available() const noexcept {
+        return _state && _state->available();
+    }
+
+    bool failed() const noexcept {
+        return _state && _state->failed();
+    }
+
     friend class future_base;
     template <typename... U> friend class seastar::future;
 };
@@ -723,6 +731,14 @@ public:
     template<typename Exception>
     std::enable_if_t<!std::is_same<std::remove_reference_t<Exception>, std::exception_ptr>::value, void> set_exception(Exception&& e) noexcept {
         internal::promise_base::set_exception(std::forward<Exception>(e));
+    }
+
+    bool available() const noexcept {
+        return internal::promise_base::available();
+    }
+
+    bool failed() const noexcept {
+        return internal::promise_base::failed();
     }
 
     using internal::promise_base_with_type<T...>::set_urgent_state;
