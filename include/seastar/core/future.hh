@@ -1490,6 +1490,10 @@ public:
         });
     }
 
+    static future<T...> current_exception_as_future() noexcept {
+        return internal::current_exception_as_future<T...>();
+    }
+
     /// \brief Ignore any result hold by this future
     ///
     /// Ignore any result (value or exception) hold by this future.
