@@ -437,8 +437,8 @@ struct future_state :  public future_state_base, private internal::uninitialized
         assert(_u.st == state::future);
         new (this) future_state(ready_future_marker(), std::forward<A>(a)...);
     }
-    future_state(exception_future_marker m, std::exception_ptr&& ex) : future_state_base(std::move(ex)) { }
-    future_state(exception_future_marker m, future_state_base&& state) : future_state_base(std::move(state)) { }
+    future_state(exception_future_marker m, std::exception_ptr&& ex) noexcept : future_state_base(std::move(ex)) { }
+    future_state(exception_future_marker m, future_state_base&& state) noexcept : future_state_base(std::move(state)) { }
     std::tuple<T...>&& get_value() && noexcept {
         assert(_u.st == state::result);
         return std::move(this->uninitialized_get());
