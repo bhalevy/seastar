@@ -281,17 +281,17 @@ struct future_state_base {
          exception_min = 4,  // or anything greater
     };
     union any {
-        any() { st = state::future; }
-        any(state s) { st = s; }
-        void set_exception(std::exception_ptr&& e) {
+        any() noexcept { st = state::future; }
+        any(state s) noexcept { st = s; }
+        void set_exception(std::exception_ptr&& e) noexcept {
             new (&ex) std::exception_ptr(std::move(e));
             assert(st >= state::exception_min);
         }
-        any(std::exception_ptr&& e) {
+        any(std::exception_ptr&& e) noexcept {
             set_exception(std::move(e));
         }
-        ~any() {}
-        std::exception_ptr take_exception() {
+        ~any() noexcept {}
+        std::exception_ptr take_exception() noexcept {
             std::exception_ptr ret(std::move(ex));
             // Unfortunately in libstdc++ ~exception_ptr is defined out of line. We know that it does nothing for
             // moved out values, so we omit calling it. This is critical for the code quality produced for this
@@ -305,7 +305,7 @@ struct future_state_base {
             st = state::invalid;
             return ret;
         }
-        any(any&& x) {
+        any(any&& x) noexcept {
             if (x.st < state::exception_min) {
                 st = x.st;
                 x.st = state::invalid;
