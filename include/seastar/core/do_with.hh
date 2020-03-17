@@ -89,8 +89,11 @@ public:
 /// \return whatever \c f returns
 template<typename T, typename F>
 inline
-auto do_with(T&& rvalue, F&& f) {
-    auto task = std::make_unique<internal::do_with_state<T, std::result_of_t<F(T&)>>>(std::forward<T>(rvalue));
+auto do_with(T&& rvalue, F&& f) noexcept {
+    using ret_type = std::result_of_t<F(T&)>;
+    using futurator = futurize<ret_type>;
+    return futurator::apply([rvalue = std::move(rvalue), f = std::move(f)] () mutable {
+    auto task = std::make_unique<internal::do_with_state<T, ret_type>>(std::forward<T>(rvalue));
     auto fut = f(task->data());
     if (fut.available()) {
         return fut;
@@ -98,6 +101,7 @@ auto do_with(T&& rvalue, F&& f) {
     auto ret = task->get_future();
     internal::set_callback(fut, task.release());
     return ret;
+    });
 }
 
 /// \cond internal
@@ -136,7 +140,7 @@ auto with_lock(Lock& lock, Func&& func) {
 template <typename T1, typename T2, typename T3_or_F, typename... More>
 inline
 auto
-do_with(T1&& rv1, T2&& rv2, T3_or_F&& rv3, More&&... more) {
+do_with(T1&& rv1, T2&& rv2, T3_or_F&& rv3, More&&... more) noexcept {
     auto all = std::forward_as_tuple(
             std::forward<T1>(rv1),
             std::forward<T2>(rv2),
@@ -148,6 +152,8 @@ do_with(T1&& rv1, T2&& rv2, T3_or_F&& rv3, More&&... more) {
     auto&& just_func = std::move(std::get<nr>(std::move(all)));
     using value_tuple = std::remove_reference_t<decltype(just_values)>;
     using ret_type = decltype(apply(just_func, just_values));
+    using futurator = futurize<ret_type>;
+    return futurator::apply([just_values = std::move(just_values), just_func = std::move(just_func)] () mutable {
     auto task = std::make_unique<internal::do_with_state<value_tuple, ret_type>>(std::move(just_values));
     auto fut = apply(just_func, task->data());
     if (fut.available()) {
@@ -156,6 +162,7 @@ do_with(T1&& rv1, T2&& rv2, T3_or_F&& rv3, More&&... more) {
     auto ret = task->get_future();
     internal::set_callback(fut, task.release());
     return ret;
+    });
 }
 
 /// @}
