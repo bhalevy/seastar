@@ -389,6 +389,10 @@ struct future_state :  public future_state_base, private internal::uninitialized
                   "Types must be no-throw move constructible");
     static_assert(std::is_nothrow_destructible<std::tuple<T...>>::value,
                   "Types must be no-throw destructible");
+    static_assert(std::is_nothrow_move_constructible<std::exception_ptr>::value,
+                  "std::exception_ptr's move constructor must not throw");
+    static_assert(std::is_nothrow_move_constructible<future_state_base>::value,
+                  "future_state_base's move constructor must not throw");
     future_state() noexcept {}
     [[gnu::always_inline]]
     future_state(future_state&& x) noexcept : future_state_base(std::move(x)) {
@@ -426,8 +430,8 @@ struct future_state :  public future_state_base, private internal::uninitialized
         assert(_u.st == state::future);
         new (this) future_state(ready_future_marker(), std::forward<A>(a)...);
     }
-    future_state(exception_future_marker m, std::exception_ptr&& ex) : future_state_base(std::move(ex)) { }
-    future_state(exception_future_marker m, future_state_base&& state) : future_state_base(std::move(state)) { }
+    future_state(exception_future_marker m, std::exception_ptr&& ex) noexcept : future_state_base(std::move(ex)) { }
+    future_state(exception_future_marker m, future_state_base&& state) noexcept : future_state_base(std::move(state)) { }
     std::tuple<T...>&& get_value() && noexcept {
         assert(_u.st == state::result);
         return std::move(this->uninitialized_get());
