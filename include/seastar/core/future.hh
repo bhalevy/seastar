@@ -786,7 +786,7 @@ struct futurize {
 
     /// Convert a value or a future to a future
     static inline type convert(T&& value) { return make_ready_future<T>(std::move(value)); }
-    static inline type convert(type&& value) { return std::move(value); }
+    static inline type convert(type&& value) noexcept { return std::move(value); }
 
     /// Convert the tuple representation into a future
     static type from_tuple(value_type&& value);
@@ -834,7 +834,7 @@ struct futurize<future<Args...>> {
     static inline type from_tuple(const value_type& value);
 
     static inline type convert(Args&&... values) { return make_ready_future<Args...>(std::move(values)...); }
-    static inline type convert(type&& value) { return std::move(value); }
+    static inline type convert(type&& value) noexcept { return std::move(value); }
 
     template <typename Arg>
     static type make_exception_future(Arg&& arg);
