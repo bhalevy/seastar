@@ -1342,7 +1342,7 @@ public:
         finally_body(Func&& func) : _func(std::forward<Func>(func))
         { }
 
-        future<T...> operator()(future<T...>&& result) {
+        future<T...> operator()(future<T...>&& result) noexcept {
             using futurator = futurize<std::result_of_t<Func()>>;
             return futurator::apply(_func).then_wrapped([result = std::move(result)](auto f_res) mutable {
                 if (!f_res.failed()) {
@@ -1366,7 +1366,7 @@ public:
         finally_body(Func&& func) : _func(std::forward<Func>(func))
         { }
 
-        future<T...> operator()(future<T...>&& result) {
+        future<T...> operator()(future<T...>&& result) noexcept {
             try {
                 _func();
                 return std::move(result);
