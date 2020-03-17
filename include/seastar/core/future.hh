@@ -1071,7 +1071,7 @@ public:
     }
 
     [[gnu::always_inline]]
-     std::exception_ptr get_exception() {
+    std::exception_ptr get_exception() noexcept {
         return get_available_state_ref().get_exception();
     }
 
