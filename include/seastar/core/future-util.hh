@@ -606,11 +606,8 @@ public:
 /// \return a ready future on success, or the first failed future if
 ///         \c action failed.
 template<typename Iterator, typename AsyncAction>
-GCC6_CONCEPT( requires requires (Iterator i, AsyncAction aa) {
-    { futurize_apply(aa, *i) } -> future<>;
-} )
 inline
-future<> do_for_each(Iterator begin, Iterator end, AsyncAction action) {
+future<> do_for_each_iterator_impl(Iterator begin, Iterator end, AsyncAction action) {
     while (begin != end) {
         auto f = futurize<void>::apply(action, *begin++);
         if (f.failed()) {
@@ -625,6 +622,16 @@ future<> do_for_each(Iterator begin, Iterator end, AsyncAction action) {
     return make_ready_future<>();
 }
 
+template<typename Iterator, typename AsyncAction>
+GCC6_CONCEPT( requires requires (Iterator i, AsyncAction aa) {
+    { futurize_apply(aa, *i) } -> future<>;
+} )
+inline
+future<> do_for_each(Iterator begin, Iterator end, AsyncAction action) noexcept {
+    auto func = do_for_each_iterator_impl<Iterator, AsyncAction>;
+    return futurize_apply(func, std::move(begin), std::move(end), std::move(action));
+}
+
 /// Call a function for each item in a range, sequentially (range version).
 ///
 /// For each item in a range, call a function, waiting for the previous
@@ -637,12 +644,19 @@ future<> do_for_each(Iterator begin, Iterator end, AsyncAction action) {
 /// \return a ready future on success, or the first failed future if
 ///         \c action failed.
 template<typename Container, typename AsyncAction>
+inline
+future<> do_for_each_container_impl(Container& c, AsyncAction action) {
+    return do_for_each(std::begin(c), std::end(c), std::move(action));
+}
+
+template<typename Container, typename AsyncAction>
 GCC6_CONCEPT( requires requires (Container c, AsyncAction aa) {
     { futurize_apply(aa, *c.begin()) } -> future<>;
 } )
 inline
-future<> do_for_each(Container& c, AsyncAction action) {
-    return do_for_each(std::begin(c), std::end(c), std::move(action));
+future<> do_for_each(Container& c, AsyncAction action) noexcept {
+    auto func = do_for_each_container_impl<Container, AsyncAction>;
+    return futurize_apply(func, c, std::move(action));
 }
 
 /// \cond internal
