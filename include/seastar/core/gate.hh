@@ -25,6 +25,8 @@
 #include <seastar/util/std-compat.hh>
 #include <exception>
 
+#include <seastar/core/internal/api-level.hh>
+
 namespace seastar {
 
 /// \addtogroup fiber-module
@@ -47,6 +49,14 @@ public:
 class gate {
     size_t _count = 0;
     compat::optional<promise<>> _stopped;
+
+    void count_enter() {
+        ++_count;
+    }
+
+    void count_leave() {
+        --_count;
+    }
 public:
     /// Registers an in-progress request.
     ///
@@ -56,14 +66,14 @@ public:
         if (_stopped) {
             throw gate_closed_exception();
         }
-        ++_count;
+        count_enter();
     }
     /// Unregisters an in-progress request.
     ///
     /// If the gate is closed, and there are no more in-progress requests,
     /// the \ref closed() promise will be fulfilled.
     void leave() {
-        --_count;
+        count_leave();
         if (!_count && _stopped) {
             _stopped->set_value();
         }
@@ -105,6 +115,16 @@ public:
     bool is_closed() const {
         return bool(_stopped);
     }
+
+    template <typename Func>
+    auto do_with(Func&& func) noexcept {
+        using futurator = futurize<std::result_of_t<Func()>>;
+        if (is_closed()) {
+            return futurator::make_exception_future(gate_closed_exception());
+        }
+        count_enter();
+        return futurator::invoke(std::forward<Func>(func)).finally([this] { leave(); });
+    }
 };
 
 /// Executes the function \c func making sure the gate \c g is properly entered
@@ -115,13 +135,23 @@ public:
 /// \returns whatever \c func returns
 ///
 /// \relates gate
+#if SEASTAR_API_LEVEL < 3
 template <typename Func>
+[[deprecated("Use SEASTAR_API_LEVEL >= 3 for with_gate noexcept")]]
 inline
 auto
 with_gate(gate& g, Func&& func) {
     g.enter();
     return futurize_invoke(std::forward<Func>(func)).finally([&g] { g.leave(); });
 }
+#else
+template <typename Func>
+inline
+auto
+with_gate(gate& g, Func&& func) noexcept {
+    return g.do_with(std::forward<Func>(func));
+}
+#endif
 /// @}
 
 }

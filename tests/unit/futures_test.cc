@@ -39,6 +39,8 @@
 #include <boost/range/iterator_range.hpp>
 #include <boost/range/irange.hpp>
 
+#include <seastar/core/internal/api-level.hh>
+
 using namespace seastar;
 using namespace std::chrono_literals;
 
@@ -1260,8 +1262,15 @@ SEASTAR_THREAD_TEST_CASE(test_with_gate) {
         });
     };
 
+#if SEASTAR_API_LEVEL < 3
     BOOST_CHECK_THROW(f().get(), gate_closed_exception);
     BOOST_REQUIRE_EQUAL(counter, 1);
     BOOST_REQUIRE_EQUAL(gate_closed_errors, 0);
     BOOST_REQUIRE_EQUAL(other_errors, 0);
+#else
+    BOOST_CHECK_NO_THROW(f().get());
+    BOOST_REQUIRE_EQUAL(counter, 1);
+    BOOST_REQUIRE_EQUAL(gate_closed_errors, 1);
+    BOOST_REQUIRE_EQUAL(other_errors, 0);
+#endif
 }
