@@ -846,13 +846,21 @@ auto futurize_apply_if_func(Func&& func) noexcept {
 }
 
 template <typename... Futs>
-GCC6_CONCEPT( requires seastar::AllAreFutures<Futs...> )
 inline
 future<std::tuple<Futs...>>
-when_all_impl(Futs&&... futs) {
+when_all_futs_impl(Futs&&... futs) {
     namespace si = internal;
     using state = si::when_all_state<si::identity_futures_tuple<Futs...>, Futs...>;
     return state::wait_all(std::forward<Futs>(futs)...);
+}
+
+template <typename... Futs>
+GCC6_CONCEPT( requires seastar::AllAreFutures<Futs...> )
+inline
+future<std::tuple<Futs...>>
+when_all_impl(Futs&&... futs) noexcept {
+    auto func = when_all_futs_impl<Futs...>;
+    return futurize_invoke(func, std::forward<Futs>(futs)...);
 }
 
 /// Wait for many futures to complete, capturing possible errors (variadic version).
@@ -869,7 +877,7 @@ when_all_impl(Futs&&... futs) {
 /// \return an \c std::tuple<> of all futures returned; when ready,
 ///         all contained futures will be ready as well.
 template <typename... FutOrFuncs>
-inline auto when_all(FutOrFuncs&&... fut_or_funcs) {
+inline auto when_all(FutOrFuncs&&... fut_or_funcs) noexcept {
     return when_all_impl(futurize_apply_if_func(std::forward<FutOrFuncs>(fut_or_funcs))...);
 }
 
@@ -1332,10 +1340,16 @@ struct extract_values_from_futures_vector<future<>> {
 }
 
 template<typename... Futures>
-GCC6_CONCEPT( requires seastar::AllAreFutures<Futures...> )
-inline auto when_all_succeed_impl(Futures&&... futures) {
+inline auto when_all_succeed_futs_impl(Futures&&... futures) {
     using state = internal::when_all_state<internal::extract_values_from_futures_tuple<Futures...>, Futures...>;
     return state::wait_all(std::forward<Futures>(futures)...);
+}
+
+template<typename... Futures>
+GCC6_CONCEPT( requires seastar::AllAreFutures<Futures...> )
+inline auto when_all_succeed_impl(Futures&&... futures) noexcept {
+    auto func = when_all_succeed_futs_impl<Futures...>;
+    return futurize_invoke(func, std::forward<Futures>(futures)...);
 }
 
 /// Wait for many futures to complete (variadic version).
@@ -1349,7 +1363,7 @@ inline auto when_all_succeed_impl(Futures&&... futures) {
 /// \param fut_or_funcs futures or functions that return futures
 /// \return future containing values of futures returned by funcs
 template <typename... FutOrFuncs>
-inline auto when_all_succeed(FutOrFuncs&&... fut_or_funcs) {
+inline auto when_all_succeed(FutOrFuncs&&... fut_or_funcs) noexcept {
     return when_all_succeed_impl(futurize_apply_if_func(std::forward<FutOrFuncs>(fut_or_funcs))...);
 }
 
