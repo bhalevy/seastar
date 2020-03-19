@@ -906,7 +906,7 @@ complete_when_all(std::vector<Future>&& futures, typename std::vector<Future>::i
 
 template<typename ResolvedVectorTransform, typename FutureIterator>
 inline auto
-do_when_all(FutureIterator begin, FutureIterator end) {
+do_when_all_iter_impl(FutureIterator begin, FutureIterator end) {
     using itraits = std::iterator_traits<FutureIterator>;
     std::vector<typename itraits::value_type> ret;
     ret.reserve(iterator_range_estimate_vector_capacity(begin, end, typename itraits::iterator_category()));
@@ -916,7 +916,16 @@ do_when_all(FutureIterator begin, FutureIterator end) {
     return complete_when_all<ResolvedVectorTransform>(std::move(ret), ret.begin());
 }
 
+template<typename ResolvedVectorTransform, typename FutureIterator>
+inline auto
+do_when_all(FutureIterator begin, FutureIterator end) noexcept {
+    static_assert(std::is_nothrow_move_constructible<FutureIterator>::value,
+                  "FutureIterator's move constructor must not throw");
+    auto func = do_when_all_iter_impl<ResolvedVectorTransform, FutureIterator>;
+    return futurize_invoke(func, std::move(begin), std::move(end));
 }
+
+} // namespace internal
 /// \endcond
 
 /// Wait for many futures to complete, capturing possible errors (iterator version).
@@ -933,7 +942,7 @@ template <typename FutureIterator>
 GCC6_CONCEPT( requires requires (FutureIterator i) { { *i++ }; requires is_future<std::remove_reference_t<decltype(*i)>>::value; } )
 inline
 future<std::vector<typename std::iterator_traits<FutureIterator>::value_type>>
-when_all(FutureIterator begin, FutureIterator end) {
+when_all(FutureIterator begin, FutureIterator end) noexcept {
     namespace si = internal;
     using itraits = std::iterator_traits<FutureIterator>;
     using result_transform = si::identity_futures_vector<typename itraits::value_type>;
@@ -1361,7 +1370,9 @@ GCC6_CONCEPT( requires requires (FutureIterator i) {
      requires is_future<std::remove_reference_t<decltype(*i)>>::value;
 } )
 inline auto
-when_all_succeed(FutureIterator begin, FutureIterator end) {
+when_all_succeed(FutureIterator begin, FutureIterator end) noexcept {
+    static_assert(std::is_nothrow_move_constructible<FutureIterator>::value,
+                  "FutureIterator's move constructor must not throw");
     using itraits = std::iterator_traits<FutureIterator>;
     using result_transform = internal::extract_values_from_futures_vector<typename itraits::value_type>;
     return internal::do_when_all<result_transform>(std::move(begin), std::move(end));
