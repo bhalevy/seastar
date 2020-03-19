@@ -389,7 +389,7 @@ public:
         next();
     }
 
-    metric_family_iterator(metric_family_iterator&& o) : _families(o._families), _positions(std::move(o._positions)),
+    metric_family_iterator(metric_family_iterator&& o) noexcept : _families(o._families), _positions(std::move(o._positions)),
             _info(*this) {
         next();
     }

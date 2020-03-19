@@ -31,11 +31,11 @@
 #include <seastar/core/timer.hh>
 #include <seastar/util/bool_class.hh>
 #include <tuple>
-#include <iterator>
 #include <vector>
 #include <seastar/util/std-compat.hh>
 #include <seastar/util/tuple_utils.hh>
 #include <seastar/util/noncopyable_function.hh>
+#include <seastar/core/internal/reverse_iterator.hh>
 
 namespace seastar {
 
@@ -565,8 +565,12 @@ class do_for_each_state final : public continuation_base<> {
     AsyncAction _action;
     promise<> _pr;
 
+    static_assert(std::is_nothrow_move_constructible<Iterator>::value,
+                  "Iterator's move constructor must not throw");
+    static_assert(std::is_nothrow_move_constructible<AsyncAction>::value,
+                  "AsyncAction's move constructor must not throw");
 public:
-    do_for_each_state(Iterator begin, Iterator end, AsyncAction action, future<> first_unavailable)
+    do_for_each_state(Iterator begin, Iterator end, AsyncAction action, future<> first_unavailable) noexcept
         : _begin(std::move(begin)), _end(std::move(end)), _action(std::move(action)) {
         internal::set_callback(first_unavailable, this);
     }
@@ -591,7 +595,7 @@ public:
         }
         _pr.set_value();
     }
-    future<> get_future() {
+    future<> get_future() noexcept {
         return _pr.get_future();
     }
 };
@@ -610,11 +614,8 @@ public:
 /// \return a ready future on success, or the first failed future if
 ///         \c action failed.
 template<typename Iterator, typename AsyncAction>
-GCC6_CONCEPT( requires requires (Iterator i, AsyncAction aa) {
-    { futurize_invoke(aa, *i) } -> future<>;
-} )
 inline
-future<> do_for_each(Iterator begin, Iterator end, AsyncAction action) {
+future<> do_for_each_iterator_impl(Iterator begin, Iterator end, AsyncAction action) {
     while (begin != end) {
         auto f = futurize_invoke(action, *begin++);
         if (f.failed()) {
@@ -628,6 +629,54 @@ future<> do_for_each(Iterator begin, Iterator end, AsyncAction action) {
     }
     return make_ready_future<>();
 }
+
+template<typename Iterator, typename AsyncAction>
+GCC6_CONCEPT( requires requires (Iterator i, AsyncAction aa) {
+    { futurize_invoke(aa, *i) } -> future<>;
+} )
+inline
+future<> do_for_each(Iterator begin, Iterator end, AsyncAction action) noexcept {
+    auto func = do_for_each_iterator_impl<Iterator, AsyncAction>;
+    return futurize_invoke(func, std::move(begin), std::move(end), std::move(action));
+}
+
+/// Call a function for each item in a range, sequentially in reverse order (iterator version).
+///
+/// For each item in a range, in reverse order, call a function, waiting for the previous
+/// invocation to complete before calling the next one.
+///
+/// \param begin an \c InputIterator designating the beginning of the range
+/// \param end an \c InputIterator designating the endof the range
+/// \param action a callable, taking a reference to objects from the range
+///               as a parameter, and returning a \c future<> that resolves
+///               when it is acceptable to process the next item.
+/// \return a ready future on success, or the first failed future if
+///         \c action failed.
+///
+/// \note this noexcept variant of do_for_each is required since std::reverse_iterator
+/// is not nothrow_move_constructible
+template<typename Iterator, typename AsyncAction>
+GCC6_CONCEPT( requires requires (Iterator i, AsyncAction aa) {
+    { futurize_invoke(aa, *i) } -> future<>;
+} )
+inline
+future<> do_for_each_reverse(Iterator begin, Iterator end, AsyncAction action) noexcept {
+    using reverse_iterator = internal::reverse_iterator<Iterator>;
+    auto func = do_for_each_iterator_impl<reverse_iterator, AsyncAction>;
+    return futurize_invoke(func, reverse_iterator(std::move(end)), reverse_iterator(std::move(begin)), std::move(action));
+}
+
+/// \cond internal
+namespace internal {
+
+template<typename Container, typename AsyncAction>
+inline
+future<> do_for_each_container_impl(Container& c, AsyncAction action) {
+    return do_for_each(std::begin(c), std::end(c), std::move(action));
+}
+
+} // namespace internal
+/// \endcond
 
 /// Call a function for each item in a range, sequentially (range version).
 ///
@@ -645,8 +694,9 @@ GCC6_CONCEPT( requires requires (Container c, AsyncAction aa) {
     { futurize_invoke(aa, *c.begin()) } -> future<>;
 } )
 inline
-future<> do_for_each(Container& c, AsyncAction action) {
-    return do_for_each(std::begin(c), std::end(c), std::move(action));
+future<> do_for_each(Container& c, AsyncAction action) noexcept {
+    auto func = internal::do_for_each_container_impl<Container, AsyncAction>;
+    return futurize_invoke(func, c, std::move(action));
 }
 
 /// \cond internal

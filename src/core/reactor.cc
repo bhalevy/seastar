@@ -1990,7 +1990,7 @@ future<> reactor::run_exit_tasks() {
     _stop_requested.broadcast();
     _stopping = true;
     stop_aio_eventfd_loop();
-    return do_for_each(_exit_funcs.rbegin(), _exit_funcs.rend(), [] (auto& func) {
+    return do_for_each_reverse(_exit_funcs.begin(), _exit_funcs.end(), [] (auto& func) {
         return func();
     });
 }
