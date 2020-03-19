@@ -1462,6 +1462,15 @@ public:
         });
     }
 
+    template <typename Exception>
+    static future<T...> make_exception_future(Exception&& ex) noexcept {
+        return seastar::make_exception_future<T...>(std::make_exception_ptr(std::forward<Exception>(ex)));
+    }
+
+    static future<T...> make_exception_future(std::exception_ptr&& ex = std::current_exception()) noexcept {
+        return seastar::make_exception_future<T...>(std::move(ex));
+    }
+
     /// \brief Ignore any result hold by this future
     ///
     /// Ignore any result (value or exception) hold by this future.
