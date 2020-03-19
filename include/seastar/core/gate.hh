@@ -47,6 +47,14 @@ public:
 class gate {
     size_t _count = 0;
     compat::optional<promise<>> _stopped;
+
+    void count_enter() {
+        ++_count;
+    }
+
+    void count_leave() {
+        --_count;
+    }
 public:
     /// Registers an in-progress request.
     ///
@@ -56,14 +64,14 @@ public:
         if (_stopped) {
             throw gate_closed_exception();
         }
-        ++_count;
+        count_enter();
     }
     /// Unregisters an in-progress request.
     ///
     /// If the gate is closed, and there are no more in-progress requests,
     /// the \ref closed() promise will be fulfilled.
     void leave() {
-        --_count;
+        count_leave();
         if (!_count && _stopped) {
             _stopped->set_value();
         }
@@ -105,6 +113,15 @@ public:
     bool is_closed() const {
         return bool(_stopped);
     }
+
+    template <typename Func, typename Result = futurize_t<std::result_of_t<Func()>>>
+    auto do_with(Func&& func) noexcept {
+        if (is_closed()) {
+            return Result::make_exception_future(gate_closed_exception());
+        }
+        count_enter();
+        return futurize_apply(std::forward<Func>(func)).finally([this] { leave(); });
+    }
 };
 
 /// Executes the function \c func making sure the gate \c g is properly entered
@@ -118,9 +135,8 @@ public:
 template <typename Func>
 inline
 auto
-with_gate(gate& g, Func&& func) {
-    g.enter();
-    return futurize_apply(std::forward<Func>(func)).finally([&g] { g.leave(); });
+with_gate(gate& g, Func&& func) noexcept {
+    return g.do_with(func);
 }
 /// @}
 
