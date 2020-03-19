@@ -192,12 +192,20 @@ parallel_for_each(Iterator begin, Iterator end, Func&& func) noexcept {
 ///         \c func returned an exceptional future, then the return
 ///         value will contain one of those exceptions.
 template <typename Range, typename Func>
+inline
+future<>
+parallel_for_each_impl(Range&& range, Func&& func) {
+    return parallel_for_each(std::begin(range), std::end(range),
+            std::forward<Func>(func));
+}
+
+template <typename Range, typename Func>
 GCC6_CONCEPT( requires requires (Func f, Range r) { { f(*r.begin()) } -> future<>; } )
 inline
 future<>
-parallel_for_each(Range&& range, Func&& func) {
-    return parallel_for_each(std::begin(range), std::end(range),
-            std::forward<Func>(func));
+parallel_for_each(Range&& range, Func&& func) noexcept {
+    auto impl = parallel_for_each_impl<Range, Func>;
+    return futurize_apply(impl, std::forward<Range>(range), std::forward<Func>(func));
 }
 
 // The AsyncAction concept represents an action which can complete later than
