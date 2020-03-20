@@ -804,7 +804,7 @@ struct futurize {
 
     /// Makes an exceptional future of type \ref type.
     template <typename Arg>
-    static type make_exception_future(Arg&& arg);
+    static type make_exception_future(Arg&& arg) noexcept;
 };
 
 /// \cond internal
@@ -824,7 +824,7 @@ struct futurize<void> {
     static inline type from_tuple(const value_type& value);
 
     template <typename Arg>
-    static type make_exception_future(Arg&& arg);
+    static type make_exception_future(Arg&& arg) noexcept;
 };
 
 template <typename... Args>
@@ -846,7 +846,7 @@ struct futurize<future<Args...>> {
     static inline type convert(type&& value) { return std::move(value); }
 
     template <typename Arg>
-    static type make_exception_future(Arg&& arg);
+    static type make_exception_future(Arg&& arg) noexcept;
 };
 /// \endcond
 
@@ -1678,7 +1678,7 @@ template <typename T>
 template <typename Arg>
 inline
 future<T>
-futurize<T>::make_exception_future(Arg&& arg) {
+futurize<T>::make_exception_future(Arg&& arg) noexcept {
     using ::seastar::make_exception_future;
     using ::seastar::internal::make_exception_future;
     return make_exception_future<T>(std::forward<Arg>(arg));
@@ -1688,7 +1688,7 @@ template <typename... T>
 template <typename Arg>
 inline
 future<T...>
-futurize<future<T...>>::make_exception_future(Arg&& arg) {
+futurize<future<T...>>::make_exception_future(Arg&& arg) noexcept {
     using ::seastar::make_exception_future;
     using ::seastar::internal::make_exception_future;
     return make_exception_future<T...>(std::forward<Arg>(arg));
@@ -1697,7 +1697,7 @@ futurize<future<T...>>::make_exception_future(Arg&& arg) {
 template <typename Arg>
 inline
 future<>
-futurize<void>::make_exception_future(Arg&& arg) {
+futurize<void>::make_exception_future(Arg&& arg) noexcept {
     using ::seastar::make_exception_future;
     using ::seastar::internal::make_exception_future;
     return make_exception_future<>(std::forward<Arg>(arg));
