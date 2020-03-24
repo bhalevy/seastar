@@ -1967,13 +1967,6 @@ struct futurize : public internal::futurize_base<T> {
         return invoke(std::forward<Func>(func));
     }
 
-    /// Deprecated alias of invoke
-    template<typename Func, typename... FuncArgs>
-    [[deprecated("Use invoke for varargs")]]
-    static inline type apply(Func&& func, FuncArgs&&... args) noexcept {
-        return invoke(std::forward<Func>(func), std::forward<FuncArgs>(args)...);
-    }
-
     static type current_exception_as_future() noexcept {
         return type(future_state_base::current_exception_future_marker());
     }
@@ -2152,12 +2145,6 @@ template<typename Func, typename... Args>
 auto futurize_invoke(Func&& func, Args&&... args) noexcept {
     using futurator = futurize<std::invoke_result_t<Func, Args&&...>>;
     return futurator::invoke(std::forward<Func>(func), std::forward<Args>(args)...);
-}
-
-template<typename Func, typename... Args>
-[[deprecated("Use futurize_invoke for varargs")]]
-auto futurize_apply(Func&& func, Args&&... args) noexcept {
-    return futurize_invoke(std::forward<Func>(func), std::forward<Args>(args)...);
 }
 
 template<typename Func, typename... Args>
