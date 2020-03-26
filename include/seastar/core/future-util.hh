@@ -845,6 +845,8 @@ auto futurize_apply_if_func(Func&& func) noexcept {
     return futurize_invoke(std::forward<Func>(func));
 }
 
+namespace internal {
+
 template <typename... Futs>
 inline
 future<std::tuple<Futs...>>
@@ -863,6 +865,8 @@ when_all_impl(Futs&&... futs) noexcept {
     return futurize_invoke(func, std::forward<Futs>(futs)...);
 }
 
+} // namespace internal
+
 /// Wait for many futures to complete, capturing possible errors (variadic version).
 ///
 /// Each future can be passed directly, or a function that returns a
@@ -878,7 +882,7 @@ when_all_impl(Futs&&... futs) noexcept {
 ///         all contained futures will be ready as well.
 template <typename... FutOrFuncs>
 inline auto when_all(FutOrFuncs&&... fut_or_funcs) noexcept {
-    return when_all_impl(futurize_apply_if_func(std::forward<FutOrFuncs>(fut_or_funcs))...);
+    return internal::when_all_impl(futurize_apply_if_func(std::forward<FutOrFuncs>(fut_or_funcs))...);
 }
 
 /// \cond internal
@@ -1337,8 +1341,6 @@ struct extract_values_from_futures_vector<future<>> {
     }
 };
 
-}
-
 template<typename... Futures>
 inline auto when_all_succeed_futs_impl(Futures&&... futures) {
     using state = internal::when_all_state<internal::extract_values_from_futures_tuple<Futures...>, Futures...>;
@@ -1352,6 +1354,8 @@ inline auto when_all_succeed_impl(Futures&&... futures) noexcept {
     return futurize_invoke(func, std::forward<Futures>(futures)...);
 }
 
+} // namespace internal
+
 /// Wait for many futures to complete (variadic version).
 ///
 /// Each future can be passed directly, or a function that returns a
@@ -1364,7 +1368,7 @@ inline auto when_all_succeed_impl(Futures&&... futures) noexcept {
 /// \return future containing values of futures returned by funcs
 template <typename... FutOrFuncs>
 inline auto when_all_succeed(FutOrFuncs&&... fut_or_funcs) noexcept {
-    return when_all_succeed_impl(futurize_apply_if_func(std::forward<FutOrFuncs>(fut_or_funcs))...);
+    return internal::when_all_succeed_impl(futurize_apply_if_func(std::forward<FutOrFuncs>(fut_or_funcs))...);
 }
 
 /// Wait for many futures to complete (iterator version).
