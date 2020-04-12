@@ -678,6 +678,10 @@ struct identity_futures_tuple {
     static future_type make_ready_future(std::tuple<Futures...> futures) {
         return futurize<future_type>::from_tuple(std::move(futures));
     }
+
+    static future_type current_exception_as_future() noexcept {
+        return internal::current_exception_as_future<std::tuple<Futures...>>();
+    }
 };
 
 // Given a future type, find the continuation_base corresponding to that future
@@ -898,6 +902,9 @@ struct identity_futures_vector {
     using future_type = future<std::vector<Future>>;
     static future_type run(std::vector<Future> futures) {
         return make_ready_future<std::vector<Future>>(std::move(futures));
+    }
+    static future_type current_exception_as_future() noexcept {
+        return internal::current_exception_as_future<std::vector<Future>>();
     }
 };
 
@@ -1284,6 +1291,10 @@ public:
     static future_type make_ready_future(std::tuple<Futures...> tuple) {
         return transform(std::move(tuple));
     }
+
+    static future_type current_exception_as_future() noexcept {
+        return futurize<future_type>::make_exception_future(std::current_exception());
+    }
 };
 
 template<typename Future>
@@ -1313,6 +1324,10 @@ struct extract_values_from_futures_vector {
         }
         return make_ready_future<std::vector<value_type>>(std::move(values));
     }
+
+    static future_type current_exception_as_future() noexcept {
+        return internal::current_exception_as_future<std::vector<value_type>>();
+    }
 };
 
 template<>
@@ -1334,6 +1349,10 @@ struct extract_values_from_futures_vector<future<>> {
             return seastar::make_exception_future<>(std::move(excp));
         }
         return make_ready_future<>();
+    }
+
+    static future_type current_exception_as_future() noexcept {
+        return internal::current_exception_as_future<>();
     }
 };
 
