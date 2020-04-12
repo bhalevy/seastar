@@ -806,7 +806,8 @@ private:
         (void)ignore;
     }
 public:
-    static typename ResolvedTupleTransform::future_type wait_all(Futures&&... futures) {
+    static typename ResolvedTupleTransform::future_type wait_all(Futures&&... futures) noexcept {
+      try {
 #ifdef SEASTAR__WAIT_ALL__AVOID_ALLOCATION_WHEN_ALL_READY
         if ((futures.available() && ...)) {
             return ResolvedTupleTransform::make_ready_future(std::make_tuple(std::move(futures)...));
@@ -819,6 +820,9 @@ public:
         auto ret = state->p.get_future();
         state->do_wait_all();
         return ret;
+      } catch (...) {
+        return ResolvedTupleTransform::current_exception_as_future();
+      }
     }
 };
 
