@@ -539,7 +539,7 @@ public:
         });
     }
 
-    future<> start() {
+    future<> start_sharded_instance() {
         return parallel_for_each(_cl, [this] (std::unique_ptr<class_data>& cl) {
             return cl->start(_dir);
         });
@@ -604,14 +604,11 @@ int main(int ac, char** av) {
                 });
             }).get();
 
+            std::cout << "Creating initial files..." << std::endl;
             ctx.start(directory, reqs, duration).get0();
             engine().at_exit([&ctx] {
                 return ctx.stop();
             });
-            std::cout << "Creating initial files..." << std::endl;
-            ctx.invoke_on_all([] (auto& c) {
-                return c.start();
-            }).get();
             std::cout << "Starting evaluation..." << std::endl;
             ctx.invoke_on_all([] (auto& c) {
                 return c.issue_requests();
