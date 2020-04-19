@@ -50,6 +50,39 @@ SEASTAR_THREAD_TEST_CASE(invoke_on_during_stop_test) {
     s.stop().get();
 }
 
+namespace {
+class invoke_on_during_start_stop final : public peering_sharded_service<invoke_on_during_start_stop> {
+    bool started = false;
+    bool stopped = false;
+
+public:
+    future<> start_sharded_instance() {
+        return container().invoke_on(0, [] (invoke_on_during_start_stop& instance) {
+            instance.started = true;
+        });
+    }
+
+    future<> stop() {
+        return container().invoke_on(0, [] (invoke_on_during_start_stop& instance) {
+            instance.stopped = true;
+        });
+    }
+
+    ~invoke_on_during_start_stop() {
+        if (this_shard_id() == 0) {
+            assert(started);
+            assert(stopped);
+        }
+    }
+};
+}
+
+SEASTAR_THREAD_TEST_CASE(invoke_on_during_start_stop_test) {
+    sharded<invoke_on_during_start_stop> s;
+    s.start().get();
+    s.stop().get();
+}
+
 class mydata {
 public:
     int x = 1;
