@@ -637,7 +637,42 @@ sharded<Service>::start_single(Args&&... args) {
 
 namespace internal {
 
-// Helper check if Service::stop exists
+// Helper check if Service::on_stop exists
+
+struct sharded_has_on_stop {
+    // If a member named `on_stop` exists, try to call it (even if it doesn't
+    // have the correct signature).
+    template <typename Service>
+    constexpr static auto check(int) -> std::enable_if_t<(sizeof(&Service::on_stop) >= 0), bool> {
+        return true;
+    }
+
+    // Fallback in case Service::on_stop doesn't exist.
+    template<typename>
+    static constexpr auto check(...) -> bool {
+        return false;
+    }
+};
+
+template <bool on_stop_exists>
+struct sharded_call_on_stop {
+    template <typename Service>
+    static future<> call(Service& instance);
+};
+
+template <>
+template <typename Service>
+inline
+future<> sharded_call_on_stop<true>::call(Service& instance) {
+    return instance.on_stop();
+}
+
+template <>
+template <typename Service>
+inline
+future<> sharded_call_on_stop<false>::call(Service& instance) {
+    return make_ready_future<>();
+}
 
 struct sharded_has_stop {
     // If a member names "stop" exists, try to call it, even if it doesn't
@@ -656,7 +691,7 @@ struct sharded_has_stop {
     }
 };
 
-template <bool stop_exists>
+template <bool on_stop_exists, bool stop_exists>
 struct sharded_call_stop {
     template <typename Service>
     static future<> call(Service& instance);
@@ -665,14 +700,21 @@ struct sharded_call_stop {
 template <>
 template <typename Service>
 inline
-future<> sharded_call_stop<true>::call(Service& instance) {
+future<> sharded_call_stop<true, false>::call(Service& instance) {
+    return instance.on_stop();
+}
+
+template <>
+template <typename Service>
+inline
+future<> sharded_call_stop<false, true>::call(Service& instance) {
     return instance.stop();
 }
 
 template <>
 template <typename Service>
 inline
-future<> sharded_call_stop<false>::call(Service& instance) {
+future<> sharded_call_stop<false, false>::call(Service& instance) {
     return make_ready_future<>();
 }
 
@@ -680,8 +722,10 @@ template <typename Service>
 inline
 future<>
 stop_sharded_instance(Service& instance) {
+    constexpr bool has_on_stop = internal::sharded_has_on_stop::check<Service>(0);
     constexpr bool has_stop = internal::sharded_has_stop::check<Service>(0);
-    return internal::sharded_call_stop<has_stop>::call(instance);
+    static_assert(!(has_on_stop && has_stop));
+    return internal::sharded_call_stop<has_on_stop, has_stop>::call(instance);
 }
 
 }
