@@ -280,7 +280,7 @@ public:
         lo.reuse_address = true;
         return listen(addr, lo);
     }
-    future<> stop() {
+    future<> stop_sharded_instance() {
         _stopping = true;
         for (auto&& l : _listeners) {
             l.abort_accept();

@@ -225,7 +225,7 @@ public:
         }
         return make_ready_future();
     }
-    future<> stop() {
+    future<> stop_sharded_instance() {
         return make_ready_future();
     }
 

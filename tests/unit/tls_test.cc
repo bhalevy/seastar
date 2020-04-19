@@ -360,7 +360,7 @@ public:
         });
     }
 
-    future<> stop() {
+    future<> stop_sharded_instance() {
         _stopped = true;
         _socket.abort_accept();
         return _gate.close().handle_exception([this] (std::exception_ptr ignored) {

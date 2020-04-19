@@ -166,7 +166,7 @@ public:
         // All finished
         return _conn_finished.wait(_conn_per_core);
     }
-    future<> stop() {
+    future<> stop_sharded_instance() {
         return make_ready_future();
     }
 };

@@ -67,7 +67,7 @@ public:
             return _switches;
         });
     }
-    future<> stop() {
+    future<> stop_sharded_instance() {
         return make_ready_future<>();
     }
 };

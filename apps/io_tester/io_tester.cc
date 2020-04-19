@@ -533,7 +533,7 @@ public:
             , _finished(0)
     {}
 
-    future<> stop() {
+    future<> stop_sharded_instance() {
         return parallel_for_each(_cl, [] (std::unique_ptr<class_data>& cl) {
             return cl->stop();
         });

@@ -47,7 +47,7 @@ struct async_service : public seastar::async_sharded_service<async_service> {
     virtual void check() {
         assert(!deleted);
     }
-    future<> stop() { return make_ready_future<>(); }
+    future<> stop_sharded_instance() { return make_ready_future<>(); }
 };
 
 thread_local bool async_service::deleted = false;
@@ -60,7 +60,7 @@ struct X {
         auto id = this_shard_id();
         return id * id;
     }
-    future<> stop() { return make_ready_future<>(); }
+    future<> stop_sharded_instance() { return make_ready_future<>(); }
 };
 
 template <typename T, typename Func>
@@ -98,7 +98,7 @@ future<> test_functor_version() {
 struct Y {
     sstring s;
     Y(sstring s) : s(std::move(s)) {}
-    future<> stop() { return make_ready_future<>(); }
+    future<> stop_sharded_instance() { return make_ready_future<>(); }
 };
 
 future<> test_constructor_argument_is_passed_to_each_core() {
@@ -143,7 +143,7 @@ future<> test_invoke_on_others() {
         struct my_service {
             int counter = 0;
             void up() { ++counter; }
-            future<> stop() { return make_ready_future<>(); }
+            future<> stop_sharded_instance() { return make_ready_future<>(); }
         };
         for (unsigned c = 0; c < smp::count; ++c) {
             smp::submit_to(c, [c] {

@@ -430,7 +430,7 @@ public:
         });
     }
 
-    future<> stop() {
+    future<> stop_sharded_instance() {
         return _file.close();
     }
 };

@@ -500,7 +500,7 @@ public:
                 return when_all(std::move(client), std::move(writer));
             }).discard_result().then_wrapped([&server] (auto f) {
                 f.ignore_ready_future();
-                return server->stop();
+                return server->stop_sharded_instance();
             });
         });
     }
@@ -570,7 +570,7 @@ public:
                 return when_all(std::move(client), std::move(writer));
             }).discard_result().then_wrapped([&server] (auto f) {
                 f.ignore_ready_future();
-                return server->stop();
+                return server->stop_sharded_instance();
             });
         });
     }
@@ -747,6 +747,6 @@ SEASTAR_TEST_CASE(content_length_limit) {
 
         client.get();
         writer.get();
-        server.stop().get();
+        server.stop_sharded_instance().get();
     });
 }

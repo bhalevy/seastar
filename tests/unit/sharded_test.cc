@@ -30,7 +30,7 @@ class invoke_on_during_stop final : public peering_sharded_service<invoke_on_dur
     bool flag = false;
 
 public:
-    future<> stop() {
+    future<> stop_sharded_instance() {
         return container().invoke_on(0, [] (invoke_on_during_stop& instance) {
             instance.flag = true;
         });
@@ -62,7 +62,7 @@ public:
         });
     }
 
-    future<> stop() {
+    future<> stop_sharded_instance() {
         return container().invoke_on(0, [] (invoke_on_during_start_stop& instance) {
             instance.stopped = true;
         });
@@ -86,7 +86,7 @@ SEASTAR_THREAD_TEST_CASE(invoke_on_during_start_stop_test) {
 class mydata {
 public:
     int x = 1;
-    future<> stop() {
+    future<> stop_sharded_instance() {
         return make_ready_future<>();
     }
 };

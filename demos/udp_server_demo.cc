@@ -55,7 +55,7 @@ public:
         });
     }
     // FIXME: we should properly tear down the service here.
-    future<> stop() {
+    future<> stop_sharded_instance() {
         return make_ready_future<>();
     }
 };
