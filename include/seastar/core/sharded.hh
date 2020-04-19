@@ -528,6 +528,55 @@ using on_each_shard_func = std::function<future<> (unsigned shard)>;
 
 future<> sharded_parallel_for_each(unsigned nr_shards, on_each_shard_func on_each_shard);
 
+// Helper check if Service::on_start exists
+
+struct sharded_has_on_start {
+    // If a member named `on_start` exists, try to call it (even if it doesn't
+    // have the correct signature).
+    //
+    // Note: we're looking for `on_start` and not just `start`
+    // since legacy services may already have a `start` method that may be called explicitly
+    // and are unlikely to have already defined `on_start`.
+    template <typename Service>
+    constexpr static auto check(int) -> std::enable_if_t<(sizeof(&Service::on_start) >= 0), bool> {
+        return true;
+    }
+
+    // Fallback in case Service::on_start doesn't exist.
+    template<typename>
+    static constexpr auto check(...) -> bool {
+        return false;
+    }
+};
+
+template <bool on_start_exists>
+struct sharded_call_on_start {
+    template <typename Service>
+    static future<> call(Service& instance);
+};
+
+template <>
+template <typename Service>
+inline
+future<> sharded_call_on_start<true>::call(Service& instance) {
+    return instance.on_start();
+}
+
+template <>
+template <typename Service>
+inline
+future<> sharded_call_on_start<false>::call(Service& instance) {
+    return make_ready_future<>();
+}
+
+template <typename Service>
+inline
+future<>
+start_sharded_instance(Service& instance) {
+    constexpr bool has_on_start = internal::sharded_has_on_start::check<Service>(0);
+    return internal::sharded_call_on_start<has_on_start>::call(instance);
+}
+
 }
 
 template <typename Service>
@@ -535,14 +584,22 @@ template <typename... Args>
 future<>
 sharded<Service>::start(Args&&... args) {
     _instances.resize(smp::count);
-    return internal::sharded_parallel_for_each(_instances.size(),
+    auto fut = internal::sharded_parallel_for_each(_instances.size(),
         [this, args = std::make_tuple(std::forward<Args>(args)...)] (unsigned c) mutable {
             return smp::submit_to(c, [this, args] () mutable {
                 _instances[this_shard_id()].service = apply([this] (Args... args) {
                     return create_local_service(internal::unwrap_sharded_arg(std::forward<Args>(args))...);
                 }, args);
             });
-    }).then_wrapped([this] (future<> f) {
+    }).then([this] () mutable {
+        return internal::sharded_parallel_for_each(_instances.size(), [this] (unsigned c) mutable {
+            return smp::submit_to(c, [this] () mutable {
+                return internal::start_sharded_instance(*_instances[this_shard_id()].service);
+            });
+        });
+    });
+
+    return fut.then_wrapped([this] (future<> f) {
         try {
             f.get();
             return make_ready_future<>();
@@ -561,9 +618,11 @@ sharded<Service>::start_single(Args&&... args) {
     assert(_instances.empty());
     _instances.resize(1);
     return smp::submit_to(0, [this, args = std::make_tuple(std::forward<Args>(args)...)] () mutable {
-        _instances[0].service = apply([this] (Args... args) {
+        auto& inst = _instances[0].service;
+        inst = apply([this] (Args... args) {
             return create_local_service(internal::unwrap_sharded_arg(std::forward<Args>(args))...);
         }, args);
+        return internal::start_sharded_instance(*inst);
     }).then_wrapped([this] (future<> f) {
         try {
             f.get();
