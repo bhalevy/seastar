@@ -233,6 +233,9 @@ template <bool... v>
 struct all_true<true, v...> : public all_true<v...> {};
 }
 
+template <typename... T>
+class future_state;
+
 //
 // A future/promise pair maintain one logical value (a future_state).
 // There are up to three places that can store it, but only one is
@@ -321,6 +324,10 @@ struct future_state_base {
     future_state_base(std::exception_ptr&& ex) noexcept : _u(std::move(ex)) { }
     future_state_base(future_state_base&& x) noexcept : _u(std::move(x._u)) { }
 
+    void set_exception_state(std::exception_ptr&& ex) noexcept {
+        _u.set_exception(std::move(ex));
+    }
+
     // We never need to destruct this polymorphicly, so we can make it
     // protected instead of virtual.
 protected:
@@ -342,7 +349,7 @@ public:
 
     void set_exception(std::exception_ptr&& ex) noexcept {
         assert(_u.st == state::future);
-        _u.set_exception(std::move(ex));
+        set_exception_state(std::move(ex));
     }
     future_state_base& operator=(future_state_base&& x) noexcept {
         this->~future_state_base();
@@ -367,6 +374,9 @@ public:
 
     template <typename... U>
     friend future<U...> internal::current_exception_as_future() noexcept;
+
+    template <typename... T>
+    friend class future_state;
 };
 
 struct ready_future_marker {};
@@ -416,7 +426,7 @@ struct future_state :  public future_state_base, private internal::uninitialized
       try {
         this->uninitialized_set(std::forward<A>(a)...);
       } catch (...) {
-        new (this) future_state(exception_future_marker(), std::current_exception());
+        this->set_exception_state(std::current_exception());
       }
     }
     template <typename... A>
