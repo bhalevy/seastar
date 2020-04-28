@@ -742,7 +742,7 @@ endif ()
 # We only need valgrind to find uninitialized memory uses, so disable
 # the leak sanitizer.
 # To test with valgrind run "ctest -T memcheck"
-set( MEMORYCHECK_COMMAND_OPTIONS "--error-exitcode=1 --leak-check=no --trace-children=yes" )
+set( MEMORYCHECK_COMMAND_OPTIONS "--error-exitcode=1 --leak-check=no --trace-children=yes --suppressions=/home/espindola/scylla/scylla/seastar/suppressions.valgrind" )
 include (CTest)
 
 #

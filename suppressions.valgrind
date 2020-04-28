@@ -1,0 +1,39 @@
+{
+   gnutls-false-positive
+   Memcheck:Cond
+   fun:decode_complex_string.isra.0
+   fun:_gnutls_x509_dn_to_string
+   ...
+}
+
+{
+   not-seastar1
+   Memcheck:Cond
+   fun:decode_complex_string.isra.0
+   fun:_gnutls_x509_dn_to_string
+   fun:append_elements
+   fun:_gnutls_x509_get_dn
+   fun:_gnutls_parse_general_name2
+   fun:gnutls_x509_ext_import_subject_alt_names
+   fun:cache_alt_names
+   fun:gnutls_x509_crt_import
+   fun:gnutls_x509_crt_list_import
+   fun:gnutls_x509_crt_list_import2
+   fun:gnutls_x509_trust_list_add_trust_mem
+   fun:gnutls_certificate_set_x509_trust_mem
+   ...
+}
+
+{
+   not-seastar2
+   Memcheck:Cond
+   fun:aesni_gcm_aead_decrypt
+   fun:UnknownInlinedFun
+   fun:gnutls_aead_cipher_decrypt
+   fun:decrypt_packet_tls13
+   fun:_gnutls_decrypt
+   fun:_gnutls_recv_in_buffers
+   fun:_gnutls_recv_int
+   fun:_gnutls_recv_int
+   ...
+}
