@@ -250,7 +250,7 @@ option (Seastar_HEAP_PROFILING
     OFF)
 
 set (Seastar_TEST_TIMEOUT
-  "300"
+  "3000"
   CACHE
   STRING
   "Maximum allowed time for a test to run, in seconds.")
