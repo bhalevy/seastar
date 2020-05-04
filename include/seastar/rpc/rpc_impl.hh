@@ -572,12 +572,11 @@ auto recv_helper(signature<Ret (InArgs...)> sig, Func&& func, WantClientInfo wci
             // FIXME: future is discarded
             (void)with_gate(client->get_server().reply_gate(), [client, timeout, msg_id, err = std::move(err)] {
                 return reply<Serializer>(wait_style(), futurize<Ret>::make_exception_future(std::runtime_error(err.c_str())), msg_id, client, timeout);
-            });
+            }).handle_exception_type([] (gate_closed_exception&) {/* ignore */});
             return make_ready_future();
         }
         // note: apply is executed asynchronously with regards to networking so we cannot chain futures here by doing "return apply()"
         auto f = client->wait_for_resources(memory_consumed, timeout).then([client, timeout, msg_id, data = std::move(data), &func] (auto permit) mutable {
-            try {
                 // FIXME: future is discarded
                 (void)with_gate(client->get_server().reply_gate(), [client, timeout, msg_id, data = std::move(data), permit = std::move(permit), &func] () mutable {
                     try {
@@ -591,8 +590,7 @@ auto recv_helper(signature<Ret (InArgs...)> sig, Func&& func, WantClientInfo wci
                         client->get_logger()(client->info(), msg_id, format("got exception while processing a message: {}", std::current_exception()));
                         return make_ready_future();
                     }
-                });
-            } catch (gate_closed_exception&) {/* ignore */ }
+                }).handle_exception_type([] (gate_closed_exception&) {/* ignore */});
         });
 
         if (timeout) {
