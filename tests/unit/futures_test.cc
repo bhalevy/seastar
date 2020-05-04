@@ -1263,7 +1263,7 @@ SEASTAR_THREAD_TEST_CASE(test_with_gate) {
     BOOST_REQUIRE_EQUAL(gate_closed_errors, 0);
     BOOST_REQUIRE_EQUAL(other_errors, 0);
 
-    BOOST_CHECK_NO_THROW(api_v3::with_gate(g, [&] {
+    BOOST_CHECK_NO_THROW(with_gate(g, [&] {
             counter++;
         }).then_wrapped([&] (future<> f) {
             auto eptr = f.get_exception();

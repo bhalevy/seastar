@@ -56,7 +56,7 @@ set (Seastar_API_LEVEL
   "3"
   CACHE
   STRING
-  "Seastar compatibility API level (2=server_socket::accept() returns accept_result)")
+  "Seastar compatibility API level (2=server_socket::accept() returns accept_result; 3=with_gate() returns exception future when closed)")
 
 set_property (CACHE Seastar_API_LEVEL
   PROPERTY
