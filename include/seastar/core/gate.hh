@@ -25,6 +25,8 @@
 #include <seastar/util/std-compat.hh>
 #include <exception>
 
+#include <seastar/core/internal/api-level.hh>
+
 namespace seastar {
 
 /// \addtogroup fiber-module
@@ -105,10 +107,53 @@ public:
     bool is_closed() const {
         return bool(_stopped);
     }
+
+    /// Invokes the function \c func making sure the gate \c g is properly entered
+    /// and later on, properly left.
+    ///
+    /// If the gate is already closed, an exception future holding
+    /// \ref gate_closed_exception is returned.
+    template <typename Func>
+    auto with_gate(Func&& func) noexcept {
+        using futurator = futurize<std::result_of_t<Func()>>;
+        if (is_closed()) {
+            return futurator::make_exception_future(gate_closed_exception());
+        }
+        ++_count;
+        return futurator::invoke(std::forward<Func>(func)).finally([this] { leave(); });
+    }
 };
+
+namespace api_v2 {
 
 /// Executes the function \c func making sure the gate \c g is properly entered
 /// and later on, properly left.
+///
+/// If the gate is already closed, a \ref gate_closed_exception is thrown.
+///
+/// \param func function to be executed
+/// \param g the gate. Caller must make sure that it outlives this function.
+/// \returns whatever \c func returns
+///
+/// \relates gate
+template <typename Func>
+[[deprecated("Instead, use Seastar_API_LEVEL 3 or higher for with_gate noexcept")]]
+inline
+auto
+with_gate(gate& g, Func&& func) {
+    g.enter();
+    return futurize_invoke(std::forward<Func>(func)).finally([&g] { g.leave(); });
+}
+
+} // namespace api_v2
+
+namespace api_v3::and_newer {
+
+/// Invokes the function \c func making sure the gate \c g is properly entered
+/// and later on, properly left.
+///
+/// If the gate is already closed, an exception future holding
+/// \ref gate_closed_exception is returned.
 ///
 /// \param func function to be executed
 /// \param g the gate. Caller must make sure that it outlives this function.
@@ -118,10 +163,11 @@ public:
 template <typename Func>
 inline
 auto
-with_gate(gate& g, Func&& func) {
-    g.enter();
-    return futurize_invoke(std::forward<Func>(func)).finally([&g] { g.leave(); });
+with_gate(gate& g, Func&& func) noexcept {
+    return g.with_gate(std::forward<Func>(func));
 }
+
+} // namespace api_v3
 /// @}
 
 }

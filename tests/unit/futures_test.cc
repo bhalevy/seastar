@@ -31,12 +31,15 @@
 #include <seastar/core/manual_clock.hh>
 #include <seastar/core/thread.hh>
 #include <seastar/core/print.hh>
+#include <seastar/core/gate.hh>
 #include <seastar/util/log.hh>
 #include <boost/iterator/counting_iterator.hpp>
 #include <seastar/testing/thread_test_case.hh>
 
 #include <boost/range/iterator_range.hpp>
 #include <boost/range/irange.hpp>
+
+#include <seastar/core/internal/api-level.hh>
 
 using namespace seastar;
 using namespace std::chrono_literals;
@@ -1228,4 +1231,51 @@ SEASTAR_TEST_CASE(test_warn_on_broken_promise_with_no_future) {
     (void)p.get_future();
     p.set_exception(std::runtime_error("foo"));
     return make_ready_future<>();
+}
+
+SEASTAR_THREAD_TEST_CASE(test_with_gate) {
+    gate g;
+    int counter = 0;
+    int gate_closed_errors = 0;
+    int other_errors = 0;
+
+    BOOST_CHECK_NO_THROW(with_gate(g, [&] { counter++; }).get());
+    BOOST_REQUIRE_EQUAL(counter, 1);
+
+    g.close().get();
+
+    BOOST_CHECK_THROW(with_gate(g, [&] { counter++; }).get(), gate_closed_exception);
+    BOOST_REQUIRE_EQUAL(counter, 1);
+
+    BOOST_CHECK_THROW(api_v2::with_gate(g, [&] {
+            counter++;
+        }).then_wrapped([&] (future<> f) {
+            auto eptr = f.get_exception();
+            try {
+                std::rethrow_exception(eptr);
+            } catch (const gate_closed_exception& e) {
+                gate_closed_errors++;
+            } catch (...) {
+                other_errors++;
+            }
+        }).get(), gate_closed_exception);
+    BOOST_REQUIRE_EQUAL(counter, 1);
+    BOOST_REQUIRE_EQUAL(gate_closed_errors, 0);
+    BOOST_REQUIRE_EQUAL(other_errors, 0);
+
+    BOOST_CHECK_NO_THROW(api_v3::with_gate(g, [&] {
+            counter++;
+        }).then_wrapped([&] (future<> f) {
+            auto eptr = f.get_exception();
+            try {
+                std::rethrow_exception(eptr);
+            } catch (const gate_closed_exception& e) {
+                gate_closed_errors++;
+            } catch (...) {
+                other_errors++;
+            }
+        }).get());
+    BOOST_REQUIRE_EQUAL(counter, 1);
+    BOOST_REQUIRE_EQUAL(gate_closed_errors, 1);
+    BOOST_REQUIRE_EQUAL(other_errors, 0);
 }
