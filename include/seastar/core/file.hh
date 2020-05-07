@@ -29,6 +29,7 @@
 #include <seastar/core/fair_queue.hh>
 #include <seastar/core/file-types.hh>
 #include <seastar/util/std-compat.hh>
+#include <seastar/util/exceptions.hh>
 #include <system_error>
 #include <sys/statvfs.h>
 #include <sys/ioctl.h>
@@ -392,7 +393,11 @@ public:
     /// to ensure file data reaches stable storage, you must call \ref flush()
     /// before calling \c close().
     future<> close() {
-        return _file_impl->close();
+        auto f = std::move(_file_impl);
+        if (__builtin_expect(!f, false)) {
+            return make_exception_future<>(file_already_closed_error());
+        }
+        return f->close().finally([f] {});
     }
 
     /// Returns a directory listing, given that this file object is a directory.

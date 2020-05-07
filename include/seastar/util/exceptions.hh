@@ -26,6 +26,11 @@
 
 namespace seastar {
 
+class file_already_closed_error : public std::runtime_error {
+public:
+    file_already_closed_error() : std::runtime_error("File already closed") { }
+};
+
 /// \brief make a filesystem_error for system calls with a single file operand.
 ///
 /// \param what - describes the action that failed

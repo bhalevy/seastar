@@ -35,6 +35,7 @@
 #include <seastar/core/file.hh>
 #include <seastar/core/report_exception.hh>
 #include <seastar/core/linux-aio.hh>
+#include <seastar/util/exceptions.hh>
 #include "core/file-impl.hh"
 #include "core/syscall_result.hh"
 #include "core/thread_pool.hh"
@@ -190,8 +191,7 @@ posix_file_impl::size() noexcept {
 future<>
 posix_file_impl::close() noexcept {
     if (_fd == -1) {
-        seastar_logger.warn("double close() detected, contact support");
-        return make_ready_future<>();
+        return make_exception_future<>(file_already_closed_error());
     }
     auto fd = _fd;
     _fd = -1;  // Prevent a concurrent close (which is illegal) from closing another file's fd
@@ -752,6 +752,9 @@ append_challenged_posix_file_impl::size() noexcept {
 
 future<>
 append_challenged_posix_file_impl::close() noexcept {
+  if (__builtin_expect(_gate.is_closed(), false)) {
+    return make_exception_future<>(file_already_closed_error());
+  }
   return _gate.close().then([this] {
     // Caller should have drained all pending I/O
     _closing_state = state::draining;
