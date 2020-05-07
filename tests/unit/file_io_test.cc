@@ -478,3 +478,24 @@ SEASTAR_TEST_CASE(test_file_stat_method) {
     umask(orig_umask);
   });
 }
+
+SEASTAR_TEST_CASE(test_file_impl_double_close) {
+    return tmp_dir::do_with_thread([] (tmp_dir& t) {
+        sstring filename = (t.get_path() / "testfile.tmp").native();
+
+        file f1 = open_file_dma(filename, open_flags::rw | open_flags::create).get0();
+        BOOST_CHECK_NO_THROW(f1.close().get());
+        BOOST_CHECK_THROW(f1.close().get(), file_already_closed_error);
+
+        file f2;
+        f2 = f1 = open_file_dma(filename, open_flags::ro).get0();
+        BOOST_CHECK_NO_THROW(f1.close().get());
+        BOOST_CHECK_THROW(f1.close().get(), file_already_closed_error);
+        BOOST_CHECK_THROW(f2.close().get(), file_already_closed_error);
+
+        f2 = f1 = open_file_dma(filename, open_flags::ro).get0();
+        BOOST_CHECK_NO_THROW(f2.close().get());
+        BOOST_CHECK_THROW(f1.close().get(), file_already_closed_error);
+        BOOST_CHECK_THROW(f2.close().get(), file_already_closed_error);
+    });
+}
