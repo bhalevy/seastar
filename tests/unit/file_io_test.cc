@@ -478,3 +478,15 @@ SEASTAR_TEST_CASE(test_file_stat_method) {
     umask(orig_umask);
   });
 }
+
+SEASTAR_TEST_CASE(test_file_impl_double_close) {
+    return tmp_dir::do_with_thread([] (tmp_dir& t) {
+        auto oflags = open_flags::rw | open_flags::create;
+        sstring filename = (t.get_path() / "testfile.tmp").native();
+
+        auto f1 = open_file_dma(filename, oflags).get0();
+        auto f2 = f1;   // to avoid an assert in file::close if we double close f1
+        BOOST_CHECK_NO_THROW(f1.close().get());
+        BOOST_CHECK_THROW(f2.close().get(), file_already_closed_error);
+    });
+}
