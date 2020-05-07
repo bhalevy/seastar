@@ -577,20 +577,20 @@ auto recv_helper(signature<Ret (InArgs...)> sig, Func&& func, WantClientInfo wci
         }
         // note: apply is executed asynchronously with regards to networking so we cannot chain futures here by doing "return apply()"
         auto f = client->wait_for_resources(memory_consumed, timeout).then([client, timeout, msg_id, data = std::move(data), &func] (auto permit) mutable {
-                // FIXME: future is discarded
-                (void)with_gate(client->get_server().reply_gate(), [client, timeout, msg_id, data = std::move(data), permit = std::move(permit), &func] () mutable {
-                    try {
-                        auto args = unmarshall<Serializer, InArgs...>(*client, std::move(data));
-                        return apply(func, client->info(), timeout, WantClientInfo(), WantTimePoint(), signature(), std::move(args)).then_wrapped([client, timeout, msg_id, permit = std::move(permit)] (futurize_t<Ret> ret) mutable {
-                            return reply<Serializer>(wait_style(), std::move(ret), msg_id, client, timeout).handle_exception([permit = std::move(permit), client, msg_id] (std::exception_ptr eptr) {
-                                client->get_logger()(client->info(), msg_id, format("got exception while processing a message: {}", eptr));
-                            });
+            // FIXME: future is discarded
+            (void)with_gate(client->get_server().reply_gate(), [client, timeout, msg_id, data = std::move(data), permit = std::move(permit), &func] () mutable {
+                try {
+                    auto args = unmarshall<Serializer, InArgs...>(*client, std::move(data));
+                    return apply(func, client->info(), timeout, WantClientInfo(), WantTimePoint(), signature(), std::move(args)).then_wrapped([client, timeout, msg_id, permit = std::move(permit)] (futurize_t<Ret> ret) mutable {
+                        return reply<Serializer>(wait_style(), std::move(ret), msg_id, client, timeout).handle_exception([permit = std::move(permit), client, msg_id] (std::exception_ptr eptr) {
+                            client->get_logger()(client->info(), msg_id, format("got exception while processing a message: {}", eptr));
                         });
-                    } catch (...) {
-                        client->get_logger()(client->info(), msg_id, format("got exception while processing a message: {}", std::current_exception()));
-                        return make_ready_future();
-                    }
-                }).handle_exception_type([] (gate_closed_exception&) {/* ignore */});
+                    });
+                } catch (...) {
+                    client->get_logger()(client->info(), msg_id, format("got exception while processing a message: {}", std::current_exception()));
+                    return make_ready_future();
+                }
+            }).handle_exception_type([] (gate_closed_exception&) {/* ignore */});
         });
 
         if (timeout) {
