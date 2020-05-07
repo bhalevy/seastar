@@ -886,13 +886,13 @@ future<> server::connection::send_unknown_verb_reply(compat::optional<rpc_clock_
         write_le<uint32_t>(p, uint32_t(exception_type::UNKNOWN_VERB));
         write_le<uint32_t>(p + 4, uint32_t(8));
         write_le<uint64_t>(p + 8, type);
-            // Send asynchronously.
-            // This is safe since connection::stop() will wait for background work.
-            (void)with_gate(_server._reply_gate, [this, timeout, msg_id, data = std::move(data), permit = std::move(permit)] () mutable {
-                // workaround for https://gcc.gnu.org/bugzilla/show_bug.cgi?id=83268
-                auto c = shared_from_this();
-                return respond(-msg_id, std::move(data), timeout).then([c = std::move(c), permit = std::move(permit)] {});
-            }).handle_exception_type([] (gate_closed_exception&) {/* ignore */});
+        // Send asynchronously.
+        // This is safe since connection::stop() will wait for background work.
+        (void)with_gate(_server._reply_gate, [this, timeout, msg_id, data = std::move(data), permit = std::move(permit)] () mutable {
+            // workaround for https://gcc.gnu.org/bugzilla/show_bug.cgi?id=83268
+            auto c = shared_from_this();
+            return respond(-msg_id, std::move(data), timeout).then([c = std::move(c), permit = std::move(permit)] {});
+        }).handle_exception_type([] (gate_closed_exception&) {/* ignore */});
     });
 }
 
