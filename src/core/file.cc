@@ -606,6 +606,7 @@ append_challenged_posix_file_impl::commit_size(uint64_t size) noexcept {
 
 future<size_t>
 append_challenged_posix_file_impl::read_dma(uint64_t pos, void* buffer, size_t len, const io_priority_class& pc) noexcept {
+  return with_gate(_gate, [this, pos, buffer, len, &pc] () mutable {
     if (pos >= _logical_size) {
         // later() avoids tail recursion
         return later().then([] {
@@ -621,10 +622,12 @@ append_challenged_posix_file_impl::read_dma(uint64_t pos, void* buffer, size_t l
             return posix_file_impl::read_dma(pos, buffer, len, pc);
         }
     );
+  });
 }
 
 future<size_t>
 append_challenged_posix_file_impl::read_dma(uint64_t pos, std::vector<iovec> iov, const io_priority_class& pc) noexcept {
+  return with_gate(_gate, [this, pos, iov = std::move(iov), &pc] () mutable {
     if (pos >= _logical_size) {
         // later() avoids tail recursion
         return later().then([] {
@@ -652,10 +655,12 @@ append_challenged_posix_file_impl::read_dma(uint64_t pos, std::vector<iovec> iov
             return posix_file_impl::read_dma(pos, std::move(iov), pc);
         }
     );
+  });
 }
 
 future<size_t>
 append_challenged_posix_file_impl::write_dma(uint64_t pos, const void* buffer, size_t len, const io_priority_class& pc) noexcept {
+  return with_gate(_gate, [this, pos, buffer, len, &pc] {
     return enqueue<size_t>(
         opcode::write,
         pos,
@@ -667,10 +672,12 @@ append_challenged_posix_file_impl::write_dma(uint64_t pos, const void* buffer, s
             });
         }
     );
+  });
 }
 
 future<size_t>
 append_challenged_posix_file_impl::write_dma(uint64_t pos, std::vector<iovec> iov, const io_priority_class& pc) noexcept {
+  return with_gate(_gate, [this, pos, iov = std::move(iov), &pc] {
     auto len = boost::accumulate(iov | boost::adaptors::transformed(std::mem_fn(&iovec::iov_len)), size_t(0));
     return enqueue<size_t>(
         opcode::write,
@@ -683,10 +690,12 @@ append_challenged_posix_file_impl::write_dma(uint64_t pos, std::vector<iovec> io
             });
         }
     );
+  });
 }
 
 future<>
 append_challenged_posix_file_impl::flush() noexcept {
+  return with_gate(_gate, [this] {
     if ((!_sloppy_size || _logical_size == _committed_size) && !_fsync_is_exclusive) {
         // FIXME: determine if flush can block concurrent reads or writes
         return posix_file_impl::flush();
@@ -708,6 +717,7 @@ append_challenged_posix_file_impl::flush() noexcept {
             }
         );
     }
+  });
 }
 
 future<struct stat>
@@ -721,6 +731,7 @@ append_challenged_posix_file_impl::stat() noexcept {
 
 future<>
 append_challenged_posix_file_impl::truncate(uint64_t length) noexcept {
+  return with_gate(_gate, [this, length] {
     return enqueue<>(
         opcode::truncate,
         length,
@@ -731,6 +742,7 @@ append_challenged_posix_file_impl::truncate(uint64_t length) noexcept {
             });
         }
     );
+  });
 }
 
 future<uint64_t>
@@ -740,6 +752,7 @@ append_challenged_posix_file_impl::size() noexcept {
 
 future<>
 append_challenged_posix_file_impl::close() noexcept {
+  return _gate.close().then([this] {
     // Caller should have drained all pending I/O
     _closing_state = state::draining;
     process_queue();
@@ -752,6 +765,7 @@ append_challenged_posix_file_impl::close() noexcept {
         }
         return posix_file_impl::close().finally([this] { _closing_state = state::closed; });
     });
+  });
 }
 
 posix_file_handle_impl::~posix_file_handle_impl() {
