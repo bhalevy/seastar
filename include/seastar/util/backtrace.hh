@@ -127,16 +127,27 @@ public:
 /// Create an exception pointer of unspecified type that is derived from Exc type
 /// with a backtrace attached to its message.
 ///
+/// \tparam e exception to be caught at the receiving side
+///
+/// \return std::exception_ptr containing the exception with the backtrace.
+template <class Exc>
+std::exception_ptr make_backtraced_exception_ptr(Exc&& ex) noexcept {
+    using exc_type = std::decay_t<Exc>;
+    static_assert(std::is_base_of<std::exception, exc_type>::value,
+            "make_backtraced_exception_ptr only works with exception types");
+    return std::make_exception_ptr<internal::backtraced<exc_type>>(std::forward<Exc>(ex));
+}
+
+/// Create an exception pointer of unspecified type that is derived from Exc type
+/// with a backtrace attached to its message.
+///
 /// \tparam Exc exception type to be caught at the receiving side
 /// \tparam Args types of arguments forwarded to the constructor of Exc
 /// \param args arguments forwarded to the constructor of Exc
 /// \return std::exception_ptr containing the exception with the backtrace.
 template <class Exc, typename... Args>
-std::exception_ptr make_backtraced_exception_ptr(Args&&... args) {
-    using exc_type = std::decay_t<Exc>;
-    static_assert(std::is_base_of<std::exception, exc_type>::value,
-            "throw_with_backtrace only works with exception types");
-    return std::make_exception_ptr<internal::backtraced<exc_type>>(Exc(std::forward<Args>(args)...));
+std::exception_ptr make_backtraced_exception_ptr(Args&&... args) noexcept {
+    return make_backtraced_exception_ptr(Exc(std::forward<Args>(args)...));
 }
 
     /**

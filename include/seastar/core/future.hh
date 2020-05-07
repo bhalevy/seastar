@@ -36,6 +36,7 @@
 #include <seastar/util/attribute-compat.hh>
 #include <seastar/util/gcc6-concepts.hh>
 #include <seastar/util/noncopyable_function.hh>
+#include <seastar/util/backtrace.hh>
 
 namespace seastar {
 
@@ -1653,6 +1654,11 @@ inline
 future<T...> make_exception_future(Exception&& ex) noexcept {
     log_exception_trace();
     return make_exception_future<T...>(std::make_exception_ptr(std::forward<Exception>(ex)));
+}
+
+template <typename... T, typename Exception>
+future<T...> make_exception_future_with_backtrace(Exception&& ex) noexcept {
+    return make_exception_future<T...>(make_backtraced_exception_ptr(std::forward<Exception>(ex)));
 }
 
 /// @}
