@@ -23,6 +23,7 @@
 
 #include <seastar/core/file.hh>
 #include <seastar/core/shared_ptr.hh>
+#include <seastar/core/gate.hh>
 
 #include <deque>
 #include <atomic>
@@ -148,6 +149,7 @@ class append_challenged_posix_file_impl : public posix_file_impl, public enable_
     // Set when the user is closing the file
     enum class state { open, draining, closing, closed };
     state _closing_state = state::open;
+    gate _gate;
 
     bool _sloppy_size = false;
     // Fulfiled when _done and I/O is complete
