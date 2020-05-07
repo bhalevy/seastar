@@ -191,7 +191,7 @@ posix_file_impl::size() noexcept {
 future<>
 posix_file_impl::close() noexcept {
     if (_fd == -1) {
-        return make_exception_future<>(file_already_closed_error());
+        return make_exception_future_with_backtrace<>(file_already_closed_error());
     }
     auto fd = _fd;
     _fd = -1;  // Prevent a concurrent close (which is illegal) from closing another file's fd
@@ -753,7 +753,7 @@ append_challenged_posix_file_impl::size() noexcept {
 future<>
 append_challenged_posix_file_impl::close() noexcept {
     if (__builtin_expect(_gate.is_closed(), false)) {
-        return make_exception_future<>(file_already_closed_error());
+        return make_exception_future_with_backtrace<>(file_already_closed_error());
     }
   return _gate.close().then([this] {
     // Caller should have drained all pending I/O

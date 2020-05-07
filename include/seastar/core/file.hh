@@ -395,7 +395,7 @@ public:
     future<> close() {
         auto f = std::move(_file_impl);
         if (__builtin_expect(!f, false)) {
-            return make_exception_future<>(file_already_closed_error());
+            return make_exception_future_with_backtrace<>(file_already_closed_error());
         }
         return f->close().finally([f] {});
     }
