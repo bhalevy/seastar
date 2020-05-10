@@ -1298,3 +1298,45 @@ SEASTAR_THREAD_TEST_CASE(test_with_gate) {
     BOOST_REQUIRE_EQUAL(gate_closed_errors, 1);
     BOOST_REQUIRE_EQUAL(other_errors, 0);
 }
+
+SEASTAR_THREAD_TEST_CASE(test_with_gate_tutorial_example) {
+    unsigned slow_entered = 0;
+    unsigned slow_done = 0;
+    int gate_closed = 0;
+    int iterations = 6;
+    auto slow = [&] (int i) {
+        auto bitmask = 1 << (i - 1);
+        slow_entered |= bitmask;
+        //std::cerr << "starting " << i << std::endl;
+        return seastar::sleep(std::chrono::milliseconds(10)).then([&, i, bitmask] {
+            slow_done |= bitmask;
+            //std::cerr << "done " << i << std::endl;
+        });
+    };
+
+    seastar::do_with(seastar::gate(), std::move(slow), [&gate_closed, iterations] (auto& g, auto& slow) {
+        return seastar::do_for_each(boost::counting_iterator<int>(1),
+                boost::counting_iterator<int>(iterations),
+                [&g, &slow] (int i) {
+            (void)seastar::with_gate(g, [i, &slow] { return slow(i); });
+            // wait one millisecond before starting the next iteration
+            return seastar::sleep(std::chrono::milliseconds(1));
+        }).then([&] {
+            (void)seastar::sleep(std::chrono::milliseconds(1)).then([&] {
+                // This will fail, because it will be after the close()
+                return seastar::with_gate(g, [&slow, iterations] { return slow(iterations); })
+                    .handle_exception_type([&gate_closed] (seastar::gate_closed_exception&) {
+                        ++gate_closed;
+                    });
+            });
+            //std::cerr << "closing gate and waiting..." << std::endl;
+            return g.close().then([] {
+                //std::cerr << "gate is closed and all slow operations are done" << std::endl;
+            });
+        });
+    }).get();
+
+    BOOST_REQUIRE_EQUAL(slow_entered, ((1 << (iterations - 1)) - 1));
+    BOOST_REQUIRE_EQUAL(slow_done, ((1 << (iterations - 1)) - 1));
+    BOOST_REQUIRE_EQUAL(gate_closed, 1);
+}
