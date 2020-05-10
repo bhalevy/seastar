@@ -1182,9 +1182,9 @@ Here is a typical example of using a gate:
 #include <boost/iterator/counting_iterator.hpp>
 
 seastar::future<> slow(int i) {
-    std::cerr << "starting " << i << "\n";
+    std::cerr << "starting " << i << std::endl;
     return seastar::sleep(std::chrono::seconds(10)).then([i] {
-        std::cerr << "done " << i << "\n";
+        std::cerr << "done " << i << std::endl;
     });
 }
 seastar::future<> f() {
@@ -1192,15 +1192,16 @@ seastar::future<> f() {
         return seastar::do_for_each(boost::counting_iterator<int>(1),
                 boost::counting_iterator<int>(6),
                 [&g] (int i) {
-            seastar::with_gate(g, [i] { return slow(i); });
+            (void)seastar::with_gate(g, [i] { return slow(i); });
             // wait one second before starting the next iteration
             return seastar::sleep(std::chrono::seconds(1));
-		}).then([&g] {
-            seastar::sleep(std::chrono::seconds(1)).then([&g] {
+        }).then([&g] {
+            (void)seastar::sleep(std::chrono::seconds(1)).then([&g] {
                 // This will fail, because it will be after the close()
-                seastar::with_gate(g, [] { return slow(6); });
+                return seastar::with_gate(g, [] { return slow(6); });
             });
-            return g.close();
+            std::cerr << "closing gate and waiting..." << std::endl;
+            return g.close().then([] { std::cerr << "gate is closed and all slow operations are done" << std::endl; });
         });
     });
 }
@@ -1215,17 +1216,20 @@ starting 2
 starting 3
 starting 4
 starting 5
-WARNING: exceptional future ignored of type 'seastar::gate_closed_exception': gate closed
+closing gate and waiting...
+WARN [shard 0] seastar - Exceptional future ignored: seastar::gate_closed_exception (gate closed)
 done 1
 done 2
 done 3
 done 4
 done 5
+gate is closed and all slow operations are done
 ```
 
-Here, the invocations of `slow()` were started at 1 second intervals. After the "`starting 5`" message, we closed the gate and another attempt to use it resulted in a `seastar::gate_closed_exception`, which we ignored and hence this message. At this point the application waits for the future returned by `g.close()`. This will happen once all the `slow()` invocations have completed: Immediately after printing "`done 5`", the test program stops.
+Here, the invocations of `slow()` were started at 1 second intervals. After the "`starting 5`" message, we closed the gate and another attempt to use it resulted in a `seastar::gate_closed_exception`, which we ignored and hence this message. At this point the application waits for the future returned by `g.close().then()`. This will happen once all the `slow()` invocations have completed: Immediately after printing "`gate is closed and all slow operations are done`", the test program stops.
 
 As explained so far, a gate can prevent new invocations of an operation, and wait for any in-progress operations to complete. However, these in-progress operations may take a very long time to complete. Often, a long operation would like to know that a shut-down has been requested, so it could stop its work prematurely. An operation can check whether its gate was closed by calling the gate's `check()` method: If the gate is already closed, the `check()` method throws an exception (the same `seastar::gate_closed_exception` that `enter()` would throw at that point). The intent is that the exception will cause the operation calling it to stop at this point.
+Note that unlike the `check()` and `enter()` methods that return void and throw an exception when the gate is closed, `with_gate` doesn't throw and exception, but rather returns a `make_exception_future<>(seastar::gate_closed_exception)` when the gate is closed.
 
 In the previous example code, we had an un-interruptible operation `slow()` which slept for 10 seconds. Let's replace it by a loop of 10 one-second sleeps, calling `g.check()` each second:
 
