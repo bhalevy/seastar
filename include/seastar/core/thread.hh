@@ -146,7 +146,7 @@ class thread {
 public:
     /// \brief Constructs a \c thread object that does not represent a thread
     /// of execution.
-    thread() = default;
+    thread() noexcept = default;
     /// \brief Constructs a \c thread object that represents a thread of execution
     ///
     /// \param func Callable object to execute in thread.  The callable is
@@ -240,7 +240,7 @@ thread::join() {
 template <typename Func, typename... Args>
 inline
 futurize_t<std::result_of_t<std::decay_t<Func>(std::decay_t<Args>...)>>
-async(thread_attributes attr, Func&& func, Args&&... args) {
+async(thread_attributes attr, Func&& func, Args&&... args) noexcept {
     using return_type = std::result_of_t<std::decay_t<Func>(std::decay_t<Args>...)>;
     struct work {
         thread_attributes attr;
@@ -272,7 +272,7 @@ async(thread_attributes attr, Func&& func, Args&&... args) {
 template <typename Func, typename... Args>
 inline
 futurize_t<std::result_of_t<std::decay_t<Func>(std::decay_t<Args>...)>>
-async(Func&& func, Args&&... args) {
+async(Func&& func, Args&&... args) noexcept {
     return async(thread_attributes{}, std::forward<Func>(func), std::forward<Args>(args)...);
 }
 /// @}
