@@ -156,8 +156,17 @@ public:
         return async([func = std::move(func)] () mutable {
             auto t = tmp_dir();
             t.create().get();
-            auto remove_on_exit = defer([&t] { t.remove().get(); });
-            func(t);
+            std::exception_ptr ret_eptr;
+            try {
+                func(t);
+            } catch (...) {
+                ret_eptr = std::current_exception();
+            }
+            t.remove().finally([&ret_eptr] () {
+                if (ret_eptr) {
+                    std::rethrow_exception(ret_eptr);
+                }
+            }).get();
         });
     }
 
