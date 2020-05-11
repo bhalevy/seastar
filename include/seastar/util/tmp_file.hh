@@ -151,7 +151,7 @@ public:
     }
 
     template <typename Func>
-    static future<> do_with_thread(Func&& func) {
+    static future<> do_with_thread(Func&& func) noexcept {
         return async([func = std::move(func)] () mutable {
             auto t = tmp_dir();
             t.create().get();
