@@ -29,7 +29,8 @@
 
 namespace seastar {
 
-const char* default_tmpdir();
+const compat::filesystem::path& default_tmpdir();
+void set_default_tmpdir(compat::filesystem::path);
 
 class tmp_file {
     compat::filesystem::path _path;
