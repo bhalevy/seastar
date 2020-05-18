@@ -38,6 +38,9 @@ struct rwlock_for_read {
     void unlock() {
         static_cast<basic_rwlock<Clock>*>(this)->read_unlock();
     }
+    bool try_lock() {
+        return static_cast<basic_rwlock<Clock>*>(this)->try_read_lock();
+    }
     friend class basic_rwlock<Clock>;
 };
 
@@ -48,6 +51,9 @@ struct rwlock_for_write {
     }
     void unlock() {
         static_cast<basic_rwlock<Clock>*>(this)->write_unlock();
+    }
+    bool try_lock() {
+        return static_cast<basic_rwlock<Clock>*>(this)->try_write_lock();
     }
     friend class basic_rwlock<Clock>;
 };
