@@ -65,13 +65,12 @@ public:
     ///
     /// \return a future that becomes ready when no exclusive access
     ///         is granted to anyone.
-    future<> lock_shared() {
+    future<> lock_shared() noexcept {
         if (!_writer && _waiters.empty()) {
             ++_readers;
             return make_ready_future<>();
         }
-        _waiters.emplace_back(promise<>(), false);
-        return _waiters.back().pr.get_future();
+        return wait(false);
     }
     /// Unlocks a \c shared_mutex after a previous call to \ref lock_shared().
     void unlock_shared() {
@@ -82,13 +81,12 @@ public:
     ///
     /// \return a future that becomes ready when no access, shared or exclusive
     ///         is granted to anyone.
-    future<> lock() {
+    future<> lock() noexcept {
         if (!_readers && !_writer) {
             _writer = true;
             return make_ready_future<>();
         }
-        _waiters.emplace_back(promise<>(), true);
-        return _waiters.back().pr.get_future();
+        return wait(true);
     }
     /// Unlocks a \c shared_mutex after a previous call to \ref lock().
     void unlock() {
@@ -96,6 +94,15 @@ public:
         wake();
     }
 private:
+    future<> wait(bool for_write) noexcept {
+        try {
+            _waiters.emplace_back(promise<>(), for_write);
+        } catch (...) {
+            return internal::current_exception_as_future();
+        }
+        return _waiters.back().pr.get_future();
+    }
+
     void wake() {
         while (!_waiters.empty()) {
             auto& w = _waiters.front();
@@ -129,7 +136,7 @@ private:
 template <typename Func>
 inline
 futurize_t<std::result_of_t<Func ()>>
-with_shared(shared_mutex& sm, Func&& func) {
+with_shared(shared_mutex& sm, Func&& func) noexcept {
     return sm.lock_shared().then([func = std::forward<Func>(func)] () mutable {
         return func();
     }).finally([&sm] {
@@ -150,7 +157,7 @@ with_shared(shared_mutex& sm, Func&& func) {
 template <typename Func>
 inline
 futurize_t<std::result_of_t<Func ()>>
-with_lock(shared_mutex& sm, Func&& func) {
+with_lock(shared_mutex& sm, Func&& func) noexcept {
     return sm.lock().then([func = std::forward<Func>(func)] () mutable {
         return func();
     }).finally([&sm] {
