@@ -32,7 +32,7 @@ class basic_rwlock;
 
 template<typename Clock = typename timer<>::clock>
 struct rwlock_for_read {
-    future<> lock() {
+    future<> lock() noexcept {
         return static_cast<basic_rwlock<Clock>*>(this)->read_lock();
     }
     void unlock() {
@@ -43,7 +43,7 @@ struct rwlock_for_read {
 
 template<typename Clock = typename timer<>::clock>
 struct rwlock_for_write {
-    future<> lock() {
+    future<> lock() noexcept {
         return static_cast<basic_rwlock<Clock>*>(this)->write_lock();
     }
     void unlock() {
@@ -92,7 +92,7 @@ public:
     /// Acquires this lock in read mode. Many readers are allowed, but when
     /// this future returns, and until \ref read_unlock is called, all fibers
     /// waiting on \ref write_lock are guaranteed not to execute.
-    future<> read_lock(typename semaphore_type::time_point timeout = semaphore_type::time_point::max()) {
+    future<> read_lock(typename semaphore_type::time_point timeout = semaphore_type::time_point::max()) noexcept {
         return _sem.wait(timeout);
     }
 
@@ -110,7 +110,7 @@ public:
     /// this future returns, and until \ref write_unlock is called, all other
     /// fibers waiting on either \ref read_lock or \ref write_lock are guaranteed
     /// not to execute.
-    future<> write_lock(typename semaphore_type::time_point timeout = semaphore_type::time_point::max()) {
+    future<> write_lock(typename semaphore_type::time_point timeout = semaphore_type::time_point::max()) noexcept {
         return _sem.wait(timeout, max_ops);
     }
 
@@ -125,12 +125,12 @@ public:
     }
 
     /// Tries to acquire the lock in read mode iff this can be done without waiting.
-    bool try_read_lock() {
+    bool try_read_lock() noexcept {
         return _sem.try_wait();
     }
 
     /// Tries to acquire the lock in write mode iff this can be done without waiting.
-    bool try_write_lock() {
+    bool try_write_lock() noexcept {
         return _sem.try_wait(max_ops);
     }
 
@@ -144,10 +144,9 @@ public:
     /// Note that both hold_read_lock() and hold_write_lock() return an object
     /// of the same type, rwlock::holder.
     ///
-    /// hold_read_lock() may throw an exception (or, in other implementations,
-    /// return an exceptional future) when it failed to obtain the lock -
+    /// hold_read_lock() may return an exceptional future when it failed to obtain the lock -
     /// e.g., on allocation failure.
-    future<holder> hold_read_lock(typename semaphore_type::time_point timeout = semaphore_type::time_point::max()) {
+    future<holder> hold_read_lock(typename semaphore_type::time_point timeout = semaphore_type::time_point::max()) noexcept {
         return get_units(_sem, 1);
     }
 
@@ -159,15 +158,14 @@ public:
     /// Note that both hold_read_lock() and hold_write_lock() return an object
     /// of the same type, rwlock::holder.
     ///
-    /// hold_read_lock() may throw an exception (or, in other implementations,
-    /// return an exceptional future) when it failed to obtain the lock -
+    /// hold_write_lock() may return an exceptional future when it failed to obtain the lock -
     /// e.g., on allocation failure.
-    future<holder> hold_write_lock(typename semaphore_type::time_point timeout = semaphore_type::time_point::max()) {
+    future<holder> hold_write_lock(typename semaphore_type::time_point timeout = semaphore_type::time_point::max()) noexcept {
         return get_units(_sem, max_ops);
     }
 
     /// Checks if any read or write locks are currently held.
-    bool locked() const {
+    bool locked() const noexcept {
         return _sem.available_units() != max_ops;
     }
 

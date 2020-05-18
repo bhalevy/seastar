@@ -117,6 +117,21 @@ cherry_pick_tuple(std::index_sequence<Idx...>, Tuple&& tuple) {
 }
 /// \endcond
 
+namespace internal {
+
+template<typename Lock, typename Func>
+inline
+auto with_lock_impl(Lock& lock, Func&& func) noexcept(std::is_nothrow_move_constructible<Func>::value) {
+    return lock.lock().then([func = std::forward<Func>(func)] () mutable {
+        return func();
+    }).then_wrapped([&lock] (auto&& fut) {
+        lock.unlock();
+        return std::move(fut);
+    });
+}
+
+} // namespace internal
+
 /// Executes the function \c func making sure the lock \c lock is taken,
 /// and later on properly released.
 ///
@@ -126,13 +141,9 @@ cherry_pick_tuple(std::index_sequence<Idx...>, Tuple&& tuple) {
 /// \returns whatever \c func returns
 template<typename Lock, typename Func>
 inline
-auto with_lock(Lock& lock, Func&& func) {
-    return lock.lock().then([func = std::forward<Func>(func)] () mutable {
-        return func();
-    }).then_wrapped([&lock] (auto&& fut) {
-        lock.unlock();
-        return std::move(fut);
-    });
+auto with_lock(Lock& lock, Func&& func) noexcept {
+    auto impl = internal::with_lock_impl<Lock, Func>;
+    return futurize_invoke(impl, std::forward<Lock>(lock), std::forward<Func>(func));
 }
 
 namespace internal {
