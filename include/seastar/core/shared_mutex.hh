@@ -47,12 +47,15 @@ namespace seastar {
 ///
 /// \see semaphore simpler mutual exclusion
 class shared_mutex {
+    struct is_for_write_tag { };
+    using is_for_write = bool_class<is_for_write_tag>;
+
     unsigned _readers = 0;
     bool _writer = false;
     struct waiter {
-        waiter(promise<>&& pr, bool for_write) : pr(std::move(pr)), for_write(for_write) {}
+        waiter(promise<>&& pr, is_for_write for_write) : pr(std::move(pr)), for_write(for_write) {}
         promise<> pr;
-        bool for_write;
+        is_for_write for_write;
     };
     circular_buffer<waiter> _waiters;
 public:
@@ -65,13 +68,12 @@ public:
     ///
     /// \return a future that becomes ready when no exclusive access
     ///         is granted to anyone.
-    future<> lock_shared() {
+    future<> lock_shared() noexcept {
         if (!_writer && _waiters.empty()) {
             ++_readers;
             return make_ready_future<>();
         }
-        _waiters.emplace_back(promise<>(), false);
-        return _waiters.back().pr.get_future();
+        return wait(is_for_write::no);
     }
     /// Unlocks a \c shared_mutex after a previous call to \ref lock_shared().
     void unlock_shared() {
@@ -82,13 +84,12 @@ public:
     ///
     /// \return a future that becomes ready when no access, shared or exclusive
     ///         is granted to anyone.
-    future<> lock() {
+    future<> lock() noexcept {
         if (!_readers && !_writer) {
             _writer = true;
             return make_ready_future<>();
         }
-        _waiters.emplace_back(promise<>(), true);
-        return _waiters.back().pr.get_future();
+        return wait(is_for_write::yes);
     }
     /// Unlocks a \c shared_mutex after a previous call to \ref lock().
     void unlock() {
@@ -96,6 +97,15 @@ public:
         wake();
     }
 private:
+    future<> wait(is_for_write for_write) noexcept {
+        try {
+            _waiters.emplace_back(promise<>(), for_write);
+        } catch (...) {
+            return current_exception_as_future();
+        }
+        return _waiters.back().pr.get_future();
+    }
+
     void wake() {
         while (!_waiters.empty()) {
             auto& w = _waiters.front();
@@ -116,6 +126,32 @@ private:
     }
 };
 
+namespace internal {
+
+template <typename Func>
+inline
+futurize_t<std::result_of_t<Func ()>>
+with_shared_impl(shared_mutex& sm, Func&& func) noexcept(std::is_nothrow_move_constructible_v<Func>) {
+    return sm.lock_shared().then([func = std::forward<Func>(func)] () mutable {
+        return func();
+    }).finally([&sm] {
+        sm.unlock_shared();
+    });
+}
+
+template <typename Func>
+inline
+futurize_t<std::result_of_t<Func ()>>
+with_lock_impl(shared_mutex& sm, Func&& func) noexcept(std::is_nothrow_move_constructible_v<Func>) {
+    return sm.lock().then([func = std::forward<Func>(func)] () mutable {
+        return func();
+    }).finally([&sm] {
+        sm.unlock();
+    });
+}
+
+} // namespace internal
+
 /// Executes a function while holding shared access to a resource.
 ///
 /// Executes a function while holding shared access to a resource.  When
@@ -129,12 +165,9 @@ private:
 template <typename Func>
 inline
 futurize_t<std::result_of_t<Func ()>>
-with_shared(shared_mutex& sm, Func&& func) {
-    return sm.lock_shared().then([func = std::forward<Func>(func)] () mutable {
-        return func();
-    }).finally([&sm] {
-        sm.unlock_shared();
-    });
+with_shared(shared_mutex& sm, Func&& func) noexcept {
+    auto impl = internal::with_shared_impl<Func>;
+    return futurize_invoke(impl, sm, std::forward<Func>(func));
 }
 
 /// Executes a function while holding exclusive access to a resource.
@@ -150,12 +183,9 @@ with_shared(shared_mutex& sm, Func&& func) {
 template <typename Func>
 inline
 futurize_t<std::result_of_t<Func ()>>
-with_lock(shared_mutex& sm, Func&& func) {
-    return sm.lock().then([func = std::forward<Func>(func)] () mutable {
-        return func();
-    }).finally([&sm] {
-        sm.unlock();
-    });
+with_lock(shared_mutex& sm, Func&& func) noexcept {
+    auto impl = internal::with_lock_impl<Func>;
+    return futurize_invoke(impl, sm, std::forward<Func>(func));
 }
 
 /// @}
