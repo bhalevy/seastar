@@ -141,6 +141,25 @@ do_with(T1&& rv1, T2&& rv2, More&&... more) noexcept {
     return futurize_invoke(func, std::forward<T1>(rv1), std::forward<T2>(rv2), std::forward<More>(more)...);
 }
 
+namespace internal {
+
+template <typename Lock>
+concept InvokableLock = requires (Lock l) {
+    { l.lock() } -> std::same_as<future<>>;
+};
+
+template <typename Lock>
+concept NothrowLock = requires (Lock l) {
+    noexcept(l.lock());
+};
+
+template <typename Lock>
+concept InvokableUnlock = requires (Lock l) {
+    { l.unlock() } -> std::same_as<void>;
+};
+
+} // namespace internal
+
 /// Executes the function \c func making sure the lock \c lock is taken,
 /// and later on properly released.
 ///
@@ -149,10 +168,13 @@ do_with(T1&& rv1, T2&& rv2, More&&... more) noexcept {
 /// \param func function to be executed
 /// \returns whatever \c func returns
 template<typename Lock, typename Func>
-SEASTAR_CONCEPT( requires std::is_nothrow_move_constructible_v<Func> )
+SEASTAR_CONCEPT( requires std::is_nothrow_move_constructible_v<Func>
+        && internal::InvokableLock<Lock> && internal::NothrowLock<Lock> && internal::InvokableUnlock<Lock> )
 inline
-auto with_lock(Lock& lock, Func&& func) {
+auto with_lock(Lock& lock, Func&& func) noexcept {
     static_assert(std::is_nothrow_move_constructible_v<Func>);
+    static_assert(noexcept(Lock::lock()));
+
     return lock.lock()
             .then(std::move(func))
             .finally([&lock] {
