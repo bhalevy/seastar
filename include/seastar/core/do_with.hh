@@ -141,6 +141,21 @@ do_with(T1&& rv1, T2&& rv2, More&&... more) noexcept {
     return futurize_invoke(func, std::forward<T1>(rv1), std::forward<T2>(rv2), std::forward<More>(more)...);
 }
 
+namespace internal {
+
+template<typename Lock, typename Func>
+inline
+auto with_lock_impl(Lock& lock, Func&& func) noexcept(std::is_nothrow_move_constructible_v<Func>) {
+    return lock.lock().then([func = std::forward<Func>(func)] () mutable {
+        return func();
+    }).then_wrapped([&lock] (auto&& fut) {
+        lock.unlock();
+        return std::move(fut);
+    });
+}
+
+} // namespace internal
+
 /// Executes the function \c func making sure the lock \c lock is taken,
 /// and later on properly released.
 ///
@@ -150,13 +165,9 @@ do_with(T1&& rv1, T2&& rv2, More&&... more) noexcept {
 /// \returns whatever \c func returns
 template<typename Lock, typename Func>
 inline
-auto with_lock(Lock& lock, Func&& func) {
-    return lock.lock().then([func = std::forward<Func>(func)] () mutable {
-        return func();
-    }).then_wrapped([&lock] (auto&& fut) {
-        lock.unlock();
-        return std::move(fut);
-    });
+auto with_lock(Lock& lock, Func&& func) noexcept {
+    auto impl = internal::with_lock_impl<Lock, Func>;
+    return futurize_invoke(impl, std::forward<Lock>(lock), std::forward<Func>(func));
 }
 
 /// @}
