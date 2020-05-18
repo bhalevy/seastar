@@ -139,10 +139,10 @@ private:
         }
     };
     expiring_fifo<entry, expiry_handler, clock> _wait_list;
-    bool has_available_units(size_t nr) const {
+    bool has_available_units(size_t nr) const noexcept {
         return _count >= 0 && (static_cast<size_t>(_count) >= nr);
     }
-    bool may_proceed(size_t nr) const {
+    bool may_proceed(size_t nr) const noexcept {
         return has_available_units(nr) && _wait_list.empty();
     }
 public:
@@ -264,7 +264,7 @@ public:
     ///
     /// \param nr number of units to reduce the counter by (default 1).
     /// \return `true` if the counter had sufficient units, and was decremented.
-    bool try_wait(size_t nr = 1) {
+    bool try_wait(size_t nr = 1) noexcept {
         if (may_proceed(nr)) {
             _count -= nr;
             return true;

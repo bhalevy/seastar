@@ -127,7 +127,7 @@ cherry_pick_tuple(std::index_sequence<Idx...>, Tuple&& tuple) {
 /// \returns whatever \c func returns
 template<typename Lock, typename Func>
 inline
-auto with_lock(Lock& lock, Func&& func) {
+auto with_lock(Lock& lock, Func&& func) noexcept {
     return lock.lock().then([func = std::forward<Func>(func)] () mutable {
         return func();
     }).then_wrapped([&lock] (auto&& fut) {
