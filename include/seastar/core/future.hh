@@ -752,12 +752,8 @@ struct continuation final : continuation_base_with_promise<Promise, T SEASTAR_EL
     // Wrapper is a helper function that implements the specific logic
     // needed by then/then_wrapped. We call the wrapper passing it the
     // original function, promise and state.
-    // Note that if Func's move constructor throws, this will call
-    // std::unexpected. We could try to require Func to be nothrow
-    // move constructible, but that will cause a lot of churn. Since
-    // we can't support a failure to create a continuation, calling
-    // std::unexpected as close to the failure as possible is the best
-    // we can do.
+    static_assert(std::is_nothrow_move_constructible_v<Func>, "Functions must be no-throw move constructible");
+    static_assert(std::is_nothrow_move_constructible_v<Wrapper>, "Functions must be no-throw move constructible");
     continuation(Promise&& pr, Func&& func, Wrapper&& wrapper) noexcept
         : continuation_base_with_promise<Promise, T SEASTAR_ELLIPSIS>(std::move(pr))
         , _func(std::move(func))
