@@ -2879,7 +2879,7 @@ void reactor::replace_poller(pollfn* old, pollfn* neww) {
 
 namespace internal {
 
-poller::poller(poller&& x)
+poller::poller(poller&& x) noexcept
         : _pollfn(std::move(x._pollfn)), _registration_task(std::exchange(x._registration_task, nullptr)) {
     if (_pollfn && _registration_task) {
         _registration_task->moved(this);
@@ -2887,7 +2887,7 @@ poller::poller(poller&& x)
 }
 
 poller&
-poller::operator=(poller&& x) {
+poller::operator=(poller&& x) noexcept {
     if (this != &x) {
         this->~poller();
         new (this) poller(std::move(x));
