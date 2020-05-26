@@ -31,6 +31,7 @@
 
 #include <seastar/core/aligned_buffer.hh>
 #include <seastar/core/file.hh>
+#include <seastar/core/fstream.hh>
 #include <seastar/core/seastar.hh>
 #include <seastar/core/sstring.hh>
 #include <seastar/core/temporary_buffer.hh>
@@ -87,11 +88,20 @@ int main(int ac, char** av) {
             std::cout << "writing random data into " << data_filename << std::endl;
             std::generate(wbuf.get_write(), wbuf.get_write() + aligned_size, [&dist, &rnd] { return dist(rnd); });
 
-            // `with_file` is used to create/open `data_filename` just around the call to `dma_write`
-            count = with_file(open_file_dma(data_filename, open_flags::rw | open_flags::create), [&wbuf] (file& f) {
-                return f.dma_write(0, wbuf.get(), aligned_size);
+            // with_file_close_on_failure will close the opened `data_filename` file only if
+            // `make_file_output_stream` returns an error. Otherwise, in the error-free path,
+            // the opened file is moved to `file_output_stream` that in-turn closes it
+            // when the stream is closed.
+            output_stream<char> o = with_file_close_on_failure(open_file_dma(data_filename, open_flags::rw | open_flags::create), [] (file f) {
+                return make_file_output_stream(std::move(f), aligned_size);
             }).get0();
-            assert(count == aligned_size);
+
+            // one byte at a time, to demonstrate output stream
+            seastar::do_for_each(wbuf, [&o] (char c) {
+                return o.write(&c, 1);
+            }).finally([&o] {
+                return o.close();
+            }).get();
 
             // verify the data via meta_filename
             std::cout << "verifying data..." << std::endl;
