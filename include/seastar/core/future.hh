@@ -1144,21 +1144,18 @@ private:
         if (!failed()) {
             return current_exception_as_future<T...>();
         } else {
-            //
-            // Encapsulate the current exception into the
-            // std::nested_exception because the current libstdc++
-            // implementation has a bug requiring the value of a
-            // std::throw_with_nested() parameter to be of a polymorphic
-            // type.
-            //
-            std::nested_exception f_ex;
+            auto inner_ex = std::current_exception();
             try {
-                get();
-            } catch (...) {
+                std::rethrow_exception(get_exception());
+            } catch (const std::exception& outer_ex) {
                 try {
-                    std::throw_with_nested(f_ex);
+                    std::rethrow_exception(inner_ex);
                 } catch (...) {
-                    return current_exception_as_future<T...>();
+                    try {
+                        std::throw_with_nested(std::runtime_error(outer_ex.what()));
+                    } catch (...) {
+                        return current_exception_as_future<T...>();
+                    }
                 }
             }
             __builtin_unreachable();
