@@ -1609,6 +1609,37 @@ public:
         });
     }
 
+    template <typename... U>
+    future<T...> with_nested_exception(future<U...>&& x) noexcept {
+        assert(failed());
+        if (!x.failed()) {
+            return std::move(*this);
+        } else {
+            //
+            // Encapsulate the current exception into the
+            // std::nested_exception because the current libstdc++
+            // implementation has a bug requiring the value of a
+            // std::throw_with_nested() parameter to be of a polymorphic
+            // type.
+            //
+            std::nested_exception f_ex;
+            try {
+                std::rethrow_exception(x.get_exception());
+            } catch (...) {
+                try {
+                    std::rethrow_exception(get_exception());
+                } catch (...) {
+                    try {
+                        std::throw_with_nested(f_ex);
+                    } catch (...) {
+                        return current_exception_as_future<T...>();
+                    }
+                }
+            }
+            __builtin_unreachable();
+        }
+    }
+
     /// \brief Ignore any result hold by this future
     ///
     /// Ignore any result (value or exception) hold by this future.
