@@ -1364,3 +1364,29 @@ SEASTAR_THREAD_TEST_CASE(test_then_unpack) {
         BOOST_REQUIRE(x == 1 && y == 2);
     }).get();
 }
+
+SEASTAR_THREAD_TEST_CASE(test_with_nested_exception) {
+    auto res = make_exception_future<>(expected_exception()).then_wrapped([] (future<> fut) {
+        return fut.with_nested_exception(make_exception_future<>(std::runtime_error("inner")));
+    });
+    try {
+        res.get();
+        BOOST_REQUIRE(false);
+    } catch (const std::nested_exception& e) {
+        // FIXME future::rethrow_with_nested loses the outer exception
+        // BOOST_REQUIRE_EQUAL(e.what(), "expected");
+        try {
+            std::rethrow_if_nested(e);
+            BOOST_REQUIRE(false);
+        } catch (const std::exception& e) {
+            BOOST_REQUIRE_EQUAL(e.what(), "inner");
+            try {
+                std::rethrow_if_nested(e);
+            } catch (const std::exception& e) {
+                BOOST_REQUIRE(false);
+            }
+        }
+    } catch (...) {
+        BOOST_REQUIRE(false);
+    }
+}

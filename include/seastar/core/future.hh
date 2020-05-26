@@ -1771,6 +1771,24 @@ public:
         });
     }
 
+    /// \brief return a failed future with optional nested exception taken from \a nested future.
+    ///
+    /// \return return an exceptional \c future holding the current and nested exception
+    //  if the \a nested future failed, or otherwise, just propagate this future's exception.
+    template <typename... U>
+    future<T...> with_nested_exception(future<U...>&& nested) noexcept {
+        if (!nested.failed()) {
+            return std::move(*this);
+        } else {
+            try {
+                nested.get();
+            } catch (...) {
+                return rethrow_with_nested();
+            }
+            __builtin_unreachable();
+        }
+    }
+
     /// \brief Ignore any result hold by this future
     ///
     /// Ignore any result (value or exception) hold by this future.
