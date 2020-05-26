@@ -445,6 +445,39 @@ auto with_file(future<file> file_fut, Func func) noexcept(std::is_nothrow_move_c
     });
 }
 
+/// \brief Helper for ensuring a file is closed if \c func fails.
+///
+/// The file provided by the \c file_fut future is passed to \c func.
+/// * If func throws an exception E, the file is closed and we return
+///   a failed future with E.
+/// * If func returns a value V, the file is not closed and we return
+///   a future with V.
+/// Note that when an exception is not thrown, it is the
+/// responsibility of func to make sure the file will be closed. It
+/// can close the file itself, return it, or store it somewhere.
+///
+/// \param file_fut A future that produces a file
+/// \param Func The type of function this wraps
+/// \param func A function that uses a file
+/// \returns the future returned by \c func, or an exceptional future if \c file_fut failed or a nested exception if closing the file failed.
+template <typename Func>
+SEASTAR_CONCEPT(requires std::invocable<Func, file&>)
+auto with_file_close_on_failure(future<file> file_fut, Func func) noexcept(std::is_nothrow_move_constructible<Func>::value) {
+    return file_fut.then([func = std::move(func)] (file f) mutable {
+        return do_with(std::move(f), [func = std::move(func)] (file& f) mutable {
+            return futurize_invoke(std::move(func), f).then_wrapped([&f] (auto ret) mutable {
+                if (!ret.failed()) {
+                    return ret;
+                }
+                // If f.close() fails, return that as nested exception.
+                return f.close().then_wrapped([ret = std::move(ret)] (future<> x) mutable {
+                    return ret.with_nested_exception(std::move(x));
+                });
+             });
+         });
+     });
+}
+
 /// \brief A shard-transportable handle to a file
 ///
 /// If you need to access a file (for reads only) across multiple shards,

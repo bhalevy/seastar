@@ -31,6 +31,7 @@
 
 #include <seastar/core/aligned_buffer.hh>
 #include <seastar/core/file.hh>
+#include <seastar/core/fstream.hh>
 #include <seastar/core/seastar.hh>
 #include <seastar/core/sstring.hh>
 #include <seastar/core/temporary_buffer.hh>
@@ -40,13 +41,14 @@ using namespace seastar;
 
 constexpr size_t aligned_size = 4096;
 
-future<> verify_data_file(file& f, temporary_buffer<char>& rbuf, const temporary_buffer<char>& wbuf) {
-    return f.dma_read(0, rbuf.get_write(), aligned_size).then([&rbuf, &wbuf] (size_t count) {
+future<> verify_data_file(file& f, const temporary_buffer<char>& wbuf) {
+    // file_input_stream will eventually close f
+    auto in = make_file_input_stream(f);
+    return in.read().then([&wbuf] (temporary_buffer<char> rbuf) {
+        auto count = rbuf.size();
         assert(count == aligned_size);
         std::cout << "  verifying " << count << " bytes" << std::endl;
         assert(!memcmp(rbuf.get(), wbuf.get(), aligned_size));
-    }).finally([&f] {
-        return f.close();
     });
 }
 
@@ -91,8 +93,9 @@ int main(int ac, char** av) {
             // verify the data via meta_filename
             std::cout << "verifying data..." << std::endl;
             auto rbuf = temporary_buffer<char>::aligned(aligned_size, aligned_size);
-            auto f = open_data_file(meta_filename, rbuf).get0();
-            verify_data_file(f, rbuf, wbuf).get();
+            with_file_close_on_failure(open_data_file(meta_filename, rbuf), [&wbuf] (file& f) {
+                return verify_data_file(f, wbuf);
+            }).get();
         });
     });
 }
