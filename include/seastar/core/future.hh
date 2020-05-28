@@ -575,10 +575,21 @@ struct warn_not_nothrow_move_constructible_func<true> {
 
 } // namespace internal
 
+SEASTAR_CONCEPT(
+    template <typename Func>
+    concept NothrowMoveConstructible = std::is_nothrow_move_constructible_v<Func>;
+)
+
 template <typename Promise, typename Func, typename... T>
+#ifdef SEASTAR_CONTINUATIONS_NOTHROW_MOVE_CONSTRUCTIBLE
+SEASTAR_CONCEPT( requires NothrowMoveConstructible<Func> )
+#endif
 struct continuation final
         : continuation_base_with_promise<Promise, T...>
         , internal::warn_not_nothrow_move_constructible_func<!std::is_nothrow_move_constructible_v<Func>> {
+#ifdef SEASTAR_CONTINUATIONS_NOTHROW_MOVE_CONSTRUCTIBLE
+    static_assert(std::is_nothrow_move_constructible_v<Func>);
+#endif
     continuation(Promise&& pr, Func&& func, future_state<T...>&& state) noexcept
         : continuation_base_with_promise<Promise, T...>(std::move(pr)
         , std::move(state))

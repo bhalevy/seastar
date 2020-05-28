@@ -551,9 +551,10 @@ future<> do_until(StopCondition stop_cond, AsyncAction action) noexcept {
 ///        that becomes ready when you wish it to be called again.
 /// \return a future<> that will resolve to the first failure of \c action
 template<typename AsyncAction>
-SEASTAR_CONCEPT( requires seastar::InvokeReturns<AsyncAction, future<>> )
+SEASTAR_CONCEPT( requires seastar::InvokeReturns<AsyncAction, future<>> && NothrowMoveConstructible<AsyncAction> )
 inline
 future<> keep_doing(AsyncAction action) noexcept {
+    static_assert(std::is_nothrow_move_constructible_v<AsyncAction>);
     return repeat([action = std::move(action)] () mutable {
         return action().then([] {
             return stop_iteration::no;
