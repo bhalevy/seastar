@@ -1282,3 +1282,197 @@ SEASTAR_TEST_CASE(test_async_throw_on_move) {
         return make_ready_future<>();
     });
 }
+
+class may_throw_on_move {
+    bool _do_throw;
+public:
+    explicit may_throw_on_move(bool do_throw) noexcept : _do_throw(do_throw) {}
+    may_throw_on_move(const may_throw_on_move&) = delete;
+    may_throw_on_move(may_throw_on_move&& x) : _do_throw(x._do_throw) {
+        if (_do_throw) {
+            throw expected_exception();
+        }
+    }
+};
+
+static_assert(!std::is_nothrow_move_constructible_v<may_throw_on_move>);
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_parallel_for_each) {
+    auto f = [] (bool do_throw) {
+        int sum = 0;
+        parallel_for_each(boost::irange(1, 3), [mtom = may_throw_on_move(do_throw), &sum] (int i) mutable {
+                sum += i;
+                return make_ready_future<>();
+        }).get();
+        BOOST_REQUIRE_EQUAL(sum, 3);
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false));
+    try { f(true); } catch (expected_exception& e) { }
+}
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_do_for_each) {
+    auto f = [] (bool do_throw) {
+        int sum = 0;
+        auto r = boost::irange(1, 3);
+        do_for_each(r.begin(), r.end(), [mtom = may_throw_on_move(do_throw), &sum] (int i) mutable {
+                sum += i;
+                return make_ready_future<>();
+        }).get();
+        BOOST_REQUIRE_EQUAL(sum, 3);
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false));
+    try { f(true); } catch (expected_exception& e) { }
+}
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_when_all) {
+    auto f = [] (bool do_throw1, bool do_throw2) {
+        when_all(
+                [mtom = may_throw_on_move(do_throw1)] () mutable { return make_ready_future<int>(1); },
+                [mtom = may_throw_on_move(do_throw2)] () mutable { return make_ready_future<double>(2.0); }
+        ).then([] (std::tuple<future<int>, future<double>> t) {
+            BOOST_REQUIRE_EQUAL(std::get<0>(t).get0(), 1);
+            BOOST_REQUIRE_EQUAL(std::get<1>(t).get0(), 2.0);
+        }).get();
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false, false));
+    try { f(false, true); } catch (expected_exception& e) { }
+    try { f(true, false); } catch (expected_exception& e) { }
+    try { f(true, true); } catch (expected_exception& e) { }
+}
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_when_all_succeed) {
+    auto f = [] (bool do_throw1, bool do_throw2) {
+        int sum = 0;
+        when_all_succeed(
+                [mtom = may_throw_on_move(do_throw1), &sum] () mutable { ++sum; },
+                [mtom = may_throw_on_move(do_throw2), &sum] () mutable { ++sum; }
+        ).get();
+        BOOST_REQUIRE_EQUAL(sum, 2);
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false, false));
+    try { f(false, true); } catch (expected_exception& e) { }
+    try { f(true, false); } catch (expected_exception& e) { }
+    try { f(true, true); } catch (expected_exception& e) { }
+}
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_do_with) {
+    auto f = [] (bool do_throw) {
+        auto res = do_with(int(1), [mtom = may_throw_on_move(do_throw)] (int& i) mutable {
+            return make_ready_future<int>(i + 1);
+        }).get0();
+        BOOST_REQUIRE_EQUAL(res, 2);
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false));
+    try { f(true); } catch (expected_exception& e) { }
+}
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_repeat) {
+    auto f = [] (bool do_throw) {
+        int sum = 0;
+        int i = 0;
+        repeat([mtom = may_throw_on_move(do_throw), &sum, &i] {
+                sum += i++;
+                return i < 3 ? stop_iteration::no : stop_iteration::yes;
+        }).get();
+        BOOST_REQUIRE_EQUAL(sum, 3);
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false));
+    try { f(true); } catch (expected_exception& e) { }
+}
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_repeat_until_value) {
+    auto f = [] (bool do_throw) {
+        do_with(int(), [do_throw] (int& counter) {
+            return repeat_until_value([&counter, mtom = may_throw_on_move(do_throw)] () -> future<compat::optional<int>> {
+                if (counter == 10) {
+                    return make_ready_future<compat::optional<int>>(counter);
+                } else {
+                    ++counter;
+                    return make_ready_future<compat::optional<int>>(compat::nullopt);
+                }
+            }).then([&counter] (int result) {
+                BOOST_REQUIRE(counter == 10);
+                BOOST_REQUIRE(result == counter);
+            });
+        }).get();
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false));
+    try { f(true); } catch (expected_exception& e) { }
+}
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_do_until) {
+    auto f = [] (bool do_throw1, bool do_throw2) {
+        int sum = 0;
+        int i = 0;
+        do_until([mtom = may_throw_on_move(do_throw1), &sum, &i] { return i >= 3; },
+                 [mtom = may_throw_on_move(do_throw2), &sum, &i] () mutable {
+            sum += i++;
+            return now();
+        }).get();
+        BOOST_REQUIRE_EQUAL(sum, 3);
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false, false));
+    try { f(false, true); } catch (expected_exception& e) { }
+    try { f(true, false); } catch (expected_exception& e) { }
+    try { f(true, true); } catch (expected_exception& e) { }
+}
+
+class stop_iteration_exception : public std::exception {
+public:
+    stop_iteration_exception() = default;
+};
+
+#undef TEST_STATIC_ASSERT_IS_NOTHROW_MOVE_CONSTRUCTIBLE
+
+// The following test cases do not compile with
+// SEASTAR_CONTINUATIONS_NOTHROW_MOVE_CONSTRUCTIBLE
+// As they hit either:
+//   requires NothrowMoveConstructible<Func>
+// Or the corresponding static_assert
+#ifdef TEST_STATIC_ASSERT_IS_NOTHROW_MOVE_CONSTRUCTIBLE
+
+SEASTAR_TEST_CASE(test_throw_on_move_func_then) {
+    return make_ready_future<>().then([mtom = may_throw_on_move(true)] {});
+}
+
+SEASTAR_TEST_CASE(test_throw_on_move_func_then_wrapped) {
+    return make_ready_future<>().then_wrapped([mtom = may_throw_on_move(true)] (future<>) {});
+}
+
+SEASTAR_TEST_CASE(test_throw_on_move_func_finally) {
+    return make_ready_future<>().finally([mtom = may_throw_on_move(true)] {});
+}
+
+SEASTAR_TEST_CASE(test_throw_on_move_func_handle_exception) {
+    return make_ready_future<>().handle_exception([mtom = may_throw_on_move(true)] (std::exception_ptr) {});
+}
+
+SEASTAR_TEST_CASE(test_throw_on_move_func_handle_exception_type) {
+    return make_ready_future<>().handle_exception_type([mtom = may_throw_on_move(true)] (std::exception&) {});
+}
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_keep_doing) {
+    auto f = [] (bool do_throw) {
+        int sum = 0;
+        int i = 0;
+        keep_doing([mtom = may_throw_on_move(do_throw), &sum, &i] {
+                sum += i++;
+                return i < 3 ? make_ready_future<>() : make_exception_future<>(stop_iteration_exception());
+        }).handle_exception_type([&sum] (const stop_iteration_exception&) {
+            BOOST_REQUIRE_EQUAL(sum, 3);
+        }).get();
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false));
+    try { f(true); } catch (expected_exception& e) { }
+}
+
+#endif
