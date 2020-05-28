@@ -292,6 +292,10 @@ if (NOT (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR))
   set (Seastar_TESTING OFF)
 endif ()
 
+option (Seastar_CONTINUATIONS_NOTHROW_MOVE_CONSTRUCTIBLE
+  "Require continuation functions to be nothrow move constructible"
+  OFF)
+
 #
 # Useful (non-cache) variables.
 #
@@ -865,6 +869,11 @@ if (Seastar_HWLOC)
 
   target_link_libraries (seastar
     PRIVATE hwloc::hwloc)
+endif ()
+
+# TODO: generate definition in header file so that application could use it too.
+if (Seastar_CONTINUATIONS_NOTHROW_MOVE_CONSTRUCTIBLE)
+  list (APPEND Seastar_PRIVATE_COMPILE_DEFINITIONS SEASTAR_CONTINUATIONS_NOTHROW_MOVE_CONSTRUCTIBLE)
 endif ()
 
 if (Seastar_LD_FLAGS)
