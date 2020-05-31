@@ -31,6 +31,23 @@
 
 namespace seastar {
 
+static_assert(std::is_nothrow_constructible_v<deleter>);
+static_assert(std::is_nothrow_move_constructible_v<deleter>);
+
+static_assert(std::is_nothrow_move_constructible_v<temporary_buffer<char>>);
+
+static_assert(std::is_nothrow_constructible_v<data_source>);
+static_assert(std::is_nothrow_move_constructible_v<data_source>);
+
+static_assert(std::is_nothrow_constructible_v<data_sink>);
+static_assert(std::is_nothrow_move_constructible_v<data_sink>);
+
+static_assert(std::is_nothrow_constructible_v<input_stream<char>>);
+static_assert(std::is_nothrow_move_constructible_v<input_stream<char>>);
+
+static_assert(std::is_nothrow_constructible_v<output_stream<char>>);
+static_assert(std::is_nothrow_move_constructible_v<output_stream<char>>);
+
 class file_data_source_impl : public data_source_impl {
     struct issued_read {
         uint64_t _pos;
