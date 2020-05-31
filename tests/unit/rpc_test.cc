@@ -187,8 +187,8 @@ public:
 
     using test_fn = std::function<future<> (rpc_test_env<MsgType>& env)>;
     static future<> do_with(rpc_test_config cfg, test_fn&& func) {
-        return seastar::do_with(rpc_test_env(cfg), [func] (rpc_test_env<MsgType>& env) {
-            return env.start().then([&env, func] {
+        return seastar::do_with(rpc_test_env(cfg), [func = std::move(func)] (rpc_test_env<MsgType>& env) mutable {
+            return env.start().then([&env, func = std::move(func)] {
                 return func(env);
             }).finally([&env] {
                 return env.stop();
@@ -198,8 +198,8 @@ public:
 
     using thread_test_fn = std::function<void (rpc_test_env<MsgType>& env)>;
     static future<> do_with_thread(rpc_test_config cfg, thread_test_fn&& func) {
-        return do_with(std::move(cfg), [func] (rpc_test_env<MsgType>& env) {
-            return seastar::async([&env, func] {
+        return do_with(std::move(cfg), [func = std::move(func)] (rpc_test_env<MsgType>& env) mutable {
+            return seastar::async([&env, func = std::move(func)] {
                 func(env);
             });
         });
@@ -207,7 +207,7 @@ public:
 
     using thread_test_fn_with_client = std::function<void (rpc_test_env<MsgType>& env, test_rpc_proto::client& cl)>;
     static future<> do_with_thread(rpc_test_config cfg, rpc::client_options co, thread_test_fn_with_client&& func) {
-        return do_with(std::move(cfg), [func, co = std::move(co)] (rpc_test_env<MsgType>& env) {
+        return do_with(std::move(cfg), [func, co = std::move(co)] (rpc_test_env<MsgType>& env) mutable {
             return seastar::async([&env, func, co = std::move(co)] {
                 test_rpc_proto::client cl(env.proto(), co, env.make_socket(), ipv4_addr());
                 auto stop = defer([&] { cl.stop().get(); });
