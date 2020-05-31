@@ -42,6 +42,14 @@ size_t std::hash<seastar::socket_address>::operator()(const seastar::socket_addr
 
 namespace seastar {
 
+static_assert(std::is_nothrow_constructible_v<ipv4_addr>);
+static_assert(std::is_nothrow_copy_constructible_v<ipv4_addr>);
+static_assert(std::is_nothrow_move_constructible_v<ipv4_addr>);
+
+static_assert(std::is_nothrow_constructible_v<ipv6_addr>);
+static_assert(std::is_nothrow_copy_constructible_v<ipv6_addr>);
+static_assert(std::is_nothrow_move_constructible_v<ipv6_addr>);
+
 socket_address::socket_address(const net::inet_address& a, uint16_t p)
     : socket_address(a.is_ipv6() ? socket_address(ipv6_addr(a, p), a.scope()) : socket_address(ipv4_addr(a, p)))
 {}
