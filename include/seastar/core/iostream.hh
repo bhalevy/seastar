@@ -214,7 +214,7 @@ public:
     using unconsumed_remainder = std::optional<tmp_buf>;
     using char_type = CharType;
     input_stream() = default;
-    explicit input_stream(data_source fd) : _fd(std::move(fd)), _buf(0) {}
+    explicit input_stream(data_source fd) noexcept : _fd(std::move(fd)), _buf() {}
     input_stream(input_stream&&) = default;
     input_stream& operator=(input_stream&&) = default;
     future<temporary_buffer<CharType>> read_exactly(size_t n);
