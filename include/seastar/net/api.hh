@@ -166,11 +166,12 @@ class connected_socket {
     std::unique_ptr<net::connected_socket_impl> _csi;
 public:
     /// Constructs a \c connected_socket not corresponding to a connection
-    connected_socket();
+    connected_socket() noexcept;
     ~connected_socket();
 
     /// \cond internal
-    explicit connected_socket(std::unique_ptr<net::connected_socket_impl> csi);
+    explicit connected_socket(std::unique_ptr<net::connected_socket_impl> csi) noexcept;
+    connected_socket(const connected_socket& cs) = delete;
     /// \endcond
     /// Moves a \c connected_socket object.
     connected_socket(connected_socket&& cs) noexcept;
@@ -229,10 +230,12 @@ public:
 class socket {
     std::unique_ptr<net::socket_impl> _si;
 public:
+    socket() noexcept = default;
     ~socket();
 
     /// \cond internal
-    explicit socket(std::unique_ptr<net::socket_impl> si);
+    explicit socket(std::unique_ptr<net::socket_impl> si) noexcept;
+    socket(const socket&) = delete;
     /// \endcond
     /// Moves a \c seastar::socket object.
     socket(socket&&) noexcept;
@@ -286,9 +289,10 @@ public:
         default_ = connection_distribution
     };
     /// Constructs a \c server_socket not corresponding to a connection
-    server_socket();
+    server_socket() noexcept;
     /// \cond internal
-    explicit server_socket(std::unique_ptr<net::server_socket_impl> ssi);
+    explicit server_socket(std::unique_ptr<net::server_socket_impl> ssi) noexcept;
+    server_socket(const server_socket& ss) = delete;
     /// \endcond
     /// Moves a \c server_socket object.
     server_socket(server_socket&& ss) noexcept;
@@ -312,7 +316,7 @@ public:
     void abort_accept();
 
     /// Local bound address
-    socket_address local_address() const;
+    socket_address local_address() const noexcept;
 };
 
 /// @}
