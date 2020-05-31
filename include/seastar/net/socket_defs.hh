@@ -48,23 +48,23 @@ public:
         ::sockaddr_in6 in6;
         ::sockaddr_un un;
     } u;
-    socket_address(const sockaddr_in& sa) : addr_length{sizeof(::sockaddr_in)} {
+    socket_address(const sockaddr_in& sa) noexcept : addr_length{sizeof(::sockaddr_in)} {
         u.in = sa;
     }
-    socket_address(const sockaddr_in6& sa) : addr_length{sizeof(::sockaddr_in6)} {
+    socket_address(const sockaddr_in6& sa) noexcept : addr_length{sizeof(::sockaddr_in6)} {
         u.in6 = sa;
     }
-    socket_address(uint16_t);
-    socket_address(ipv4_addr);
-    socket_address(const ipv6_addr&);
-    socket_address(const ipv6_addr&, uint32_t scope);
-    socket_address(const net::inet_address&, uint16_t p = 0);
-    explicit socket_address(const unix_domain_addr&);
+    socket_address(uint16_t) noexcept;
+    socket_address(ipv4_addr) noexcept;
+    socket_address(const ipv6_addr&) noexcept;
+    socket_address(const ipv6_addr&, uint32_t scope) noexcept;
+    socket_address(const net::inet_address&, uint16_t p = 0) noexcept;
+    explicit socket_address(const unix_domain_addr&) noexcept;
     /** creates an uninitialized socket_address. this can be written into, or used as
      *  "unspecified" for such addresses as bind(addr) or local address in socket::connect
      *  (i.e. system picks)
      */ 
-    socket_address();
+    socket_address() noexcept;
 
     ::sockaddr& as_posix_sockaddr() { return u.sa; }
     ::sockaddr_in& as_posix_sockaddr_in() { return u.in; }
@@ -73,7 +73,7 @@ public:
     const ::sockaddr_in& as_posix_sockaddr_in() const { return u.in; }
     const ::sockaddr_in6& as_posix_sockaddr_in6() const { return u.in6; }
 
-    socket_address(uint32_t, uint16_t p = 0);
+    socket_address(uint32_t, uint16_t p = 0) noexcept;
 
     socklen_t length() const { return addr_length; };
 
@@ -108,19 +108,20 @@ struct ipv4_addr {
     uint32_t ip;
     uint16_t port;
 
-    ipv4_addr() : ip(0), port(0) {}
-    ipv4_addr(uint32_t ip, uint16_t port) : ip(ip), port(port) {}
-    ipv4_addr(uint16_t port) : ip(0), port(port) {}
+    ipv4_addr() noexcept : ip(0), port(0) {}
+    ipv4_addr(uint32_t ip, uint16_t port) noexcept : ip(ip), port(port) {}
+    ipv4_addr(uint16_t port) noexcept : ip(0), port(port) {}
+    // throw if not a valid ipv4 addr
     ipv4_addr(const std::string &addr);
     ipv4_addr(const std::string &addr, uint16_t port);
-    ipv4_addr(const net::inet_address&, uint16_t);
-    ipv4_addr(const socket_address &);
-    ipv4_addr(const ::in_addr&, uint16_t = 0);
+    ipv4_addr(const net::inet_address&, uint16_t) noexcept;
+    ipv4_addr(const socket_address &) noexcept;
+    ipv4_addr(const ::in_addr&, uint16_t = 0) noexcept;
 
-    bool is_ip_unspecified() const {
+    bool is_ip_unspecified() const noexcept {
         return ip == 0;
     }
-    bool is_port_unspecified() const {
+    bool is_port_unspecified() const noexcept {
         return port == 0;
     }
 };
@@ -131,17 +132,17 @@ struct ipv6_addr {
     ipv6_bytes ip;
     uint16_t port;
 
-    ipv6_addr(const ipv6_bytes&, uint16_t port = 0);
-    ipv6_addr(uint16_t port = 0);
+    ipv6_addr(const ipv6_bytes&, uint16_t port = 0) noexcept;
+    ipv6_addr(uint16_t port = 0) noexcept;
     ipv6_addr(const std::string&);
     ipv6_addr(const std::string&, uint16_t port);
-    ipv6_addr(const net::inet_address&, uint16_t = 0);
-    ipv6_addr(const ::in6_addr&, uint16_t = 0);
-    ipv6_addr(const ::sockaddr_in6&);
-    ipv6_addr(const socket_address&);
+    ipv6_addr(const net::inet_address&, uint16_t = 0) noexcept;
+    ipv6_addr(const ::in6_addr&, uint16_t = 0) noexcept;
+    ipv6_addr(const ::sockaddr_in6&) noexcept;
+    ipv6_addr(const socket_address&) noexcept;
 
-    bool is_ip_unspecified() const;
-    bool is_port_unspecified() const {
+    bool is_ip_unspecified() const noexcept;
+    bool is_port_unspecified() const noexcept {
         return port == 0;
     }
 };

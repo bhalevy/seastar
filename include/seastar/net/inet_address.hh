@@ -58,24 +58,25 @@ private:
 public:
     static constexpr uint32_t invalid_scope = std::numeric_limits<uint32_t>::max();
 
-    inet_address();
-    inet_address(family);
-    inet_address(::in_addr i);
-    inet_address(::in6_addr i, uint32_t scope = invalid_scope);
+    inet_address() noexcept;
+    inet_address(family) noexcept;
+    inet_address(::in_addr i) noexcept;
+    inet_address(::in6_addr i, uint32_t scope = invalid_scope) noexcept;
     // NOTE: does _not_ resolve the address. Only parses
     // ipv4/ipv6 numerical address
+    // may throw std::invalid_argument
     inet_address(const sstring&);
-    inet_address(inet_address&&) = default;
-    inet_address(const inet_address&) = default;
+    inet_address(inet_address&&) noexcept = default;
+    inet_address(const inet_address&) noexcept = default;
 
-    inet_address(const ipv4_address&);
-    inet_address(const ipv6_address&, uint32_t scope = invalid_scope);
+    inet_address(const ipv4_address&) noexcept;
+    inet_address(const ipv6_address&, uint32_t scope = invalid_scope) noexcept;
 
     // throws iff ipv6
-    ipv4_address as_ipv4_address() const;
-    ipv6_address as_ipv6_address() const;
+    ipv4_address as_ipv4_address() const noexcept;
+    ipv6_address as_ipv6_address() const noexcept;
 
-    inet_address& operator=(const inet_address&) = default;
+    inet_address& operator=(const inet_address&) noexcept = default;
     bool operator==(const inet_address&) const;
 
     family in_family() const {
@@ -96,10 +97,11 @@ public:
         return _scope;
     }
 
+    // may throw if not an ipv4 address
     operator ::in_addr() const;
-    operator ::in6_addr() const;
+    operator ::in6_addr() const noexcept;
 
-    operator ipv6_address() const;
+    operator ipv6_address() const noexcept;
 
     future<sstring> hostname() const;
     future<std::vector<sstring>> aliases() const;
