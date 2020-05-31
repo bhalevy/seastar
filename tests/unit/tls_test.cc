@@ -403,16 +403,17 @@ static future<> run_echo_test(sstring message,
         f = certs->set_x509_key_file(client_crt, client_key, tls::x509_crt_format::PEM);
     }
 
-    return f.then([=] {
+    return f.then([certs, trust] {
         return certs->set_x509_trust_file(trust, tls::x509_crt_format::PEM);
-    }).then([=] {
-        return server->start(msg->size()).then([=]() {
+    }).then([server, msg] {
+        return server->start(msg->size());
+    }).then([ca, trust, server, addr, crt, key]() {
             sstring server_trust;
             if (ca != tls::client_auth::NONE) {
                 server_trust = trust;
             }
             return server->invoke_on_all(&echoserver::listen, addr, crt, key, ca, server_trust);
-        }).then([=] {
+    }).then([certs, addr, name, loops, msg, do_read] {
             return tls::connect(certs, addr, name).then([loops, msg, do_read](::connected_socket s) {
                 auto strms = ::make_lw_shared<streams>(std::move(s));
                 auto range = boost::irange(0, loops);
@@ -444,9 +445,8 @@ static future<> run_echo_test(sstring message,
                     }).finally([strms] { });
                 });
             });
-        }).finally([server] {
+    }).finally([server] {
             return server->stop().finally([server]{});
-        });
     });
 }
 
