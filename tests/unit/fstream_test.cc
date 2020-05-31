@@ -60,11 +60,10 @@ struct reader {
 
 SEASTAR_TEST_CASE(test_fstream) {
     return tmp_dir::do_with([] (tmp_dir& t) {
-        // Run in background, signal when done.
-        auto filename = (t.get_path() / "testfile.tmp").native();
+      return do_with(std::string((t.get_path() / "testfile.tmp").native()), [] (auto& filename) {
         return open_file_dma(filename,
-                open_flags::rw | open_flags::create | open_flags::truncate).then([filename] (file f) {
-            return writer::make(std::move(f)).then([filename] (shared_ptr<writer> w) {
+                open_flags::rw | open_flags::create | open_flags::truncate).then([&filename] (file f) {
+            return writer::make(std::move(f)).then([&filename] (shared_ptr<writer> w) {
                 auto buf = static_cast<char*>(::malloc(4096));
                 memset(buf, 0, 4096);
                 buf[0] = '[';
@@ -83,7 +82,7 @@ SEASTAR_TEST_CASE(test_fstream) {
                         ::free(buf);
                         return w->out.close().then([w] {});
                     });
-                }).then([filename] {
+                }).then([&filename] {
                     return open_file_dma(filename, open_flags::ro);
                 }).then([] (file f) {
                     /*  file content after running the above:
@@ -109,6 +108,7 @@ SEASTAR_TEST_CASE(test_fstream) {
                 });
             });
         });
+      });
     });
 }
 
@@ -183,11 +183,10 @@ SEASTAR_TEST_CASE(test_consume_skip_bytes) {
 
 SEASTAR_TEST_CASE(test_fstream_unaligned) {
   return tmp_dir::do_with([] (tmp_dir& t) {
-    // Run in background, signal when done.
-    auto filename = (t.get_path() / "testfile.tmp").native();
+   return do_with(std::string((t.get_path() / "testfile.tmp").native()), [] (auto& filename) {
     return open_file_dma(filename,
-            open_flags::rw | open_flags::create | open_flags::truncate).then([filename] (file f) {
-        return writer::make(std::move(f)).then([filename] (shared_ptr<writer> w) {
+            open_flags::rw | open_flags::create | open_flags::truncate).then([&filename] (file f) {
+        return writer::make(std::move(f)).then([&filename] (shared_ptr<writer> w) {
             auto buf = static_cast<char*>(::malloc(40));
             memset(buf, 0, 40);
             buf[0] = '[';
@@ -196,7 +195,7 @@ SEASTAR_TEST_CASE(test_fstream_unaligned) {
             return w->out.write(buf, 40).then([buf, w] {
                 ::free(buf);
                 return w->out.close().then([w] {});
-            }).then([filename] {
+            }).then([&filename] {
                 return open_file_dma(filename, open_flags::ro);
             }).then([] (file f) {
                 return do_with(std::move(f), [] (file& f) {
@@ -206,7 +205,7 @@ SEASTAR_TEST_CASE(test_fstream_unaligned) {
                         return make_ready_future<>();
                     });
                 });
-            }).then([filename] {
+            }).then([&filename] {
                 return open_file_dma(filename, open_flags::ro);
             }).then([] (file f) {
                 auto r = make_shared<reader>(std::move(f));
@@ -220,6 +219,7 @@ SEASTAR_TEST_CASE(test_fstream_unaligned) {
             });
         });
     });
+   });
   });
 }
 
