@@ -47,11 +47,11 @@ int main(int ac, char** av) {
         auto verbose = config["verbose"].as<bool>();
 
         std::cout << "Starting..." << std::endl;
-        return net::dns::resolve_name(addr).then([=](net::inet_address a) {
+        return net::dns::resolve_name(addr).then([=](net::inet_address a) mutable {
             ipv4_addr ia(a, port);
 
             auto server = ::make_shared<seastar::sharded<echoserver>>();
-            return server->start(verbose).then([=]() {
+            return server->start(verbose).then([=]() mutable {
                 return server->invoke_on_all(&echoserver::listen, socket_address(ia), sstring(crt), sstring(key), tls::client_auth::NONE);
             }).handle_exception([=](auto e) {
                 std::cerr << "Error: " << e << std::endl;
