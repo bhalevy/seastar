@@ -84,27 +84,27 @@ int main(int ac, char** av) {
         if (verbose) {
             std::cout << "Msg (" << msg->size() << "B):" << std::endl << *msg << std::endl;
         }
-        return f.then([=]() {
-            return net::dns::get_host_by_name(addr).then([=](net::hostent e) {
+        return f.then([addr, port, check, server_name, certs, i, msg, do_read, verbose]() mutable {
+            return net::dns::get_host_by_name(addr).then([=](net::hostent e) mutable {
                 ipv4_addr ia(e.addr_list.front(), port);
 
                 sstring name;
                 if (check) {
                     name = server_name.empty() ? e.names.front() : server_name;
                 }
-                return tls::connect(certs, ia, name).then([=](::connected_socket s) {
+                return tls::connect(certs, ia, name).then([=](::connected_socket s) mutable {
                     auto strms = ::make_lw_shared<streams>(std::move(s));
                     auto range = boost::irange(size_t(0), i);
-                    return do_for_each(range, [=](auto) {
+                    return do_for_each(range, [=](auto) mutable {
                         auto f = strms->out.write(*msg);
                         if (!do_read) {
                             return strms->out.close().then([f = std::move(f)]() mutable {
                                 return std::move(f);
                             });
                         }
-                        return f.then([=]() {
-                            return strms->out.flush().then([=] {
-                                return strms->in.read_exactly(msg->size()).then([=](temporary_buffer<char> buf) {
+                        return f.then([strms, msg, verbose]() mutable {
+                            return strms->out.flush().then([=] () mutable {
+                                return strms->in.read_exactly(msg->size()).then([=](temporary_buffer<char> buf) mutable {
                                     sstring tmp(buf.begin(), buf.end());
                                     if (tmp != *msg) {
                                         std::cerr << "Got garbled message!" << std::endl;
