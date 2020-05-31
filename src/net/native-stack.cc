@@ -126,9 +126,9 @@ void create_native_net_device(boost::program_options::variables_map opts) {
     // wait for all shards to set their local queue,
     // then when link is ready, communicate the native_stack to the caller
     // via `create_native_stack` (that sets the ready_promise value)
-    (void)sem->wait(smp::count).then([opts, sdev] {
+    (void)sem->wait(smp::count).then([opts, sdev] () mutable {
         // FIXME: future is discarded
-        (void)sdev->link_ready().then([opts, sdev] {
+        (void)sdev->link_ready().then([opts, sdev] () mutable {
             for (unsigned i = 0; i < smp::count; i++) {
                 // FIXME: future is discarded
                 (void)smp::submit_to(i, [opts, sdev] {
