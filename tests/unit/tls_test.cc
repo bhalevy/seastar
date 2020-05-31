@@ -408,45 +408,45 @@ static future<> run_echo_test(sstring message,
     }).then([server, msg] {
         return server->start(msg->size());
     }).then([ca, trust, server, addr, crt, key]() {
-            sstring server_trust;
-            if (ca != tls::client_auth::NONE) {
-                server_trust = trust;
-            }
-            return server->invoke_on_all(&echoserver::listen, addr, crt, key, ca, server_trust);
+        sstring server_trust;
+        if (ca != tls::client_auth::NONE) {
+            server_trust = trust;
+        }
+        return server->invoke_on_all(&echoserver::listen, addr, crt, key, ca, server_trust);
     }).then([certs, addr, name, loops, msg, do_read] {
-            return tls::connect(certs, addr, name).then([loops, msg, do_read](::connected_socket s) {
-                auto strms = ::make_lw_shared<streams>(std::move(s));
-                auto range = boost::irange(0, loops);
-                return do_for_each(range, [strms, msg](auto) {
-                    auto f = strms->out.write(*msg);
-                    return f.then([strms, msg]() {
-                        return strms->out.flush().then([strms, msg] {
-                            return strms->in.read_exactly(msg->size()).then([msg](temporary_buffer<char> buf) {
-                                if (buf.empty()) {
-                                    throw std::runtime_error("Unexpected EOF");
-                                }
-                                sstring tmp(buf.begin(), buf.end());
-                                BOOST_CHECK(*msg == tmp);
-                            });
+        return tls::connect(certs, addr, name).then([loops, msg, do_read](::connected_socket s) {
+            auto strms = ::make_lw_shared<streams>(std::move(s));
+            auto range = boost::irange(0, loops);
+            return do_for_each(range, [strms, msg](auto) {
+                auto f = strms->out.write(*msg);
+                return f.then([strms, msg]() {
+                    return strms->out.flush().then([strms, msg] {
+                        return strms->in.read_exactly(msg->size()).then([msg](temporary_buffer<char> buf) {
+                            if (buf.empty()) {
+                                throw std::runtime_error("Unexpected EOF");
+                            }
+                            sstring tmp(buf.begin(), buf.end());
+                            BOOST_CHECK(*msg == tmp);
                         });
                     });
-                }).then_wrapped([strms, do_read] (future<> f1) {
-                    // Always call close()
-                    return (do_read ? strms->out.close() : make_ready_future<>()).then_wrapped([strms, f1 = std::move(f1)] (future<> f2) mutable {
-                        // Verification errors will be reported by the call to output_stream::close(),
-                        // which waits for the flush to actually happen. They can also be reported by the
-                        // input_stream::read_exactly() call. We want to keep only one and avoid nested exception mess.
-                        if (f1.failed()) {
-                            (void)f2.handle_exception([] (std::exception_ptr ignored) { });
-                            return std::move(f1);
-                        }
-                        (void)f1.handle_exception([] (std::exception_ptr ignored) { });
-                        return f2;
-                    }).finally([strms] { });
                 });
+            }).then_wrapped([strms, do_read] (future<> f1) {
+                // Always call close()
+                return (do_read ? strms->out.close() : make_ready_future<>()).then_wrapped([strms, f1 = std::move(f1)] (future<> f2) mutable {
+                    // Verification errors will be reported by the call to output_stream::close(),
+                    // which waits for the flush to actually happen. They can also be reported by the
+                    // input_stream::read_exactly() call. We want to keep only one and avoid nested exception mess.
+                    if (f1.failed()) {
+                        (void)f2.handle_exception([] (std::exception_ptr ignored) { });
+                        return std::move(f1);
+                    }
+                    (void)f1.handle_exception([] (std::exception_ptr ignored) { });
+                    return f2;
+                }).finally([strms] { });
             });
+        });
     }).finally([server] {
-            return server->stop().finally([server]{});
+        return server->stop().finally([server]{});
     });
 }
 
