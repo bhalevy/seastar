@@ -62,8 +62,8 @@ SEASTAR_TEST_CASE(test_fstream) {
     return tmp_dir::do_with([] (tmp_dir& t) {
         auto filename = (t.get_path() / "testfile.tmp").native();
         return open_file_dma(filename,
-                open_flags::rw | open_flags::create | open_flags::truncate).then([filename] (file f) {
-            return writer::make(std::move(f)).then([filename] (shared_ptr<writer> w) {
+                open_flags::rw | open_flags::create | open_flags::truncate).then([filename] (file f) mutable {
+            return writer::make(std::move(f)).then([filename] (shared_ptr<writer> w) mutable {
                 auto buf = static_cast<char*>(::malloc(4096));
                 memset(buf, 0, 4096);
                 buf[0] = '[';
@@ -184,8 +184,8 @@ SEASTAR_TEST_CASE(test_fstream_unaligned) {
   return tmp_dir::do_with([] (tmp_dir& t) {
     auto filename = (t.get_path() / "testfile.tmp").native();
     return open_file_dma(filename,
-            open_flags::rw | open_flags::create | open_flags::truncate).then([filename] (file f) {
-        return writer::make(std::move(f)).then([filename] (shared_ptr<writer> w) {
+            open_flags::rw | open_flags::create | open_flags::truncate).then([filename] (file f) mutable {
+        return writer::make(std::move(f)).then([filename] (shared_ptr<writer> w) mutable {
             auto buf = static_cast<char*>(::malloc(40));
             memset(buf, 0, 40);
             buf[0] = '[';
