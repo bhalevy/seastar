@@ -224,8 +224,8 @@ SEASTAR_TEST_CASE(unixdomain_abort) {
     std::string sockname{"7"s}; // note: no portable & warnings-free option
     std::ignore = ::unlink(sockname.c_str());
     ud_server_client uds(sockname, compat::nullopt, 10, 4);
-    return do_with(std::move(uds), [sockname](auto& uds){
-        return uds.run().finally([sockname](){
+    return do_with(std::move(uds), [sockname = std::move(sockname)](auto& uds) mutable {
+        return uds.run().finally([sockname = std::move(sockname)](){
             std::ignore = ::unlink(sockname.c_str());
             return seastar::make_ready_future<>();
         });
