@@ -181,7 +181,7 @@ socket_address server_socket::local_address() const {
     return _ssi->local_address();
 }
 
-socket_address::socket_address() 
+socket_address::socket_address() noexcept
     // set max addr_length, as we (probably) want to use the constructed object
     // in accept() or get_address()
     : addr_length(sizeof(::sockaddr_storage))
@@ -190,11 +190,11 @@ socket_address::socket_address()
     memset(&u, 0, sizeof(u));
 }
 
-socket_address::socket_address(uint16_t p)
+socket_address::socket_address(uint16_t p) noexcept
     : socket_address(ipv4_addr(p))
 {}
 
-socket_address::socket_address(ipv4_addr addr)
+socket_address::socket_address(ipv4_addr addr) noexcept
 {
     addr_length = sizeof(::sockaddr_in);
     u.in.sin_family = AF_INET;
@@ -202,7 +202,7 @@ socket_address::socket_address(ipv4_addr addr)
     u.in.sin_addr.s_addr = htonl(addr.ip);
 }
 
-socket_address::socket_address(const ipv6_addr& addr, uint32_t scope)
+socket_address::socket_address(const ipv6_addr& addr, uint32_t scope) noexcept
 {
     addr_length = sizeof(::sockaddr_in6);
     u.in6.sin6_family = AF_INET6;
@@ -212,11 +212,11 @@ socket_address::socket_address(const ipv6_addr& addr, uint32_t scope)
     std::copy(addr.ip.begin(), addr.ip.end(), u.in6.sin6_addr.s6_addr);
 }
 
-socket_address::socket_address(const ipv6_addr& addr)
+socket_address::socket_address(const ipv6_addr& addr) noexcept
     : socket_address(addr, net::inet_address::invalid_scope)
 {}
 
-socket_address::socket_address(uint32_t ipv4, uint16_t p)
+socket_address::socket_address(uint32_t ipv4, uint16_t p) noexcept
     : socket_address(make_ipv4_address(ipv4, p))
 {}
 
