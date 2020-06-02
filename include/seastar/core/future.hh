@@ -555,10 +555,43 @@ protected:
     Promise _pr;
 };
 
+namespace internal {
+
+template <bool IsNothrowMoveConstructible>
+struct warn_not_nothrow_move_constructible_func;
+
+template <>
+struct warn_not_nothrow_move_constructible_func<false> {
+    // nothrow_move_constructible case, do nothing
+    void is_deprecated() {}
+};
+
+template <>
+struct warn_not_nothrow_move_constructible_func<true> {
+    // not nothrow_move_constructible case, has deprecation attribute
+    [[deprecated("Continuation functions that may throw when moved are deprecated, replace with nothrow_move_constructible function")]]
+    void is_deprecated() {}
+};
+
+} // namespace internal
+
 template <typename Promise, typename Func, typename... T>
-struct continuation final : continuation_base_with_promise<Promise, T...> {
-    continuation(Promise&& pr, Func&& func, future_state<T...>&& state) : continuation_base_with_promise<Promise, T...>(std::move(pr), std::move(state)), _func(std::move(func)) {}
-    continuation(Promise&& pr, Func&& func) : continuation_base_with_promise<Promise, T...>(std::move(pr)), _func(std::move(func)) {}
+struct continuation final
+        : continuation_base_with_promise<Promise, T...>
+        , internal::warn_not_nothrow_move_constructible_func<!std::is_nothrow_move_constructible_v<Func>> {
+    continuation(Promise&& pr, Func&& func, future_state<T...>&& state) noexcept
+        : continuation_base_with_promise<Promise, T...>(std::move(pr)
+        , std::move(state))
+        , _func(std::move(func))
+    {
+        this->is_deprecated();
+    }
+    continuation(Promise&& pr, Func&& func) noexcept
+        : continuation_base_with_promise<Promise, T...>(std::move(pr))
+        , _func(std::move(func))
+    {
+        this->is_deprecated();
+    }
     virtual void run_and_dispose() noexcept override {
         _func(this->_pr, std::move(this->_state));
         delete this;
