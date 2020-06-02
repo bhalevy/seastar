@@ -60,8 +60,8 @@ public:
     /// Moves a deleter.
     deleter(deleter&& x) noexcept : _impl(x._impl) { x._impl = nullptr; }
     /// \cond internal
-    explicit deleter(impl* i) : _impl(i) {}
-    deleter(raw_object_tag tag, void* object)
+    explicit deleter(impl* i) noexcept : _impl(i) {}
+    deleter(raw_object_tag tag, void* object) noexcept
         : _impl(from_raw_object(object)) {}
     /// \endcond
     /// Destroys the deleter and carries out the encapsulated action.
