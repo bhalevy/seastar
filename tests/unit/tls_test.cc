@@ -420,7 +420,7 @@ static future<> run_echo_test(sstring message,
                 server_trust = trust;
             }
             return server->invoke_on_all(&echoserver::listen, addr, crt, key, ca, server_trust);
-        }).then([=] {
+        }).then([certs, addr, loops, SEASTAR_GCC_BZ95368(name), msg, do_read] {
             return tls::connect(certs, addr, name).then([loops, msg, do_read](::connected_socket s) {
                 auto strms = ::make_lw_shared<streams>(std::move(s));
                 auto range = boost::irange(0, loops);

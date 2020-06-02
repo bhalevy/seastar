@@ -189,7 +189,7 @@ public:
     using test_fn = std::function<future<> (rpc_test_env<MsgType>& env)>;
     static future<> do_with(rpc_test_config cfg, test_fn&& func) {
         return seastar::do_with(rpc_test_env(cfg), [func] (rpc_test_env<MsgType>& env) {
-            return env.start().then([&env, func] {
+            return env.start().then([&env, SEASTAR_GCC_BZ95368(func)] {
                 return func(env);
             }).finally([&env] {
                 return env.stop();

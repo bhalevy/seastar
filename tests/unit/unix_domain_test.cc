@@ -225,7 +225,7 @@ SEASTAR_TEST_CASE(unixdomain_abort) {
     std::ignore = ::unlink(sockname.c_str());
     ud_server_client uds(sockname, std::nullopt, 10, 4);
     return do_with(std::move(uds), [sockname](auto& uds){
-        return uds.run().finally([sockname](){
+        return uds.run().finally([SEASTAR_GCC_BZ95368(sockname)](){
             std::ignore = ::unlink(sockname.c_str());
             return seastar::make_ready_future<>();
         });

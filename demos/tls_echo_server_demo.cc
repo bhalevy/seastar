@@ -51,12 +51,12 @@ int main(int ac, char** av) {
             ipv4_addr ia(a, port);
 
             auto server = ::make_shared<seastar::sharded<echoserver>>();
-            return server->start(verbose).then([=]() {
+            return server->start(verbose).then([server, ia, SEASTAR_GCC_BZ95368(key), SEASTAR_GCC_BZ95368(crt)]() {
                 return server->invoke_on_all(&echoserver::listen, socket_address(ia), sstring(crt), sstring(key), tls::client_auth::NONE);
             }).handle_exception([=](auto e) {
                 std::cerr << "Error: " << e << std::endl;
                 engine().exit(1);
-            }).then([=] {
+            }).then([SEASTAR_GCC_BZ95368(addr), server, port] {
                 std::cout << "TLS echo server running at " << addr << ":" << port << std::endl;
                 engine().at_exit([server] {
                     return server->stop().finally([server] {});
