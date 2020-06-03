@@ -1328,3 +1328,148 @@ future<> func1() {
 SEASTAR_THREAD_TEST_CASE(test_backtracing) {
     func1().get();
 }
+
+class may_throw_on_move {
+    bool _do_throw;
+public:
+    explicit may_throw_on_move(bool do_throw) noexcept : _do_throw(do_throw) {}
+    may_throw_on_move(const may_throw_on_move&) = delete;
+    may_throw_on_move(may_throw_on_move&& x) : _do_throw(x._do_throw) {
+        if (_do_throw) {
+            throw expected_exception();
+        }
+    }
+};
+
+static_assert(!std::is_nothrow_move_constructible_v<may_throw_on_move>);
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_parallel_for_each) {
+    auto f = [] (bool do_throw, bool do_suspend) {
+        int sum = 0;
+        parallel_for_each(boost::irange(1, 3), [mtom = may_throw_on_move(do_throw), &sum, do_suspend] (int i) mutable {
+            sum += i;
+            return do_suspend ? sleep(1us) : make_ready_future<>();
+        }).get();
+        BOOST_REQUIRE_EQUAL(sum, 3);
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false, false));
+    BOOST_REQUIRE_NO_THROW(f(false, true));
+    try { f(true, false); } catch (expected_exception& e) { }
+    try { f(true, true); } catch (expected_exception& e) { }
+}
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_do_for_each) {
+    auto f = [] (bool do_throw, bool do_suspend) {
+        int sum = 0;
+        auto r = boost::irange(1, 3);
+        do_for_each(r.begin(), r.end(), [mtom = may_throw_on_move(do_throw), &sum, do_suspend] (int i) mutable {
+            sum += i;
+            return do_suspend ? sleep(1us) : make_ready_future<>();
+        }).get();
+        BOOST_REQUIRE_EQUAL(sum, 3);
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false, false));
+    BOOST_REQUIRE_NO_THROW(f(false, true));
+    try { f(true, false); } catch (expected_exception& e) { }
+    try { f(true, true); } catch (expected_exception& e) { }
+}
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_when_all) {
+    auto f = [] (bool do_throw1, bool do_throw2, bool do_suspend) {
+        when_all(
+                [mtom = may_throw_on_move(do_throw1), do_suspend] () mutable {
+                    auto f = [] {
+                        return make_ready_future<int>(1);
+                    };
+                    if (!do_suspend) {
+                        return f();
+                    } else {
+                        return sleep(1us).then(std::move(f));
+                    }
+                },
+                [mtom = may_throw_on_move(do_throw2), do_suspend] () mutable {
+                    auto f = [] {
+                        return make_ready_future<double>(2.0);
+                    };
+                    if (!do_suspend) {
+                        return f();
+                    } else {
+                        return sleep(1us).then(std::move(f));
+                    }
+                }
+        ).then([] (std::tuple<future<int>, future<double>> t) {
+            BOOST_REQUIRE_EQUAL(std::get<0>(t).get0(), 1);
+            BOOST_REQUIRE_EQUAL(std::get<1>(t).get0(), 2.0);
+        }).get();
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false, false, false));
+    BOOST_REQUIRE_NO_THROW(f(false, false, true));
+    try { f(false, true, false); } catch (expected_exception& e) { }
+    try { f(true, false, false); } catch (expected_exception& e) { }
+    try { f(true, true, false); } catch (expected_exception& e) { }
+    try { f(false, true, true); } catch (expected_exception& e) { }
+    try { f(true, false, true); } catch (expected_exception& e) { }
+    try { f(true, true, true); } catch (expected_exception& e) { }
+}
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_when_all_succeed) {
+    auto f = [] (bool do_throw1, bool do_throw2, bool do_suspend) {
+        int sum = 0;
+        when_all_succeed(
+                [mtom = may_throw_on_move(do_throw1), &sum, do_suspend] () mutable {
+                    auto f = [&sum] {
+                        return make_ready_future<int>(++sum);
+                    };
+                    if (!do_suspend) {
+                        return f();
+                    } else {
+                        return sleep(1us).then(std::move(f));
+                    }
+                },
+                [mtom = may_throw_on_move(do_throw2), &sum, do_suspend] () mutable {
+                    auto f = [&sum] {
+                        return make_ready_future<int>(++sum);
+                    };
+                    if (!do_suspend) {
+                        return f();
+                    } else {
+                        return sleep(1us).then(std::move(f));
+                    }
+                }
+        ).get();
+        BOOST_REQUIRE_EQUAL(sum, 2);
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false, false, false));
+    BOOST_REQUIRE_NO_THROW(f(false, false, true));
+    try { f(false, true, false); } catch (expected_exception& e) { }
+    try { f(true, false, false); } catch (expected_exception& e) { }
+    try { f(true, true, false); } catch (expected_exception& e) { }
+    try { f(false, true, true); } catch (expected_exception& e) { }
+    try { f(true, false, true); } catch (expected_exception& e) { }
+    try { f(true, true, true); } catch (expected_exception& e) { }
+}
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_do_with) {
+    auto f = [] (bool do_throw, bool do_suspend) {
+        auto res = do_with(int(1), [mtom = may_throw_on_move(do_throw), do_suspend] (int& i) mutable {
+            auto f = [i] {
+                return make_ready_future<int>(i + 1);
+            };
+            if (!do_suspend) {
+                return f();
+            } else {
+                return sleep(1us).then(std::move(f));
+            }
+        }).get0();
+        BOOST_REQUIRE_EQUAL(res, 2);
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false, false));
+    BOOST_REQUIRE_NO_THROW(f(false, true));
+    try { f(true, false); } catch (expected_exception& e) { }
+    try { f(true, true); } catch (expected_exception& e) { }
+}
