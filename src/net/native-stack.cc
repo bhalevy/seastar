@@ -128,7 +128,7 @@ void create_native_net_device(boost::program_options::variables_map opts) {
     // via `create_native_stack` (that sets the ready_promise value)
     (void)sem->wait(smp::count).then([opts, sdev] {
         // FIXME: future is discarded
-        (void)sdev->link_ready().then([opts, sdev] {
+        (void)sdev->link_ready().then([SEASTAR_GCC_BZ95368(opts), sdev] {
             for (unsigned i = 0; i < smp::count; i++) {
                 // FIXME: future is discarded
                 (void)smp::submit_to(i, [opts, sdev] {

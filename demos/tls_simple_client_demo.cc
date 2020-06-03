@@ -85,7 +85,7 @@ int main(int ac, char** av) {
             std::cout << "Msg (" << msg->size() << "B):" << std::endl << *msg << std::endl;
         }
         return f.then([=]() {
-            return net::dns::get_host_by_name(addr).then([=](net::hostent e) {
+            return net::dns::get_host_by_name(addr).then([port, check, SEASTAR_GCC_BZ95368(server_name), certs, i, msg, do_read, verbose](net::hostent e) {
                 ipv4_addr ia(e.addr_list.front(), port);
 
                 sstring name;

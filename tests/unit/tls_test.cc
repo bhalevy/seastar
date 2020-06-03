@@ -406,13 +406,13 @@ static future<> run_echo_test(sstring message,
     return f.then([=] {
         return certs->set_x509_trust_file(trust, tls::x509_crt_format::PEM);
     }).then([=] {
-        return server->start(msg->size()).then([=]() {
+        return server->start(msg->size()).then([ca, SEASTAR_GCC_BZ95368(trust), server, addr, SEASTAR_GCC_BZ95368(crt), SEASTAR_GCC_BZ95368(key)]() {
             sstring server_trust;
             if (ca != tls::client_auth::NONE) {
                 server_trust = trust;
             }
             return server->invoke_on_all(&echoserver::listen, addr, crt, key, ca, server_trust);
-        }).then([=] {
+        }).then([certs, addr, loops, SEASTAR_GCC_BZ95368(name), msg, do_read] {
             return tls::connect(certs, addr, name).then([loops, msg, do_read](::connected_socket s) {
                 auto strms = ::make_lw_shared<streams>(std::move(s));
                 auto range = boost::irange(0, loops);
