@@ -288,9 +288,10 @@ public:
 /// \return a ready future if we stopped successfully, or a failed future if
 ///         a call to to \c action failed.
 template<typename AsyncAction>
-SEASTAR_CONCEPT( requires seastar::InvokeReturns<AsyncAction, stop_iteration> || seastar::InvokeReturns<AsyncAction, future<stop_iteration>> )
+SEASTAR_CONCEPT( requires (seastar::InvokeReturns<AsyncAction, stop_iteration> || seastar::InvokeReturns<AsyncAction, future<stop_iteration>>) && NothrowMoveConstructible<AsyncAction> )
 inline
 future<> repeat(AsyncAction action) noexcept {
+    SEASTAR_ASSERT_IS_NOTHROW_MOVE_CONSTRUCTIBLE(AsyncAction);
     using futurator = futurize<std::result_of_t<AsyncAction()>>;
     static_assert(std::is_same<future<stop_iteration>, typename futurator::type>::value, "bad AsyncAction signature");
     try {
@@ -413,9 +414,10 @@ template<typename AsyncAction>
 SEASTAR_CONCEPT( requires requires (AsyncAction aa) {
     bool(futurize_invoke(aa).get0());
     futurize_invoke(aa).get0().value();
-} )
+} && NothrowMoveConstructible<AsyncAction> )
 repeat_until_value_return_type<AsyncAction>
 repeat_until_value(AsyncAction action) noexcept {
+    SEASTAR_ASSERT_IS_NOTHROW_MOVE_CONSTRUCTIBLE(AsyncAction);
     using futurator = futurize<std::result_of_t<AsyncAction()>>;
     using type_helper = repeat_until_value_type_helper<typename futurator::type>;
     // the "T" in the documentation
@@ -514,9 +516,10 @@ public:
 /// \return a ready future if we stopped successfully, or a failed future if
 ///         a call to to \c action failed.
 template<typename AsyncAction, typename StopCondition>
-SEASTAR_CONCEPT( requires seastar::InvokeReturns<StopCondition, bool> && seastar::InvokeReturns<AsyncAction, future<>> )
+SEASTAR_CONCEPT( requires seastar::InvokeReturns<StopCondition, bool> && seastar::InvokeReturns<AsyncAction, future<>> && NothrowMoveConstructible<AsyncAction> )
 inline
 future<> do_until(StopCondition stop_cond, AsyncAction action) noexcept {
+    SEASTAR_ASSERT_IS_NOTHROW_MOVE_CONSTRUCTIBLE(AsyncAction);
     using namespace internal;
     do {
         if (stop_cond()) {
@@ -551,9 +554,10 @@ future<> do_until(StopCondition stop_cond, AsyncAction action) noexcept {
 ///        that becomes ready when you wish it to be called again.
 /// \return a future<> that will resolve to the first failure of \c action
 template<typename AsyncAction>
-SEASTAR_CONCEPT( requires seastar::InvokeReturns<AsyncAction, future<>> )
+SEASTAR_CONCEPT( requires seastar::InvokeReturns<AsyncAction, future<>> && NothrowMoveConstructible<AsyncAction> )
 inline
 future<> keep_doing(AsyncAction action) noexcept {
+    SEASTAR_ASSERT_IS_NOTHROW_MOVE_CONSTRUCTIBLE(AsyncAction);
     return repeat([action = std::move(action)] () mutable {
         return action().then([] {
             return stop_iteration::no;
