@@ -1969,7 +1969,6 @@ void set_callback(future<T...>& fut, U* callback) noexcept {
 
 }
 
-
 /// \endcond
 
 }

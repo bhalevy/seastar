@@ -1328,3 +1328,29 @@ future<> func1() {
 SEASTAR_THREAD_TEST_CASE(test_backtracing) {
     func1().get();
 }
+
+class may_throw_on_move {
+    bool _do_throw;
+public:
+    explicit may_throw_on_move(bool do_throw) noexcept : _do_throw(do_throw) {}
+    may_throw_on_move(const may_throw_on_move& x) noexcept : _do_throw(x._do_throw) {};
+    may_throw_on_move(may_throw_on_move&& x) : _do_throw(x._do_throw) {
+        if (_do_throw) {
+            throw expected_exception();
+        }
+    }
+};
+
+static_assert(!std::is_nothrow_move_constructible_v<may_throw_on_move>);
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_with_func) {
+    auto f = [] (bool do_throw) {
+        int res = with_func([mtom = may_throw_on_move(do_throw)] { return make_ready_future<int>(42); }).then([] (auto func) {
+            return func();
+        }).get0();
+        BOOST_REQUIRE_EQUAL(res, 42);
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false));
+    try { f(true); } catch (expected_exception& e) { }
+}

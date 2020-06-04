@@ -141,6 +141,30 @@ do_with(T1&& rv1, T2&& rv2, More&&... more) noexcept {
     return futurize_invoke(func, std::forward<T1>(rv1), std::forward<T2>(rv2), std::forward<More>(more)...);
 }
 
+/// Wraps a continuation function \c func in a std::function if it is
+/// not nothrow_move_constructible.
+///
+/// \param func function to be executed
+/// \returns future holding the wrapped function
+template<typename Func, typename FuncResult = futurize_t<std::result_of_t<Func()>>, typename ResultType = std::function<FuncResult ()>>
+std::enable_if_t<!std::is_nothrow_move_constructible_v<Func>, future<ResultType>>
+with_func(Func&& func) noexcept {
+    try {
+        auto f = ResultType([func = std::forward<Func>(func)] {
+            return futurize_invoke(func);
+        });
+        return make_ready_future<ResultType>(std::move(f));
+    } catch (...) {
+        return current_exception_as_future<ResultType>();
+    }
+}
+
+template<typename Func, typename FuncResult = futurize_t<std::result_of_t<Func()>>, typename ResultType = std::function<FuncResult ()>>
+std::enable_if_t<std::is_nothrow_move_constructible_v<Func>, future<ResultType>>
+with_func(Func&& func) noexcept {
+    return make_ready_future<ResultType>(std::move(func));
+}
+
 /// Executes the function \c func making sure the lock \c lock is taken,
 /// and later on properly released.
 ///
