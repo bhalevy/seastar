@@ -174,13 +174,15 @@ with_func(Func&& func) noexcept {
 /// \returns whatever \c func returns
 template<typename Lock, typename Func>
 inline
-auto with_lock(Lock& lock, Func&& func) {
-    return lock.lock().then([func = std::forward<Func>(func)] () mutable {
+auto with_lock(Lock& lock, Func&& func) noexcept {
+  return with_func(std::forward<Func>(func)).then([&lock] (auto&& func) {
+    return lock.lock().then([func = std::move(func)] () mutable {
         return func();
     }).then_wrapped([&lock] (auto&& fut) {
         lock.unlock();
         return std::move(fut);
     });
+  });
 }
 
 /// @}

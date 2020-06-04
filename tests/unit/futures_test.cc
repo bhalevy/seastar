@@ -1354,3 +1354,46 @@ SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_with_func) {
     BOOST_REQUIRE_NO_THROW(f(false));
     try { f(true); } catch (expected_exception& e) { }
 }
+
+class dummy_lock {
+    bool _locked = false;
+    bool _do_suspend;
+public:
+    dummy_lock(bool do_suspend = false) noexcept
+        : _do_suspend(do_suspend)
+    { }
+
+    bool try_lock() {
+        bool can_lock = !_locked;
+        if (can_lock) {
+            _locked = true;
+        }
+        return can_lock;
+    }
+
+    future<> lock() {
+        return wait().then([this] {
+            assert(!_locked);
+            _locked = true;
+        });
+    }
+
+    void unlock() {
+        _locked = false;
+    }
+private:
+    future<> wait() {
+        return _do_suspend ? sleep(1us) : make_ready_future<>();
+    }
+};
+
+SEASTAR_THREAD_TEST_CASE(test_throw_on_move_func_with_lock) {
+    auto f = [] (bool do_throw) {
+        auto l = dummy_lock();
+        int res = with_lock(l, [mtom = may_throw_on_move(do_throw)] { return make_ready_future<int>(42); }).get0();
+        BOOST_REQUIRE_EQUAL(res, 42);
+    };
+
+    BOOST_REQUIRE_NO_THROW(f(false));
+    try { f(true); } catch (expected_exception& e) { }
+}
