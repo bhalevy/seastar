@@ -287,7 +287,6 @@ private:
     timer_set<timer<manual_clock>, &timer<manual_clock>::_link>::timer_list_t _expired_manual_timers;
     io_stats _io_stats;
     uint64_t _fsyncs = 0;
-    uint64_t _cxx_exceptions = 0;
     uint64_t _abandoned_failed_futures = 0;
     struct task_queue {
         explicit task_queue(unsigned id, sstring name, float shares);
@@ -650,7 +649,6 @@ private:
     friend class internal::poller;
     friend class scheduling_group;
     friend void add_to_flush_poller(output_stream<char>* os);
-    friend void seastar::log_exception_trace() noexcept;
     friend void report_failed_future(const std::exception_ptr& eptr) noexcept;
     friend void with_allow_abandoned_failed_futures(unsigned count, noncopyable_function<void ()> func);
     metrics::metric_groups _metric_groups;
