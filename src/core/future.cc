@@ -153,27 +153,23 @@ future_state_base::future_state_base(nested_exception_marker, const future_state
     if (!old.failed()) {
         new (this) future_state_base(current_exception_future_marker());
         return;
-    } else {
-        //
-        // Encapsulate the current exception into the
-        // std::nested_exception because the current libstdc++
-        // implementation has a bug requiring the value of a
-        // std::throw_with_nested() parameter to be of a polymorphic
-        // type.
-        //
-        std::nested_exception f_ex;
+    }
+    auto inner = std::current_exception();
+    try {
+        std::rethrow_exception(get_exception());
+    } catch (const std::exception& outer) {
         try {
-            std::rethrow_exception(old._u.ex);
+            std::rethrow_exception(inner);
         } catch (...) {
             try {
-                std::throw_with_nested(f_ex);
+                std::throw_with_nested(outer);
             } catch (...) {
                 new (this) future_state_base(current_exception_future_marker());
                 return;
             }
         }
-        __builtin_unreachable();
     }
+    __builtin_unreachable();
 }
 
 void report_failed_future(const std::exception_ptr& eptr) noexcept {

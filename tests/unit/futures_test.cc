@@ -1328,3 +1328,23 @@ future<> func1() {
 SEASTAR_THREAD_TEST_CASE(test_backtracing) {
     func1().get();
 }
+
+void print_exception(const std::exception& e, int level =  0)
+{
+    std::cerr << std::string(level, ' ') << "exception: " << e.what() << '\n';
+    try {
+        std::rethrow_if_nested(e);
+    } catch(const std::exception& e) {
+        print_exception(e, level+1);
+    } catch(...) {}
+}
+
+SEASTAR_THREAD_TEST_CASE(test_throw_in_finally) {
+    try {
+        make_exception_future<>(std::runtime_error("outer")).finally([] {
+            throw std::runtime_error("inner");
+        }).get();
+    } catch (const std::exception& e) {
+        print_exception(e);
+    }
+}
