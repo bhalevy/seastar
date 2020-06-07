@@ -42,4 +42,28 @@ std::filesystem::filesystem_error make_filesystem_error(const std::string& what,
 ///
 std::filesystem::filesystem_error make_filesystem_error(const std::string& what, std::filesystem::path path1, std::filesystem::path path2, int error);
 
+class nested_exception : public std::exception {
+    std::exception_ptr _outer;
+    std::exception_ptr _inner;
+public:
+    nested_exception(std::exception_ptr outer) noexcept
+        : _outer(outer)
+        , _inner(std::current_exception())
+    { }
+
+    virtual const char* what() const noexcept override {
+        try {
+            std::rethrow_exception(_outer);
+        } catch (const std::exception& e) {
+            return e.what();
+        }
+    }
+
+    void rethrow_if_nested() const {
+        if (_inner) {
+            std::rethrow_exception(_inner);
+        }
+    }
+};
+
 } // namespace seastar
