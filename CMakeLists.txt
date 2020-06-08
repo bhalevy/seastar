@@ -50,6 +50,10 @@ set (Seastar_ALLOC_FAILURE_INJECTION
   STRING
   "Enable failure injection into the Seastar allocator. Can be ON, OFF or DEFAULT (which enables it for Dev mode)")
 
+option (Seastar_FILESYSTEM_ERROR_INJECTION
+  "Enable error injection into filesystem operations."
+  OFF)
+
 option (Seastar_TASK_BACKTRACE
   "Collect backtrace at deferring points."
   OFF)
@@ -779,6 +783,11 @@ if ((Seastar_ALLOC_FAILURE_INJECTION IN_LIST True_STRING_VALUES) OR
      (CMAKE_BUILD_TYPE IN_LIST Seastar_ALLOC_FAILURE_INJECTION_MODES)))
   target_compile_definitions (seastar
     PUBLIC SEASTAR_ENABLE_ALLOC_FAILURE_INJECTION)
+endif ()
+
+if (Seastar_FILESYSTEM_ERROR_INJECTION)
+  target_compile_definitions (seastar
+    PUBLIC SEASTAR_ENABLE_FILESYSTEM_ERROR_INJECTION)
 endif ()
 
 if (Seastar_TASK_BACKTRACE)
