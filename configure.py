@@ -93,6 +93,11 @@ add_tristate(
     help = 'allocation failure injection')
 add_tristate(
     arg_parser,
+    name = 'filesystem-error-injection',
+    dest = "filesystem_error_injection",
+    help = 'filesystem error injection')
+add_tristate(
+    arg_parser,
     name = 'task-backtrace',
     dest = 'task_backtrace',
     help = 'Collect backtrace at deferring points')
@@ -198,6 +203,7 @@ def configure_mode(mode):
         tr(args.heap_profiling, 'HEAP_PROFILING'),
         tr(args.coroutines_ts, 'EXPERIMENTAL_COROUTINES_TS'),
         tr(args.unused_result_error, 'UNUSED_RESULT_ERROR'),
+        tr(args.filesystem_error_injection, 'FILESYSTEM_ERROR_INJECTION'),
     ]
 
     ingredients_to_cook = set(args.cook)

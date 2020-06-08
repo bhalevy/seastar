@@ -44,6 +44,10 @@ option (Seastar_ALLOC_FAILURE_INJECTION
   "Enable failure injection into the Seastar allocator."
   OFF)
 
+option (Seastar_FILESYSTEM_ERROR_INJECTION
+  "Enable error injection into filesystem operations."
+  OFF)
+
 option (Seastar_TASK_BACKTRACE
   "Collect backtrace at deferring points."
   OFF)
@@ -778,6 +782,11 @@ endif ()
 if (Seastar_ALLOC_FAILURE_INJECTION)
   target_compile_definitions (seastar
     PUBLIC SEASTAR_ENABLE_ALLOC_FAILURE_INJECTION)
+endif ()
+
+if (Seastar_FILESYSTEM_ERROR_INJECTION)
+  target_compile_definitions (seastar
+    PUBLIC SEASTAR_ENABLE_FILESYSTEM_ERROR_INJECTION)
 endif ()
 
 if (Seastar_TASK_BACKTRACE)
