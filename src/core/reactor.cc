@@ -123,6 +123,7 @@
 #endif
 
 #include <seastar/util/defer.hh>
+#include <seastar/util/filesystem_error_injector.hh>
 #include <seastar/core/alien.hh>
 #include <seastar/core/metrics.hh>
 #include <seastar/core/execution_stage.hh>
@@ -890,7 +891,11 @@ reactor::reactor(unsigned id, reactor_backend_selector rbs, reactor_config cfg)
     , _cpu_started(0)
     , _cpu_stall_detector(std::make_unique<cpu_stall_detector>())
     , _reuseport(posix_reuseport_detect())
-    , _thread_pool(std::make_unique<thread_pool>(this, seastar::format("syscall-{}", id))) {
+    , _thread_pool(std::make_unique<thread_pool>(this, seastar::format("syscall-{}", id)))
+#ifdef SEASTAR_ENABLE_FILESYSTEM_ERROR_INJECTION
+    , _filesystem_error_injector_manager(std::make_unique<filesystem_error_injector::manager>(id))
+#endif
+{
     /*
      * The _backend assignment is here, not on the initialization list as
      * the chosen backend constructor may want to handle signals and thus
@@ -1531,10 +1536,27 @@ const io_priority_class& default_priority_class() {
     return shard_default_class;
 }
 
+namespace fsei = seastar::filesystem_error_injector;
+
+#ifdef SEASTAR_ENABLE_FILESYSTEM_ERROR_INJECTION
+// sets errno
+std::optional<ssize_t> reactor::do_inject_error_on_syscall(fsei::syscall_type type, std::optional<sstring> path1, std::optional<sstring> path2, ulong flags) noexcept {
+    auto& m = get_filesystem_error_injector_manager();
+    return m.on_syscall(type, std::move(path1), std::move(path2), flags);
+}
+#endif // SEASTAR_ENABLE_FILESYSTEM_ERROR_INJECTION
+
 future<size_t>
 reactor::submit_io_read(io_queue* ioq, const io_priority_class& pc, size_t len, io_request req) noexcept {
     ++_io_stats.aio_reads;
     _io_stats.aio_read_bytes += len;
+    if (do_inject_error_on_syscall(fsei::syscall_type::read)) {
+        try {
+            wrap_syscall<int>(-1).throw_if_error();
+        } catch (...) {
+            return current_exception_as_future<size_t>();
+        }
+    }
     return ioq->queue_request(pc, len, std::move(req));
 }
 
@@ -1542,6 +1564,13 @@ future<size_t>
 reactor::submit_io_write(io_queue* ioq, const io_priority_class& pc, size_t len, io_request req) noexcept {
     ++_io_stats.aio_writes;
     _io_stats.aio_write_bytes += len;
+    if (do_inject_error_on_syscall(fsei::syscall_type::write)) {
+        try {
+            wrap_syscall<int>(-1).throw_if_error();
+        } catch (...) {
+            return current_exception_as_future<size_t>();
+        }
+    }
     return ioq->queue_request(pc, len, std::move(req));
 }
 
@@ -1569,7 +1598,7 @@ size_t sanitize_iovecs(std::vector<iovec>& iov, size_t disk_alignment) noexcept 
 future<file>
 reactor::open_file_dma(sstring name, open_flags flags, file_open_options options) noexcept {
   return do_with(static_cast<int>(flags), std::move(name), std::move(options), [this] (auto& open_flags, sstring& name, file_open_options& options) {
-    return _thread_pool->submit<syscall_result<int>>([&name, &open_flags, &options, strict_o_direct = _strict_o_direct, bypass_fsync = _bypass_fsync] () mutable {
+    return _thread_pool->submit<syscall_result<int>>([this, &name, &open_flags, &options, strict_o_direct = _strict_o_direct, bypass_fsync = _bypass_fsync] () mutable {
         // We want O_DIRECT, except in two cases:
         //   - tmpfs (which doesn't support it, but works fine anyway)
         //   - strict_o_direct == false (where we forgive it being not supported)
@@ -1587,6 +1616,9 @@ reactor::open_file_dma(sstring name, open_flags flags, file_open_options options
         open_flags |= O_CLOEXEC;
         if (bypass_fsync) {
             open_flags &= ~O_DSYNC;
+        }
+        if (do_inject_error_on_syscall(fsei::syscall_type::open, name, open_flags)) {
+            return wrap_syscall<int>(-1);
         }
         auto mode = static_cast<mode_t>(options.create_permissions);
         int fd = ::open(name.c_str(), open_flags, mode);
@@ -1620,7 +1652,10 @@ reactor::open_file_dma(sstring name, open_flags flags, file_open_options options
 
 future<>
 reactor::remove_file(sstring pathname) noexcept {
-    return engine()._thread_pool->submit<syscall_result<int>>([pathname] {
+    return engine()._thread_pool->submit<syscall_result<int>>([this, pathname] {
+        if (do_inject_error_on_syscall(fsei::syscall_type::remove, pathname)) {
+            return wrap_syscall<int>(-1);
+        }
         return wrap_syscall<int>(::remove(pathname.c_str()));
     }).then([pathname] (syscall_result<int> sr) {
         sr.throw_fs_exception_if_error("remove failed", pathname);
@@ -1630,7 +1665,10 @@ reactor::remove_file(sstring pathname) noexcept {
 
 future<>
 reactor::rename_file(sstring old_pathname, sstring new_pathname) noexcept {
-    return engine()._thread_pool->submit<syscall_result<int>>([old_pathname, new_pathname] {
+    return engine()._thread_pool->submit<syscall_result<int>>([this, old_pathname, new_pathname] {
+        if (do_inject_error_on_syscall(fsei::syscall_type::rename, old_pathname, new_pathname)) {
+            return wrap_syscall<int>(-1);
+        }
         return wrap_syscall<int>(::rename(old_pathname.c_str(), new_pathname.c_str()));
     }).then([old_pathname, new_pathname] (syscall_result<int> sr) {
         sr.throw_fs_exception_if_error("rename failed",  old_pathname, new_pathname);
@@ -1640,7 +1678,10 @@ reactor::rename_file(sstring old_pathname, sstring new_pathname) noexcept {
 
 future<>
 reactor::link_file(sstring oldpath, sstring newpath) noexcept {
-    return engine()._thread_pool->submit<syscall_result<int>>([oldpath, newpath] {
+    return engine()._thread_pool->submit<syscall_result<int>>([this, oldpath, newpath] {
+        if (do_inject_error_on_syscall(fsei::syscall_type::link, oldpath, newpath)) {
+            return wrap_syscall<int>(-1);
+        }
         return wrap_syscall<int>(::link(oldpath.c_str(), newpath.c_str()));
     }).then([oldpath, newpath] (syscall_result<int> sr) {
         sr.throw_fs_exception_if_error("link failed", oldpath, newpath);
@@ -1651,7 +1692,10 @@ reactor::link_file(sstring oldpath, sstring newpath) noexcept {
 future<>
 reactor::chmod(sstring name, file_permissions permissions) noexcept {
     auto mode = static_cast<mode_t>(permissions);
-    return _thread_pool->submit<syscall_result<int>>([name, mode] {
+    return _thread_pool->submit<syscall_result<int>>([this, name, mode] {
+        if (do_inject_error_on_syscall(fsei::syscall_type::chmod, name, mode)) {
+            return wrap_syscall<int>(-1);
+        }
         return wrap_syscall<int>(::chmod(name.c_str(), mode));
     }).then([name, mode] (syscall_result<int> sr) {
         if (sr.result == -1) {
@@ -1689,8 +1733,11 @@ directory_entry_type stat_to_entry_type(__mode_t type) {
 
 future<std::optional<directory_entry_type>>
 reactor::file_type(sstring name, follow_symlink follow) noexcept {
-    return _thread_pool->submit<syscall_result_extra<struct stat>>([name, follow] {
+    return _thread_pool->submit<syscall_result_extra<struct stat>>([this, name, follow] {
         struct stat st;
+        if (do_inject_error_on_syscall(fsei::syscall_type::stat, name)) {
+            return wrap_syscall(-1, st);
+        }
         auto stat_syscall = follow ? stat : lstat;
         auto ret = stat_syscall(name.c_str(), &st);
         return wrap_syscall(ret, st);
@@ -1721,8 +1768,11 @@ timespec_to_time_point(const timespec& ts) {
 
 future<struct stat>
 reactor::fstat(int fd) noexcept {
-    return _thread_pool->submit<syscall_result_extra<struct stat>>([fd] {
+    return _thread_pool->submit<syscall_result_extra<struct stat>>([this, fd] {
         struct stat st;
+        if (do_inject_error_on_syscall(fsei::syscall_type::stat)) {
+            return wrap_syscall(-1, st);
+        }
         auto ret = ::fstat(fd, &st);
         return wrap_syscall(ret, st);
     }).then([] (syscall_result_extra<struct stat> ret) {
@@ -1744,8 +1794,11 @@ reactor::inotify_add_watch(int fd, const sstring& path, uint32_t flags) {
 
 future<stat_data>
 reactor::file_stat(sstring pathname, follow_symlink follow) noexcept {
-    return _thread_pool->submit<syscall_result_extra<struct stat>>([pathname, follow] {
+    return _thread_pool->submit<syscall_result_extra<struct stat>>([this, pathname, follow] {
         struct stat st;
+        if (do_inject_error_on_syscall(fsei::syscall_type::stat, pathname)) {
+            return wrap_syscall(-1, st);
+        }
         auto stat_syscall = follow ? stat : lstat;
         auto ret = stat_syscall(pathname.c_str(), &st);
         return wrap_syscall(ret, st);
@@ -1780,8 +1833,11 @@ reactor::file_size(sstring pathname) noexcept {
 
 future<bool>
 reactor::file_accessible(sstring pathname, access_flags flags) noexcept {
-    return _thread_pool->submit<syscall_result<int>>([pathname, flags] {
+    return _thread_pool->submit<syscall_result<int>>([this, pathname, flags] {
         auto aflags = std::underlying_type_t<access_flags>(flags);
+        if (do_inject_error_on_syscall(fsei::syscall_type::access, pathname, aflags)) {
+            return wrap_syscall<int>(-1);
+        }
         auto ret = ::access(pathname.c_str(), aflags);
         return wrap_syscall(ret);
     }).then([pathname, flags] (syscall_result<int> sr) {
@@ -1799,8 +1855,11 @@ reactor::file_accessible(sstring pathname, access_flags flags) noexcept {
 
 future<fs_type>
 reactor::file_system_at(sstring pathname) noexcept {
-    return _thread_pool->submit<syscall_result_extra<struct statfs>>([pathname] {
+    return _thread_pool->submit<syscall_result_extra<struct statfs>>([this, pathname] {
         struct statfs st;
+        if (do_inject_error_on_syscall(fsei::syscall_type::statfs, pathname)) {
+            return wrap_syscall(-1, st);
+        }
         auto ret = statfs(pathname.c_str(), &st);
         return wrap_syscall(ret, st);
     }).then([pathname] (syscall_result_extra<struct statfs> sr) {
@@ -1825,8 +1884,11 @@ reactor::file_system_at(sstring pathname) noexcept {
 
 future<struct statfs>
 reactor::fstatfs(int fd) noexcept {
-    return _thread_pool->submit<syscall_result_extra<struct statfs>>([fd] {
+    return _thread_pool->submit<syscall_result_extra<struct statfs>>([this, fd] {
         struct statfs st;
+        if (do_inject_error_on_syscall(fsei::syscall_type::statfs)) {
+            return wrap_syscall(-1, st);
+        }
         auto ret = ::fstatfs(fd, &st);
         return wrap_syscall(ret, st);
     }).then([] (syscall_result_extra<struct statfs> sr) {
@@ -1838,8 +1900,11 @@ reactor::fstatfs(int fd) noexcept {
 
 future<struct statvfs>
 reactor::statvfs(sstring pathname) noexcept {
-    return _thread_pool->submit<syscall_result_extra<struct statvfs>>([pathname] {
+    return _thread_pool->submit<syscall_result_extra<struct statvfs>>([this, pathname] {
         struct statvfs st;
+        if (do_inject_error_on_syscall(fsei::syscall_type::statvfs, pathname)) {
+            return wrap_syscall(-1, st);
+        }
         auto ret = ::statvfs(pathname.c_str(), &st);
         return wrap_syscall(ret, st);
     }).then([pathname] (syscall_result_extra<struct statvfs> sr) {
@@ -1852,7 +1917,10 @@ reactor::statvfs(sstring pathname) noexcept {
 future<file>
 reactor::open_directory(sstring name) noexcept {
     auto oflags = O_DIRECTORY | O_CLOEXEC | O_RDONLY;
-    return _thread_pool->submit<syscall_result<int>>([name, oflags] {
+    return _thread_pool->submit<syscall_result<int>>([this, name, oflags] {
+        if (do_inject_error_on_syscall(fsei::syscall_type::open, name, oflags)) {
+            return wrap_syscall<int>(-1);
+        }
         return wrap_syscall<int>(::open(name.c_str(), oflags));
     }).then([name, oflags] (syscall_result<int> sr) {
         sr.throw_fs_exception_if_error("open failed", name);
@@ -1864,8 +1932,11 @@ reactor::open_directory(sstring name) noexcept {
 
 future<>
 reactor::make_directory(sstring name, file_permissions permissions) noexcept {
-    return _thread_pool->submit<syscall_result<int>>([=] {
+    return _thread_pool->submit<syscall_result<int>>([this, name, permissions] {
         auto mode = static_cast<mode_t>(permissions);
+        if (do_inject_error_on_syscall(fsei::syscall_type::mkdir, name, mode)) {
+            return wrap_syscall<int>(-1);
+        }
         return wrap_syscall<int>(::mkdir(name.c_str(), mode));
     }).then([name] (syscall_result<int> sr) {
         sr.throw_fs_exception_if_error("mkdir failed", name);
@@ -1874,8 +1945,11 @@ reactor::make_directory(sstring name, file_permissions permissions) noexcept {
 
 future<>
 reactor::touch_directory(sstring name, file_permissions permissions) noexcept {
-    return engine()._thread_pool->submit<syscall_result<int>>([=] {
+    return engine()._thread_pool->submit<syscall_result<int>>([this, name, permissions] {
         auto mode = static_cast<mode_t>(permissions);
+        if (do_inject_error_on_syscall(fsei::syscall_type::mkdir, name, mode)) {
+            return wrap_syscall<int>(-1);
+        }
         return wrap_syscall<int>(::mkdir(name.c_str(), mode));
     }).then([name] (syscall_result<int> sr) {
         if (sr.result == -1 && sr.error != EEXIST) {
@@ -1890,6 +1964,9 @@ reactor::fdatasync(int fd) noexcept {
     ++_fsyncs;
     if (_bypass_fsync) {
         return make_ready_future<>();
+    }
+    if (do_inject_error_on_syscall(fsei::syscall_type::fdatasync)) {
+        wrap_syscall<int>(-1).throw_if_error();
     }
     if (_have_aio_fsync) {
         try {

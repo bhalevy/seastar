@@ -559,6 +559,7 @@ add_library (seastar STATIC
   include/seastar/util/conversions.hh
   include/seastar/util/defer.hh
   include/seastar/util/eclipse.hh
+  include/seastar/util/filesystem_error_injector.hh
   include/seastar/util/function_input_iterator.hh
   include/seastar/util/gcc6-concepts.hh
   include/seastar/util/indirect.hh
@@ -652,6 +653,7 @@ add_library (seastar STATIC
   src/util/conversions.cc
   src/util/exceptions.cc
   src/util/file.cc
+  src/util/filesystem_error_injector.cc
   src/util/log.cc
   src/util/program-options.cc
   src/util/read_first_line.cc
