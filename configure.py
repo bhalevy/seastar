@@ -197,7 +197,8 @@ def configure_mode(mode):
         tr(args.split_dwarf, 'SPLIT_DWARF'),
         tr(args.heap_profiling, 'HEAP_PROFILING'),
         tr(args.unused_result_error, 'UNUSED_RESULT_ERROR'),
-        tr(args.filesystem_error_injection, 'FILESYSTEM_ERROR_INJECTION'),
+        tr(args.filesystem_error_injection, 'FILESYSTEM_ERROR_INJECTION',
+           value_when_none='yes' if mode == 'debug' else 'no'),
     ]
 
     ingredients_to_cook = set(args.cook)
