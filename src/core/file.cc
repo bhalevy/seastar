@@ -39,6 +39,7 @@
 #include "core/syscall_result.hh"
 #include "core/thread_pool.hh"
 #include "core/uname.hh"
+#include <seastar/util/filesystem_error_injector.hh>
 
 namespace seastar {
 
@@ -47,6 +48,7 @@ static_assert(std::is_nothrow_move_constructible_v<io_priority_class>);
 
 using namespace internal;
 using namespace internal::linux_abi;
+namespace fsei = filesystem_error_injector;
 
 file_handle::file_handle(const file_handle& x)
         : _impl(x._impl ? x._impl->clone() : std::unique_ptr<file_handle_impl>()) {
@@ -612,6 +614,9 @@ append_challenged_posix_file_impl::read_dma(uint64_t pos, void* buffer, size_t l
     if (pos >= _logical_size) {
         // later() avoids tail recursion
         return later().then([] {
+            if (engine().do_inject_error_on_syscall(fsei::syscall_type::read)) {
+                wrap_syscall<int>(-1).throw_if_error();
+            }
             return size_t(0);
         });
     }
@@ -631,6 +636,9 @@ append_challenged_posix_file_impl::read_dma(uint64_t pos, std::vector<iovec> iov
     if (pos >= _logical_size) {
         // later() avoids tail recursion
         return later().then([] {
+            if (engine().do_inject_error_on_syscall(fsei::syscall_type::read)) {
+                wrap_syscall<int>(-1).throw_if_error();
+            }
             return size_t(0);
         });
     }
@@ -798,6 +806,7 @@ xfs_concurrency_from_kernel_version() {
 
 future<shared_ptr<file_impl>>
 make_file_impl(int fd, file_open_options options, int flags) noexcept {
+  return do_with(fsei::disable_guard(), [fd, options = std::move(options), flags] (auto& disable_guard) mutable {
     return engine().fstat(fd).then([fd, options = std::move(options), flags] (struct stat st) mutable {
         auto r = ::ioctl(fd, BLKGETSIZE);
         auto st_dev = st.st_dev;
@@ -850,6 +859,7 @@ make_file_impl(int fd, file_open_options options, int flags) noexcept {
             });
         }
     });
+  });
 }
 
 file::file(seastar::file_handle&& handle) noexcept

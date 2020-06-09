@@ -292,6 +292,9 @@ seastar_add_test (file_io
 seastar_add_test (file_utils
   SOURCES file_utils_test.cc)
 
+seastar_add_test (filesystem_error_injector
+  SOURCES filesystem_error_injector_test.cc)
+
 seastar_add_test (foreign_ptr
   SOURCES foreign_ptr_test.cc)
 

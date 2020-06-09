@@ -172,6 +172,11 @@ public:
 
 }
 
+namespace filesystem_error_injector {
+    enum class syscall_type;
+    class manager;
+}
+
 class kernel_completion;
 class io_queue;
 class disk_config_params;
@@ -712,6 +717,27 @@ public:
     // For testing:
     void set_stall_detector_report_function(std::function<void ()> report);
     std::function<void ()> get_stall_detector_report_function() const;
+private:
+    friend class append_challenged_posix_file_impl;
+
+    std::optional<ssize_t> do_inject_error_on_syscall(filesystem_error_injector::syscall_type type, sstring path1, ulong flags = 0) noexcept {
+        return do_inject_error_on_syscall(type, std::make_optional<sstring>(std::move(path1)), std::nullopt, flags);
+    }
+    std::optional<ssize_t> do_inject_error_on_syscall(filesystem_error_injector::syscall_type type, sstring path1, sstring path2, ulong flags = 0) noexcept {
+        return do_inject_error_on_syscall(type, std::make_optional<sstring>(std::move(path1)), std::make_optional<sstring>(std::move(path2)), flags);
+    }
+#ifdef SEASTAR_ENABLE_FILESYSTEM_ERROR_INJECTION
+    std::optional<ssize_t> do_inject_error_on_syscall(filesystem_error_injector::syscall_type type, std::optional<sstring> path1 = std::nullopt, std::optional<sstring> path2 = std::nullopt, ulong flags = 0) noexcept;
+    std::unique_ptr<filesystem_error_injector::manager> _filesystem_error_injector_manager;
+public:
+    filesystem_error_injector::manager& get_filesystem_error_injector_manager() const noexcept {
+        return *_filesystem_error_injector_manager;
+    }
+#else
+    std::optional<ssize_t> do_inject_error_on_syscall(filesystem_error_injector::syscall_type type, std::optional<sstring> path1 = std::nullopt, std::optional<sstring> path2 = std::nullopt, ulong flags = 0) noexcept {
+        return std::nullopt;
+    }
+#endif // SEASTAR_ENABLE_FILESYSTEM_ERROR_INJECTION
 };
 
 template <typename Func> // signature: bool ()
