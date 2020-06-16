@@ -1391,6 +1391,10 @@ SEASTAR_TEST_CASE(test_async_throw_on_move) {
     });
 }
 
+SEASTAR_TEST_CASE(test_continuation_throw_on_move) {
+    return later().then([foo = throw_on_move()] {});
+}
+
 future<> func4() {
     return later().then([] {
         seastar_logger.info("backtrace: {}", current_backtrace());
