@@ -191,3 +191,23 @@ SEASTAR_THREAD_TEST_CASE(test_shared_mutex_failed_func) {
     BOOST_REQUIRE(sm.try_lock());
     sm.unlock();
 }
+
+#ifdef SEASTAR_DEBUG_LOCKING
+
+SEASTAR_THREAD_TEST_CASE(test_shared_mutex_failed_lock) {
+    shared_mutex sm;
+
+    // if l.lock() fails neither the function nor l.unlock()
+    // should be called.
+    sm.set_inject_lock_error(std::make_exception_ptr(std::runtime_error("injected")));
+    BOOST_REQUIRE_THROW(with_shared(sm, [] {
+        BOOST_REQUIRE(false);
+    }).get(), std::runtime_error);
+
+    sm.set_inject_lock_error(std::make_exception_ptr(std::runtime_error("injected")));
+    BOOST_REQUIRE_THROW(with_lock(sm, [] {
+        BOOST_REQUIRE(false);
+    }).get(), std::runtime_error);
+}
+
+#endif

@@ -55,6 +55,9 @@ class shared_mutex {
         bool for_write;
     };
     circular_buffer<waiter> _waiters;
+#ifdef SEASTAR_DEBUG_LOCKING
+    std::exception_ptr _inject_lock_error;
+#endif
 public:
     shared_mutex() = default;
     shared_mutex(shared_mutex&&) = default;
@@ -66,6 +69,12 @@ public:
     /// \return a future that becomes ready when no exclusive access
     ///         is granted to anyone.
     future<> lock_shared() {
+#ifdef SEASTAR_DEBUG_LOCKING
+        auto ep = maybe_inject_lock_error();
+        if (ep) {
+            return make_exception_future<>(ep);
+        }
+#endif
         if (try_lock_shared()) {
             return make_ready_future<>();
         }
@@ -95,6 +104,12 @@ public:
     /// \return a future that becomes ready when no access, shared or exclusive
     ///         is granted to anyone.
     future<> lock() {
+#ifdef SEASTAR_DEBUG_LOCKING
+        auto ep = maybe_inject_lock_error();
+        if (ep) {
+            return make_exception_future<>(ep);
+        }
+#endif
         if (try_lock()) {
             return make_ready_future<>();
         }
@@ -119,6 +134,12 @@ public:
         _writer = false;
         wake();
     }
+
+#ifdef SEASTAR_DEBUG_LOCKING
+    void set_inject_lock_error(std::exception_ptr ep) {
+        _inject_lock_error = ep;
+    }
+#endif
 private:
     void wake() {
         while (!_waiters.empty()) {
@@ -137,6 +158,13 @@ private:
                 _waiters.pop_front();
             }
         }
+    }
+    std::exception_ptr maybe_inject_lock_error() {
+        std::exception_ptr ep;
+#ifdef SEASTAR_DEBUG_LOCKING
+        std::swap(ep, _inject_lock_error);
+#endif
+        return ep;
     }
 };
 
