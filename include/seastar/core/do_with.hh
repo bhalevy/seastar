@@ -156,8 +156,8 @@ auto with_lock(Lock& lock, Func&& func) {
     return lock.lock()
             .then(std::move(func))
             .finally([&lock] {
-        lock.unlock();
-    });
+                lock.unlock();
+            });
 }
 
 /// @}
