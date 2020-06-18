@@ -108,6 +108,7 @@ arg_parser.add_argument('--without-demos', dest='exclude_demos', action='store_t
 arg_parser.add_argument('--split-dwarf', dest='split_dwarf', action='store_true', default=False,
                         help='use of split dwarf (https://gcc.gnu.org/wiki/DebugFission) to speed up linking')
 arg_parser.add_argument('--heap-profiling', dest='heap_profiling', action='store_true', default=False, help='Enable heap profiling')
+arg_parser.add_argument('--debug-locking', dest='debug_locking', action='store_true', default=None, help='Enable lock debugging')
 arg_parser.add_argument('--prefix', dest='install_prefix', default='/usr/local', help='Root installation path of Seastar files')
 args = arg_parser.parse_args()
 
@@ -192,6 +193,7 @@ def configure_mode(mode):
         tr(args.split_dwarf, 'SPLIT_DWARF'),
         tr(args.heap_profiling, 'HEAP_PROFILING'),
         tr(args.unused_result_error, 'UNUSED_RESULT_ERROR'),
+        tr(args.debug_locking, 'DEBUG_LOCKING', value_when_none='yes' if mode == 'debug' else 'no'),
     ]
 
     ingredients_to_cook = set(args.cook)

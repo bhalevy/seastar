@@ -245,6 +245,10 @@ set (Seastar_TEST_TIMEOUT
   STRING
   "Maximum allowed time for a test to run, in seconds.")
 
+option (Seastar_DEBUG_LOCKING
+    "Enable lock debugging code."
+    OFF)
+
 # We set the following environment variables
 # * ASAN_OPTIONS=disable_coredump=0:abort_on_error=1
 #   By default asan disables core dumps because they used to be
@@ -806,6 +810,11 @@ if (Seastar_HEAP_PROFILING)
       SOURCE "src/core/memory.cc"
       PROPERTY
       COMPILE_DEFINITIONS SEASTAR_HEAPPROF)
+endif ()
+
+if (Seastar_DEBUG_LOCKING)
+  target_compile_definitions (seastar
+    PUBLIC SEASTAR_DEBUG_LOCKING)
 endif ()
 
 if (Seastar_DPDK)
