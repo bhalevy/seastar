@@ -84,6 +84,9 @@ public:
     }
     /// Unlocks a \c shared_mutex after a previous call to \ref lock_shared().
     void unlock_shared() {
+#ifdef SEASTAR_DEBUG_LOCKING
+        assert(_readers > 0);
+#endif
         --_readers;
         wake();
     }
@@ -110,6 +113,9 @@ public:
     }
     /// Unlocks a \c shared_mutex after a previous call to \ref lock().
     void unlock() {
+#ifdef SEASTAR_DEBUG_LOCKING
+        assert(_writer);
+#endif
         _writer = false;
         wake();
     }
