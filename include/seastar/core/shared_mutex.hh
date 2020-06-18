@@ -127,9 +127,11 @@ private:
 ///
 /// \relates shared_mutex
 template <typename Func>
+SEASTAR_CONCEPT( requires std::is_nothrow_move_constructible_v<Func> )
 inline
 futurize_t<std::result_of_t<Func ()>>
 with_shared(shared_mutex& sm, Func&& func) {
+    static_assert(std::is_nothrow_move_constructible_v<Func>);
     return sm.lock_shared().then([func = std::forward<Func>(func)] () mutable {
         return func();
     }).finally([&sm] {
@@ -148,9 +150,11 @@ with_shared(shared_mutex& sm, Func&& func) {
 ///
 /// \relates shared_mutex
 template <typename Func>
+SEASTAR_CONCEPT( requires std::is_nothrow_move_constructible_v<Func> )
 inline
 futurize_t<std::result_of_t<Func ()>>
 with_lock(shared_mutex& sm, Func&& func) {
+    static_assert(std::is_nothrow_move_constructible_v<Func>);
     return sm.lock().then([func = std::forward<Func>(func)] () mutable {
         return func();
     }).finally([&sm] {
