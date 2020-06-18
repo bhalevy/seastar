@@ -521,8 +521,8 @@ protected:
     future_state_base(nested_exception_marker, future_state_base&& n, future_state_base&& old) noexcept;
     ~future_state_base() noexcept = default;
 
-    void rethrow_exception() &&;
-    void rethrow_exception() const&;
+    void maybe_rethrow_exception() &&;
+    void maybe_rethrow_exception() const&;
 
 public:
 
@@ -654,25 +654,16 @@ struct future_state :  public future_state_base, private internal::uninitialized
         return this->uninitialized_get();
     }
     T&& take() && {
-        assert(available());
-        if (_u.st >= state::exception_min) {
-            std::move(*this).rethrow_exception();
-        }
+        std::move(*this).maybe_rethrow_exception();
         _u.st = state::result_unavailable;
         return static_cast<T&&>(this->uninitialized_get());
     }
     T&& get() && {
-        assert(available());
-        if (_u.st >= state::exception_min) {
-            std::move(*this).rethrow_exception();
-        }
+        std::move(*this).maybe_rethrow_exception();
         return static_cast<T&&>(this->uninitialized_get());
     }
     const T& get() const& {
-        assert(available());
-        if (_u.st >= state::exception_min) {
-            rethrow_exception();
-        }
+        maybe_rethrow_exception();
         return this->uninitialized_get();
     }
     using get0_return_type = typename internal::get0_return_type<internal::future_tuple_type_t<T>>::type;
