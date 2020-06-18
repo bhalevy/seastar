@@ -153,11 +153,10 @@ SEASTAR_CONCEPT( requires std::is_nothrow_move_constructible_v<Func> )
 inline
 auto with_lock(Lock& lock, Func&& func) {
     static_assert(std::is_nothrow_move_constructible_v<Func>);
-    return lock.lock().then([func = std::forward<Func>(func)] () mutable {
-        return func();
-    }).then_wrapped([&lock] (auto&& fut) {
+    return lock.lock()
+            .then(std::move(func))
+            .finally([&lock] {
         lock.unlock();
-        return std::move(fut);
     });
 }
 
