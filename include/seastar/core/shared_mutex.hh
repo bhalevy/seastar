@@ -135,8 +135,8 @@ with_shared(shared_mutex& sm, Func&& func) {
     return sm.lock_shared()
             .then(std::move(func))
             .finally([&sm] {
-        sm.unlock_shared();
-    });
+                sm.unlock_shared();
+            });
 }
 
 /// Executes a function while holding exclusive access to a resource.
@@ -158,8 +158,8 @@ with_lock(shared_mutex& sm, Func&& func) {
     return sm.lock()
             .then(std::move(func))
             .finally([&sm] {
-        sm.unlock();
-    });
+                sm.unlock();
+            });
 }
 
 /// @}
