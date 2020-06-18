@@ -264,7 +264,7 @@ public:
     ///
     /// \param nr number of units to reduce the counter by (default 1).
     /// \return `true` if the counter had sufficient units, and was decremented.
-    bool try_wait(size_t nr = 1) {
+    bool try_wait(size_t nr = 1) noexcept {
         if (may_proceed(nr)) {
             _count -= nr;
             return true;
