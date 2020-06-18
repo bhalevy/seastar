@@ -149,8 +149,10 @@ do_with(T1&& rv1, T2&& rv2, More&&... more) noexcept {
 /// \param func function to be executed
 /// \returns whatever \c func returns
 template<typename Lock, typename Func>
+SEASTAR_CONCEPT( requires std::is_nothrow_move_constructible_v<Func> )
 inline
 auto with_lock(Lock& lock, Func&& func) {
+    static_assert(std::is_nothrow_move_constructible_v<Func>);
     return lock.lock().then([func = std::forward<Func>(func)] () mutable {
         return func();
     }).then_wrapped([&lock] (auto&& fut) {
