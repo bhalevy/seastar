@@ -236,9 +236,9 @@ void qp::build_sw_reta(const std::map<unsigned, float>& cpu_weights) {
 
 future<>
 device::receive(std::function<future<> (packet)> next_packet) {
-    auto sub = _queues[this_shard_id()]->_rx_stream.listen(std::move(next_packet));
+    auto sub = _queues[this_shard_id()]->_rx_stream.listen_fut(std::move(next_packet));
     _queues[this_shard_id()]->rx_start();
-    return sub.done();
+    return sub;
 }
 
 void device::set_local_queue(std::unique_ptr<qp> dev) {
@@ -295,7 +295,7 @@ interface::register_l3(eth_protocol_num proto_num,
     auto i = _proto_map.emplace(std::piecewise_construct, std::make_tuple(uint16_t(proto_num)), std::forward_as_tuple(std::move(forward)));
     assert(i.second);
     l3_rx_stream& l3_rx = i.first->second;
-    return l3_rx.packet_stream.listen(std::move(next)).done();
+    return l3_rx.packet_stream.listen_fut(std::move(next));
 }
 
 unsigned interface::hash2cpu(uint32_t hash) {

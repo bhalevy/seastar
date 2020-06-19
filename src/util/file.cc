@@ -172,7 +172,11 @@ static future<> do_recursive_remove_directory(const fs::path path) noexcept {
                                     work_queue.emplace_back(std::move(sub_path), true);
                                 }
                                 return make_ready_future<>();
-                            }).done().then([&dir] () mutable {
+                            })
+#if SEASTAR_API_LEVEL < 7
+                            .done()
+#endif
+                            .then([&dir] () mutable {
                                 return dir.close();
                             });
                         });

@@ -101,7 +101,7 @@ public:
         _closed = true;
         return make_ready_future<>();
     }
-    virtual subscription<directory_entry> list_directory(std::function<future<> (directory_entry de)>) override {
+    virtual list_directory_ret_t list_directory(std::function<future<> (directory_entry de)>) override {
         throw std::bad_function_call();
     }
     virtual future<temporary_buffer<uint8_t>> dma_read_bulk(uint64_t offset, size_t range_size, const io_priority_class&) noexcept override {

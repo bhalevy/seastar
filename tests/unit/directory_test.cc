@@ -54,13 +54,17 @@ const char* de_type_desc(directory_entry_type t)
 int main(int ac, char** av) {
     class lister {
         file _f;
-        subscription<directory_entry> _listing;
+        future<> _listing_done;
     public:
         lister(file f)
                 : _f(std::move(f))
-                , _listing(_f.list_directory([this] (directory_entry de) { return report(de); })) {
+                , _listing_done(_f.list_directory([this] (directory_entry de) { return report(de); })
+#if SEASTAR_API_LEVEL < 7
+.done()
+#endif
+) {
         }
-        future<> done() { return _listing.done(); }
+        future<> done() { return std::move(_listing_done); }
     private:
         future<> report(directory_entry de) {
             return file_stat(de.name, follow_symlink::no).then([de = std::move(de)] (stat_data sd) {

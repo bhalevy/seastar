@@ -95,29 +95,26 @@ SEASTAR_TEST_CASE(test_self_move) {
 #pragma clang diagnostic pop
 #endif
 
-static subscription<int> get_empty_subscription(std::function<future<> (int)> func) {
+static future<> get_empty_subscription(std::function<future<> (int)> func) {
     stream<int> s;
-    auto ret = s.listen(func);
+    auto ret = s.listen_fut(func);
     s.close();
     return ret;
 }
 
 SEASTAR_TEST_CASE(test_stream) {
-    auto sub = get_empty_subscription([](int x) {
+    return get_empty_subscription([](int x) {
         return make_ready_future<>();
     });
-    return sub.done();
 }
 
 SEASTAR_TEST_CASE(test_stream_drop_sub) {
     auto s = make_lw_shared<stream<int>>();
     std::optional<future<>> ret;
     {
-        auto sub = s->listen([](int x) {
+        ret = s->listen_fut([](int x) {
             return make_ready_future<>();
         });
-        ret = sub.done();
-        // It is ok to drop the subscription when we only want the competition future.
     }
     return s->produce(42).then([ret = std::move(*ret), s] () mutable {
         s->close();

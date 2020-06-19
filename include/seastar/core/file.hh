@@ -114,6 +114,12 @@ public:
     virtual shared_ptr<file_impl> to_file() && = 0;
 };
 
+#if SEASTAR_API_LEVEL < 7
+using list_directory_ret_t = subscription<directory_entry>;
+#else
+using list_directory_ret_t = future<>;
+#endif
+
 class file_impl {
 protected:
     static file_impl* get_file_impl(file& f);
@@ -136,7 +142,7 @@ public:
     virtual future<uint64_t> size(void) = 0;
     virtual future<> close() = 0;
     virtual std::unique_ptr<file_handle_impl> dup();
-    virtual subscription<directory_entry> list_directory(std::function<future<> (directory_entry de)> next) = 0;
+    virtual list_directory_ret_t list_directory(std::function<future<>(directory_entry de)> next) = 0;
     virtual future<temporary_buffer<uint8_t>> dma_read_bulk(uint64_t offset, size_t range_size, const io_priority_class& pc) = 0;
 
     friend class reactor;
@@ -370,7 +376,7 @@ public:
     future<> close() noexcept;
 
     /// Returns a directory listing, given that this file object is a directory.
-    subscription<directory_entry> list_directory(std::function<future<> (directory_entry de)> next);
+    list_directory_ret_t list_directory(std::function<future<> (directory_entry de)> next);
 
     /**
      * Read a data bulk containing the provided addresses range that starts at

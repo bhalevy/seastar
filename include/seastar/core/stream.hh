@@ -49,8 +49,10 @@ namespace seastar {
 template <typename... T>
 class stream;
 
+#if SEASTAR_API_LEVEL < 7
 template <typename... T>
 class subscription;
+#endif
 
 template <typename... T>
 class stream {
@@ -79,15 +81,26 @@ public:
 
     // Returns a subscription that reads value from this
     // stream.
-    subscription<T...> listen() {
+    auto listen() {
+#if SEASTAR_API_LEVEL < 7
         return subscription<T...>(this);
+#else
+        return _done.get_future();
+#endif
     }
 
     // Returns a subscription that reads value from this
     // stream, and also sets up the listen function.
-    subscription<T...> listen(next_fn next) {
+    auto listen(next_fn next) {
         start(std::move(next));
-        return subscription<T...>(this);
+        return listen();
+    }
+
+    // Similar to listen(), but returns a future<> on any API
+    // level. Exists to simplify the transition.
+    future<> listen_fut(next_fn next) {
+        start(std::move(next));
+        return _done.get_future();
     }
 
     // Becomes ready when the listener is ready to accept
@@ -116,9 +129,12 @@ public:
         _done.set_exception(ex);
     }
 
+#if SEASTAR_API_LEVEL < 7
     friend class subscription<T...>;
+#endif
 };
 
+#if SEASTAR_API_LEVEL < 7
 template <typename... T>
 class subscription {
     stream<T...>* _stream;
@@ -147,6 +163,7 @@ public:
 
     friend class stream<T...>;
 };
+#endif
 
 template <typename... T>
 inline

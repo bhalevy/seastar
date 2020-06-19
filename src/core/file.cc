@@ -232,7 +232,7 @@ blockdev_file_impl::size(void) noexcept {
     });
 }
 
-subscription<directory_entry>
+list_directory_ret_t
 posix_file_impl::list_directory(std::function<future<> (directory_entry de)> next) {
     static constexpr size_t buffer_size = 8192;
     struct work {
@@ -871,7 +871,7 @@ future<> file::close() noexcept {
     });
 }
 
-subscription<directory_entry>
+list_directory_ret_t
 file::list_directory(std::function<future<>(directory_entry de)> next) {
     return _file_impl->list_directory(std::move(next));
 }

@@ -78,7 +78,7 @@ public:
     future<uint64_t> size() noexcept override;
     virtual future<> close() noexcept override;
     virtual std::unique_ptr<seastar::file_handle_impl> dup() override;
-    virtual subscription<directory_entry> list_directory(std::function<future<> (directory_entry de)> next) override;
+    virtual list_directory_ret_t list_directory(std::function<future<> (directory_entry de)> next) override;
     virtual future<temporary_buffer<uint8_t>> dma_read_bulk(uint64_t offset, size_t range_size, const io_priority_class& pc) noexcept override;
 
     open_flags flags() const {
