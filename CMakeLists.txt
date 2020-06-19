@@ -611,6 +611,7 @@ add_library (seastar STATIC
   src/core/fstream.cc
   src/core/future.cc
   src/core/future-util.cc
+  src/core/gate.cc
   src/core/linux-aio.cc
   src/core/memory.cc
   src/core/metrics.cc

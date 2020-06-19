@@ -115,6 +115,10 @@ public:
     bool is_closed() const noexcept {
         return bool(_stopped);
     }
+
+    ~gate();
+    gate() noexcept;
+    gate(gate&&) noexcept;
 };
 
 namespace internal {
