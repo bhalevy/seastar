@@ -43,6 +43,11 @@ static named_semaphore_exception_factory make_service_group_semaphore_exception_
     return named_semaphore_exception_factory{format("smp_service_group#{} {}->{} semaphore", id, client_cpu, this_cpu)};
 }
 
+// FIXME: Disabled following static assert since smp_service_group::smp_service_group(unsigned) is private
+// static_assert(std::is_nothrow_constructible_v<smp_service_group, unsigned>);
+static_assert(std::is_nothrow_copy_constructible_v<smp_service_group>);
+static_assert(std::is_nothrow_move_constructible_v<smp_service_group>);
+
 future<smp_service_group> create_smp_service_group(smp_service_group_config ssgc) {
     ssgc.max_nonlocal_requests = std::max(ssgc.max_nonlocal_requests, smp::count - 1);
     return smp::submit_to(0, [ssgc] {
@@ -96,7 +101,7 @@ void init_default_smp_service_group(shard_id cpu) {
     }
 }
 
-smp_service_group_semaphore& get_smp_service_groups_semaphore(unsigned ssg_id, shard_id t) {
+smp_service_group_semaphore& get_smp_service_groups_semaphore(unsigned ssg_id, shard_id t) noexcept {
     return smp_service_groups[ssg_id].clients[t];
 }
 
