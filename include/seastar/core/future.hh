@@ -860,6 +860,15 @@ protected:
         set_exception_impl(std::move(ex));
     }
 
+    void set_exception_if_connected(std::exception_ptr&& ex) noexcept {
+        // If the user is no longer interested and the future has
+        // been destroyed, don't set the exception as that would
+        // cause an exceptional future ignored warning.
+        if (_state) {
+            set_exception_impl(std::move(ex));
+        }
+    }
+
     void set_exception(const std::exception_ptr& ex) noexcept {
         set_exception(std::exception_ptr(ex));
     }
@@ -1025,6 +1034,8 @@ public:
     void set_exception(const std::exception_ptr& ex) noexcept {
         internal::promise_base::set_exception(ex);
     }
+
+    using internal::promise_base::set_exception_if_connected;
 
     /// \brief Marks the promise as failed
     ///

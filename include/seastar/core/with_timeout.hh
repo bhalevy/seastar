@@ -54,7 +54,7 @@ future<T...> with_timeout(std::chrono::time_point<Clock, Duration> timeout, futu
     auto pr = std::make_unique<promise<T...>>();
     auto result = pr->get_future();
     timer<Clock> timer([&pr = *pr] {
-        pr.set_exception(std::make_exception_ptr(ExceptionFactory::timeout()));
+        pr.set_exception_if_connected(std::make_exception_ptr(ExceptionFactory::timeout()));
     });
     timer.arm(timeout);
     // Future is returned indirectly.

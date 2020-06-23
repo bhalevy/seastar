@@ -1105,6 +1105,23 @@ SEASTAR_THREAD_TEST_CASE(test_shared_future_get_future_after_timeout) {
     fut3.get();
 }
 
+SEASTAR_THREAD_TEST_CASE(test_shared_future_destroy_before_timeout) {
+    {
+        promise<> pr;
+        shared_future<with_clock<manual_clock>> sfut(pr.get_future());
+        future<> fut1 = sfut.get_future(manual_clock::now() + 1s);
+    }
+    manual_clock::advance(1s);
+}
+
+SEASTAR_THREAD_TEST_CASE(test_future_destroy_before_timeout) {
+    {
+        promise<> pr;
+        auto f = with_timeout(manual_clock::now() + 1s, pr.get_future());
+    }
+    manual_clock::advance(1s);
+}
+
 SEASTAR_TEST_CASE(test_custom_exception_factory_in_with_timeout) {
     return seastar::async([] {
         class custom_error : public std::exception {

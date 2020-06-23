@@ -40,7 +40,7 @@ struct dummy_expiry {
 template<typename... T>
 struct promise_expiry {
     void operator()(promise<T...>& pr) noexcept {
-        pr.set_exception(std::make_exception_ptr(timed_out_error()));
+        pr.set_exception_if_connected(std::make_exception_ptr(timed_out_error()));
     };
 };
 
