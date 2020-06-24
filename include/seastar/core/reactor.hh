@@ -422,7 +422,7 @@ private:
     void account_idle(sched_clock::duration idletime);
     void allocate_scheduling_group_specific_data(scheduling_group sg, scheduling_group_key key);
     future<> init_scheduling_group(scheduling_group sg, sstring name, float shares) noexcept;
-    future<> init_new_scheduling_group_key(scheduling_group_key key, scheduling_group_key_config cfg);
+    future<> init_new_scheduling_group_key(scheduling_group_key key, scheduling_group_key_config cfg) noexcept;
     future<> destroy_scheduling_group(scheduling_group sg) noexcept;
     uint64_t tasks_processed() const;
     uint64_t min_vruntime() const;

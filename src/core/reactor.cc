@@ -4182,10 +4182,14 @@ reactor::init_scheduling_group(seastar::scheduling_group sg, sstring name, float
 }
 
 future<>
-reactor::init_new_scheduling_group_key(scheduling_group_key key, scheduling_group_key_config cfg) {
+reactor::init_new_scheduling_group_key(scheduling_group_key key, scheduling_group_key_config cfg) noexcept {
+    try {
     auto& sg_data = _scheduling_group_specific_data;
     sg_data.scheduling_group_key_configs.resize(std::max<size_t>(sg_data.scheduling_group_key_configs.size(), key.id() + 1));
     sg_data.scheduling_group_key_configs[key.id()] = cfg;
+    } catch (...) {
+        return current_exception_as_future();
+    }
     return parallel_for_each(_task_queues, [this, key] (std::unique_ptr<task_queue>& tq) {
         if (tq) {
             scheduling_group sg = scheduling_group(tq->_id);
