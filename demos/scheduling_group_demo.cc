@@ -74,10 +74,10 @@ using done_func = std::function<bool ()>;
 
 future<>
 run_compute_intensive_tasks(seastar::scheduling_group sg, done_func done, unsigned concurrency, unsigned& counter, std::function<future<> (unsigned& counter)> task) {
-    return seastar::async([task, sg, concurrency, done, &counter] {
+    return seastar::async([task = std::move(task), sg, concurrency, done, &counter] () mutable {
         while (!done()) {
-            parallel_for_each(boost::irange(0u, concurrency), [task, sg, &counter] (unsigned i) {
-                return with_scheduling_group(sg, [task, &counter] {
+            parallel_for_each(boost::irange(0u, concurrency), [task, sg, &counter] (unsigned i) mutable {
+                return with_scheduling_group(sg, [task = std::move(task), &counter] {
                     return task(counter);
                 });
             }).get();
