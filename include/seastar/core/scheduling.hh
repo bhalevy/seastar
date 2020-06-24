@@ -117,6 +117,19 @@ struct scheduling_group_key_config {
      */
     scheduling_group_key_config(const std::type_info& type_info) noexcept :
             type_index(type_info) {}
+
+    void construct(void *p) noexcept {
+        if (constructor) {
+            constructor(p);
+        }
+    }
+
+    void destruct(void *p) noexcept {
+        if (destructor) {
+            destructor(p);
+        }
+    }
+
     /// The allocation size for the value (usually: sizeof(T))
     size_t allocation_size;
     /// The required alignment of the value (usually: alignof(T))
@@ -184,7 +197,7 @@ inline unsigned long scheduling_group_key_id(scheduling_group_key key) noexcept 
  * for suporting \ref make_scheduling_group_key_config
  */
 template<typename ConstructorType, typename Tuple, size_t...Idx>
-void apply_constructor(void* pre_alocated_mem, Tuple args, std::index_sequence<Idx...> idx_seq) {
+void apply_constructor(void* pre_alocated_mem, Tuple args, std::index_sequence<Idx...> idx_seq) noexcept {
     new (pre_alocated_mem) ConstructorType(std::get<Idx>(args)...);
 }
 }
