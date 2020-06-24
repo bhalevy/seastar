@@ -936,9 +936,7 @@ reactor::~reactor() {
             for (size_t key : boost::irange<size_t>(0, sg_data.scheduling_group_key_configs.size())) {
                 void* val = this_sg.specific_vals[key];
                 if (val) {
-                    if (sg_data.scheduling_group_key_configs[key].destructor) {
-                        sg_data.scheduling_group_key_configs[key].destructor(val);
-                    }
+                    sg_data.scheduling_group_key_configs[key].destruct(val);
                     free(val);
                     this_sg.specific_vals[key] = nullptr;
                 }
@@ -4152,9 +4150,7 @@ reactor::allocate_scheduling_group_specific_data(scheduling_group sg, scheduling
     if (!this_sg.specific_vals[key.id()]) {
         std::abort();
     }
-    if (sg_data.scheduling_group_key_configs[key.id()].constructor) {
-        sg_data.scheduling_group_key_configs[key.id()].constructor(this_sg.specific_vals[key.id()]);
-    }
+    sg_data.scheduling_group_key_configs[key.id()].construct(this_sg.specific_vals[key.id()]);
 }
 
 future<>
@@ -4197,9 +4193,7 @@ reactor::destroy_scheduling_group(scheduling_group sg) noexcept {
         for (unsigned long key_id = 0; key_id < sg_data.scheduling_group_key_configs.size(); key_id++) {
             void* val = this_sg.specific_vals[key_id];
             if (val) {
-                if (sg_data.scheduling_group_key_configs[key_id].destructor) {
-                    sg_data.scheduling_group_key_configs[key_id].destructor(val);
-                }
+                sg_data.scheduling_group_key_configs[key_id].destruct(val);
                 free(val);
                 this_sg.specific_vals[key_id] = nullptr;
             }
