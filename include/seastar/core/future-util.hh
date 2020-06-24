@@ -50,7 +50,7 @@ namespace internal {
 
 template <typename Func>
 auto
-schedule_in_group(scheduling_group sg, Func func) {
+schedule_in_group(scheduling_group sg, Func func) noexcept {
     auto tsk = make_task(sg, std::move(func));
     schedule(tsk);
     return tsk->get_future();
@@ -76,7 +76,7 @@ schedule_in_group(scheduling_group sg, Func func) {
 template <typename Func, typename... Args>
 inline
 auto
-with_scheduling_group(scheduling_group sg, Func func, Args&&... args) {
+with_scheduling_group(scheduling_group sg, Func func, Args&&... args) noexcept {
     using return_type = decltype(func(std::forward<Args>(args)...));
     using futurator = futurize<return_type>;
     if (sg.active()) {
