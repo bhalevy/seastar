@@ -4144,11 +4144,13 @@ reactor::allocate_scheduling_group_specific_data(scheduling_group sg, scheduling
     auto& sg_data = _scheduling_group_specific_data;
     auto& this_sg = sg_data.per_scheduling_group_data[sg._id];
     this_sg.specific_vals.resize(std::max<size_t>(this_sg.specific_vals.size(), key.id()+1));
-    this_sg.specific_vals[key.id()] =
+    if (!this_sg.specific_vals[key.id()]) {
+      this_sg.specific_vals[key.id()] =
         aligned_alloc(sg_data.scheduling_group_key_configs[key.id()].alignment,
                 sg_data.scheduling_group_key_configs[key.id()].allocation_size);
-    if (!this_sg.specific_vals[key.id()]) {
-        std::abort();
+      if (!this_sg.specific_vals[key.id()]) {
+        throw std::bad_alloc{};
+      }
     }
     sg_data.scheduling_group_key_configs[key.id()].construct(this_sg.specific_vals[key.id()]);
 }
