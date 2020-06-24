@@ -668,9 +668,9 @@ private:
     friend future<scheduling_group_key> scheduling_group_key_create(scheduling_group_key_config cfg);
 
     template<typename T>
-    friend T& scheduling_group_get_specific(scheduling_group sg, scheduling_group_key key);
+    friend T& scheduling_group_get_specific(scheduling_group sg, scheduling_group_key key) noexcept;
     template<typename T>
-    friend T& scheduling_group_get_specific(scheduling_group_key key);
+    friend T& scheduling_group_get_specific(scheduling_group_key key) noexcept;
     template<typename SpecificValType, typename Mapper, typename Reducer, typename Initial>
         SEASTAR_CONCEPT( requires requires(SpecificValType specific_val, Mapper mapper, Reducer reducer, Initial initial) {
             {reducer(initial, mapper(specific_val))} -> std::convertible_to<Initial>;

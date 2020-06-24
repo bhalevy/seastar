@@ -153,9 +153,9 @@ private:
     friend class reactor;
     friend future<scheduling_group_key> scheduling_group_key_create(scheduling_group_key_config cfg);
     template<typename T>
-    friend T& scheduling_group_get_specific(scheduling_group sg, scheduling_group_key key);
+    friend T& scheduling_group_get_specific(scheduling_group sg, scheduling_group_key key) noexcept;
     template<typename T>
-    friend T& scheduling_group_get_specific(scheduling_group_key key);
+    friend T& scheduling_group_get_specific(scheduling_group_key key) noexcept;
 
     friend unsigned long internal::scheduling_group_key_id(scheduling_group_key key) noexcept;
 };
@@ -232,7 +232,7 @@ future<scheduling_group_key> scheduling_group_key_create(scheduling_group_key_co
  * @return A reference to the scheduling specific value.
  */
 template<typename T>
-T& scheduling_group_get_specific(scheduling_group sg, scheduling_group_key key);
+T& scheduling_group_get_specific(scheduling_group sg, scheduling_group_key key) noexcept;
 
 
 /// \brief Identifies function calls that are accounted as a group

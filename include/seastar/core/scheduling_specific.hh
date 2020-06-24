@@ -84,7 +84,7 @@ bool scheduling_group_specific_is_initialized(scheduling_group sg) noexcept {
  * @note The parameter T has to be given since there is no way to deduce it.
  */
 template<typename T>
-T& scheduling_group_get_specific(scheduling_group sg, scheduling_group_key key) {
+T& scheduling_group_get_specific(scheduling_group sg, scheduling_group_key key) noexcept {
     assert(scheduling_group_specific_is_initialized(sg));
     auto& data = internal::get_scheduling_group_specific_thread_local_data();
 #ifdef SEASTAR_DEBUG
@@ -102,7 +102,7 @@ T& scheduling_group_get_specific(scheduling_group sg, scheduling_group_key key) 
  * @note The parameter T has to be given since there is no way to deduce it.
  */
 template<typename T>
-T& scheduling_group_get_specific(scheduling_group_key key) {
+T& scheduling_group_get_specific(scheduling_group_key key) noexcept {
     return scheduling_group_get_specific<T>(current_scheduling_group(), std::move(key));
 }
 
