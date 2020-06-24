@@ -303,7 +303,7 @@ private:
         circular_buffer<task*> _q;
         sstring _name;
         int64_t to_vruntime(sched_clock::duration runtime) const;
-        void set_shares(float shares);
+        void set_shares(float shares) noexcept;
         struct indirect_compare;
         sched_clock::duration _time_spent_on_task_quota_violations = {};
         seastar::metrics::metric_groups _metrics;
@@ -423,7 +423,7 @@ private:
     void allocate_scheduling_group_specific_data(scheduling_group sg, scheduling_group_key key);
     future<> init_scheduling_group(scheduling_group sg, sstring name, float shares);
     future<> init_new_scheduling_group_key(scheduling_group_key key, scheduling_group_key_config cfg);
-    future<> destroy_scheduling_group(scheduling_group sg);
+    future<> destroy_scheduling_group(scheduling_group sg) noexcept;
     uint64_t tasks_processed() const;
     uint64_t min_vruntime() const;
     void request_preemption();
@@ -662,10 +662,10 @@ private:
     friend void seastar::log_exception_trace() noexcept;
     friend void report_failed_future(const std::exception_ptr& eptr) noexcept;
     metrics::metric_groups _metric_groups;
-    friend future<scheduling_group> create_scheduling_group(sstring name, float shares);
-    friend future<> seastar::destroy_scheduling_group(scheduling_group);
-    friend future<> seastar::rename_scheduling_group(scheduling_group sg, sstring new_name);
-    friend future<scheduling_group_key> scheduling_group_key_create(scheduling_group_key_config cfg);
+    friend future<scheduling_group> create_scheduling_group(sstring name, float shares) noexcept;
+    friend future<> seastar::destroy_scheduling_group(scheduling_group) noexcept;
+    friend future<> seastar::rename_scheduling_group(scheduling_group sg, sstring new_name) noexcept;
+    friend future<scheduling_group_key> scheduling_group_key_create(scheduling_group_key_config cfg) noexcept;
 
     template<typename T>
     friend T& scheduling_group_get_specific(scheduling_group sg, scheduling_group_key key);
