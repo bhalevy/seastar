@@ -87,7 +87,7 @@ T& scheduling_group_get_specific(scheduling_group sg, scheduling_group_key key) 
  * @note The parameter T has to be given since there is no way to deduce it.
  */
 template<typename T>
-T& scheduling_group_get_specific(scheduling_group_key key) {
+T& scheduling_group_get_specific(scheduling_group_key key) noexcept {
     auto& data = internal::get_scheduling_group_specific_thread_local_data();
 #ifdef SEASTAR_DEBUG
     assert(std::type_index(typeid(T)) == data.scheduling_group_key_configs[key.id()].type_index);

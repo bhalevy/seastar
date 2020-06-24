@@ -154,7 +154,7 @@ private:
     template<typename T>
     friend T& scheduling_group_get_specific(scheduling_group sg, scheduling_group_key key);
     template<typename T>
-    friend T& scheduling_group_get_specific(scheduling_group_key key);
+    friend T& scheduling_group_get_specific(scheduling_group_key key) noexcept;
 
     friend unsigned long internal::scheduling_group_key_id(scheduling_group_key key);
 };
