@@ -4190,7 +4190,7 @@ reactor::init_new_scheduling_group_key(scheduling_group_key key, scheduling_grou
 }
 
 future<>
-reactor::destroy_scheduling_group(scheduling_group sg) {
+reactor::destroy_scheduling_group(scheduling_group sg) noexcept {
     return with_scheduling_group(sg, [this, sg] () {
         auto& sg_data = _scheduling_group_specific_data;
         auto& this_sg = sg_data.per_scheduling_group_data[sg._id];
