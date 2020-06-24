@@ -4186,7 +4186,7 @@ reactor::init_new_scheduling_group_key(scheduling_group_key key, scheduling_grou
     auto& sg_data = _scheduling_group_specific_data;
     sg_data.scheduling_group_key_configs.resize(std::max<size_t>(sg_data.scheduling_group_key_configs.size(), key.id() + 1));
     sg_data.scheduling_group_key_configs[key.id()] = cfg;
-    return parallel_for_each(_task_queues, [this, cfg, key] (std::unique_ptr<task_queue>& tq) {
+    return parallel_for_each(_task_queues, [this, key] (std::unique_ptr<task_queue>& tq) {
         if (tq) {
             scheduling_group sg = scheduling_group(tq->_id);
             return with_scheduling_group(sg, [this, key, sg] () {
