@@ -4158,13 +4158,13 @@ reactor::allocate_scheduling_group_specific_data(scheduling_group sg, scheduling
 future<>
 reactor::init_scheduling_group(seastar::scheduling_group sg, sstring name, float shares) noexcept {
     try {
-    auto& sg_data = _scheduling_group_specific_data;
-    auto& this_sg = sg_data.per_scheduling_group_data[sg._id];
-    assert(!this_sg.queue_is_initialized);
-    _task_queues.resize(std::max<size_t>(_task_queues.size(), sg._id + 1));
-    if (!_task_queues[sg._id]) {
-    _task_queues[sg._id] = std::make_unique<task_queue>(sg._id, name, shares);
-    }
+        auto& sg_data = _scheduling_group_specific_data;
+        auto& this_sg = sg_data.per_scheduling_group_data[sg._id];
+        assert(!this_sg.queue_is_initialized);
+        _task_queues.resize(std::max<size_t>(_task_queues.size(), sg._id + 1));
+        if (!_task_queues[sg._id]) {
+            _task_queues[sg._id] = std::make_unique<task_queue>(sg._id, name, shares);
+        }
     } catch (...) {
         return current_exception_as_future();
     }
