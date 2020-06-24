@@ -107,7 +107,7 @@ struct scheduling_group_key_config {
     /**
      * Constructs a default configuration
      */
-    scheduling_group_key_config() :
+    scheduling_group_key_config() noexcept :
         scheduling_group_key_config(typeid(void)) {}
     /**
      * Creates a configuration that is made for a specific type.
@@ -118,7 +118,7 @@ struct scheduling_group_key_config {
      * the value.
      * @param type_info - the type information class (create with typeid(T)).
      */
-    scheduling_group_key_config(const std::type_info& type_info) :
+    scheduling_group_key_config(const std::type_info& type_info) noexcept :
             type_index(type_info) {}
     /// The allocation size for the value (usually: sizeof(T))
     size_t allocation_size;
