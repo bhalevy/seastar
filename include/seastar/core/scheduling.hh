@@ -258,7 +258,7 @@ public:
      * @param key - the key of the value to retrieve.
      * @return A reference to this scheduling specific value.
      */
-    T& get_specific(scheduling_group_key key) {
+    T& get_specific(scheduling_group_key key) noexcept {
         return scheduling_group_get_specific<T>(*this, key);
     }
     /// Adjusts the number of shares allotted to the group.
