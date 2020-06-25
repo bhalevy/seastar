@@ -4214,7 +4214,7 @@ reactor::destroy_scheduling_group(scheduling_group sg) {
 }
 
 void
-internal::no_such_scheduling_group(scheduling_group sg) {
+no_such_scheduling_group(scheduling_group sg) {
     throw std::invalid_argument(format("The scheduling group does not exist ({})", internal::scheduling_group_index(sg)));
 }
 

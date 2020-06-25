@@ -54,8 +54,25 @@ scheduling_group_specific_thread_local_data& get_scheduling_group_specific_threa
     return **get_scheduling_group_specific_thread_local_data_ptr();
 }
 
+}
+
 [[noreturn]] void no_such_scheduling_group(scheduling_group sg);
 
+/**
+ * Checks if the scheduling group if recognized and its per_scheduling_group_data
+ * is initialized
+ *
+ * @param sg - The scheduling group which data needs to be accessed
+ * @return A boolean value.
+ *
+ * @note The parameter T has to be given since there is no way to deduce it.
+ */
+inline
+bool scheduling_group_specific_is_initialized(scheduling_group sg) noexcept {
+    auto& data = internal::get_scheduling_group_specific_thread_local_data();
+    auto sg_id = internal::scheduling_group_index(sg);
+    return sg_id < data.per_scheduling_group_data.size() &&
+            data.per_scheduling_group_data[sg_id].queue_is_initialized;
 }
 
 /**
@@ -68,14 +85,12 @@ scheduling_group_specific_thread_local_data& get_scheduling_group_specific_threa
  */
 template<typename T>
 T& scheduling_group_get_specific(scheduling_group sg, scheduling_group_key key) {
+    assert(scheduling_group_specific_is_initialized(sg));
     auto& data = internal::get_scheduling_group_specific_thread_local_data();
 #ifdef SEASTAR_DEBUG
     assert(std::type_index(typeid(T)) == data.scheduling_group_key_configs[key.id()].type_index);
 #endif
     auto sg_id = internal::scheduling_group_index(sg);
-    if (!data.per_scheduling_group_data[sg_id].queue_is_initialized) {
-        internal::no_such_scheduling_group(sg);
-    }
     return *reinterpret_cast<T*>(data.per_scheduling_group_data[sg_id].specific_vals[key.id()]);
 }
 
