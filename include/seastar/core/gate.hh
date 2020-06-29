@@ -107,12 +107,12 @@ public:
     }
 
     /// Returns a current number of registered in-progress requests.
-    size_t get_count() const {
+    size_t get_count() const noexcept {
         return _count;
     }
 
     /// Returns whether the gate is closed.
-    bool is_closed() const {
+    bool is_closed() const noexcept {
         return bool(_stopped);
     }
 };
