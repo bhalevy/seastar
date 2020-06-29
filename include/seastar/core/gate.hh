@@ -46,7 +46,8 @@ public:
 /// requests have completed.  The \c gate class provides a solution.
 class gate {
     size_t _count = 0;
-    std::optional<promise<>> _stopped;
+    promise<> _stopped_promise;
+    promise<>* _stopped = nullptr;
 public:
     /// Tries to register an in-progress request.
     ///
@@ -97,9 +98,9 @@ public:
     /// Future calls to \ref enter() will fail with an exception, and when
     /// all current requests call \ref leave(), the returned future will be
     /// made ready.
-    future<> close() {
+    future<> close() noexcept {
         assert(!_stopped && "seastar::gate::close() cannot be called more than once");
-        _stopped = std::make_optional(promise<>());
+        _stopped = &_stopped_promise;
         if (!_count) {
             _stopped->set_value();
         }
