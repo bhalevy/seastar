@@ -58,6 +58,11 @@ std::ostream& operator<<(std::ostream& os, const std::optional<net::inet_address
 
 namespace seastar {
 
+static_assert(std::is_nothrow_default_constructible_v<gate>,
+    "seastar::gate constructor must not throw");
+static_assert(std::is_nothrow_move_constructible_v<gate>,
+    "seastar::gate move constructor must not throw");
+
 static logger dns_log("dns_resolver");
 
 class ares_error_category : public std::error_category {
