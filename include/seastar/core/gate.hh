@@ -72,7 +72,7 @@ public:
     ///
     /// If the gate is closed, and there are no more in-progress requests,
     /// the \ref closed() promise will be fulfilled.
-    void leave() {
+    void leave() noexcept {
         --_count;
         if (!_count && _stopped) {
             _stopped->set_value();
