@@ -87,8 +87,7 @@ void promise_base::clear() noexcept {
         ::seastar::schedule(std::exchange(_task, nullptr));
     }
     if (_future) {
-        assert(_state);
-        if (!_state->available()) {
+        if (_state && !_state->available()) {
             set_to_broken_promise(*_state);
         }
         _future->detach_promise();
@@ -113,6 +112,9 @@ void promise_base::make_ready() noexcept {
         } else {
             ::seastar::schedule(std::exchange(_task, nullptr));
         }
+        // _state might be pointing inside the task, clear it so that
+        // we don't keep a pointer to memory that will be freed soon
+        _state = nullptr;
     }
 }
 
