@@ -870,6 +870,10 @@ public:
 
     /// Returns the task which is waiting for this promise to resolve, or nullptr.
     task* waiting_task() const noexcept { return _task; }
+
+    /// Return true if it is still valid to call set_exception or
+    /// set_value.
+    bool is_unset() const noexcept;
 };
 
 /// \brief A promise with type but no local data.
@@ -927,6 +931,8 @@ public:
     /// Returns the task which is waiting for this promise to resolve, or nullptr.
     using internal::promise_base::waiting_task;
 
+    using internal::promise_base::is_unset;
+
 private:
 
     template <typename SEASTAR_ELLIPSIS U>
@@ -978,6 +984,8 @@ public:
 
     /// Returns the task which is waiting for this promise to resolve, or nullptr.
     using internal::promise_base::waiting_task;
+
+    using internal::promise_base::is_unset;
 
     /// \brief Gets the promise's associated future.
     ///

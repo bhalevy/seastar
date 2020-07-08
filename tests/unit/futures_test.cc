@@ -231,6 +231,16 @@ static void check_finally_exception(std::exception_ptr ex) {
   }
 }
 
+SEASTAR_TEST_CASE(test_pr_available) {
+    promise<uint32_t> pr;
+    BOOST_REQUIRE(pr.is_unset());
+    future<uint32_t> fut = pr.get_future();
+    BOOST_REQUIRE(pr.is_unset());
+    pr.set_value(42);
+    BOOST_REQUIRE(!pr.is_unset());
+    return make_ready_future<>();
+}
+
 SEASTAR_TEST_CASE(test_finally_exception) {
     return make_ready_future<>().then([] {
         throw test_exception("foo");

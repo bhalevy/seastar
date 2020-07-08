@@ -102,6 +102,13 @@ void promise_base::set_to_current_exception() noexcept {
     set_exception(std::current_exception());
 }
 
+bool promise_base::is_unset() const noexcept {
+    if (_state == nullptr) {
+        return false;
+    }
+    return _state->_u.st == future_state_base::state::future;
+}
+
 template <promise_base::urgent Urgent>
 void promise_base::make_ready() noexcept {
     if (_task) {
