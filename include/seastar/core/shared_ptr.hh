@@ -82,9 +82,6 @@ lw_shared_ptr<T> make_lw_shared(T& a);
 template <typename T, typename... A>
 shared_ptr<T> make_shared(A&&... a);
 
-template <typename T>
-shared_ptr<T> make_shared(T&& a);
-
 template <typename T, typename U>
 shared_ptr<T> static_pointer_cast(const shared_ptr<U>& p);
 
@@ -594,9 +591,6 @@ public:
     template <typename U, typename... A>
     friend shared_ptr<U> make_shared(A&&... a);
 
-    template <typename U>
-    friend shared_ptr<U> make_shared(U&& a);
-
     template <typename V, typename U>
     friend shared_ptr<V> static_pointer_cast(const shared_ptr<U>& p);
 
@@ -645,14 +639,6 @@ shared_ptr<T>
 make_shared(A&&... a) {
     using helper = shared_ptr_make_helper<T, std::is_base_of<shared_ptr_count_base, T>::value>;
     return helper::make(std::forward<A>(a)...);
-}
-
-template <typename T>
-inline
-shared_ptr<T>
-make_shared(T&& a) {
-    using helper = shared_ptr_make_helper<T, std::is_base_of<shared_ptr_count_base, T>::value>;
-    return helper::make(std::forward<T>(a));
 }
 
 template <typename T, typename U>

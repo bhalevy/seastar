@@ -472,7 +472,7 @@ SEASTAR_TEST_CASE(test_when_all_iterator_range) {
     // Verify the above statement is correct
     BOOST_REQUIRE(!std::all_of(futures.begin(), futures.end(),
             [] (auto& f) { return f.available(); }));
-    auto p = make_shared(std::move(futures));
+    auto p = seastar::make_shared<std::vector<future<size_t>>>(std::move(futures));
     return when_all(p->begin(), p->end()).then([p] (std::vector<future<size_t>> ret) {
         BOOST_REQUIRE(std::all_of(ret.begin(), ret.end(), [] (auto& f) { return f.available(); }));
         BOOST_REQUIRE(std::all_of(ret.begin(), ret.end(), [&ret] (auto& f) { return f.get0() == size_t(&f - ret.data()); }));
