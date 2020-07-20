@@ -2505,7 +2505,7 @@ void reactor::start_aio_eventfd_loop() {
         });
     });
     // must use make_lw_shared, because at_exit expects a copyable function
-    at_exit([loop_done = make_lw_shared(std::move(loop_done))] {
+    at_exit([loop_done = make_lw_shared<future<>>(std::move(loop_done))] {
         return std::move(*loop_done);
     });
 }

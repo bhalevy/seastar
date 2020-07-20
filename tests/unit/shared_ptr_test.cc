@@ -77,8 +77,8 @@ BOOST_AUTO_TEST_CASE(test_const_ptr) {
 struct D {};
 
 BOOST_AUTO_TEST_CASE(test_lw_const_ptr_1) {
-    auto pd1 = make_lw_shared<const D>(D());
-    auto pd2 = make_lw_shared(D());
+    auto pd1 = make_lw_shared<const D>();
+    auto pd2 = make_lw_shared<D>();
     lw_shared_ptr<const D> pd3 = pd2;
     BOOST_REQUIRE(pd2 == pd3);
 }

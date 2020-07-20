@@ -795,7 +795,7 @@ namespace rpc {
                           throw std::logic_error(format("Unknown parent connection {:d} on shard {:d}", _parent_id, this_shard_id()).c_str());
                       }
                       auto id = c->get_connection_id();
-                      it->second->register_stream(id, make_lw_shared(std::move(c)));
+                      it->second->register_stream(id, make_lw_shared<foreign_ptr<shared_ptr<rpc::connection>>>(std::move(c)));
                   });
               }
               break;

@@ -90,7 +90,7 @@ auto
 map_reduce(Iterator begin, Iterator end, Mapper&& mapper, Reducer&& r)
     -> typename reducer_traits<Reducer>::future_type
 {
-    auto r_ptr = make_lw_shared(std::forward<Reducer>(r));
+    auto r_ptr = make_lw_shared<Reducer>(std::forward<Reducer>(r));
     future<> ret = make_ready_future<>();
     while (begin != end) {
         ret = futurize_invoke(mapper, *begin++).then_wrapped([ret = std::move(ret), r_ptr] (auto f) mutable {
@@ -156,8 +156,9 @@ map_reduce(Iterator begin, Iterator end, Mapper&& mapper, Initial initial, Reduc
     struct state {
         Initial result;
         Reduce reduce;
+        state(Initial&& result, Reduce&& reduce) : result(std::move(result)), reduce(std::move(reduce)) {}
     };
-    auto s = make_lw_shared(state{std::move(initial), std::move(reduce)});
+    auto s = make_lw_shared<state>(std::move(initial), std::move(reduce));
     future<> ret = make_ready_future<>();
     while (begin != end) {
         ret = futurize_invoke(mapper, *begin++).then_wrapped([s = s.get(), ret = std::move(ret)] (auto f) mutable {

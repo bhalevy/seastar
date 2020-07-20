@@ -73,12 +73,6 @@ class enable_shared_from_this;
 template <typename T, typename... A>
 lw_shared_ptr<T> make_lw_shared(A&&... a);
 
-template <typename T>
-lw_shared_ptr<T> make_lw_shared(T&& a);
-
-template <typename T>
-lw_shared_ptr<T> make_lw_shared(T& a);
-
 template <typename T, typename... A>
 shared_ptr<T> make_shared(A&&... a);
 
@@ -398,12 +392,6 @@ public:
     friend lw_shared_ptr<X> make_lw_shared(A&&...);
 
     template <typename U>
-    friend lw_shared_ptr<U> make_lw_shared(U&&);
-
-    template <typename U>
-    friend lw_shared_ptr<U> make_lw_shared(U&);
-
-    template <typename U>
     friend class enable_lw_shared_from_this;
 };
 
@@ -411,18 +399,6 @@ template <typename T, typename... A>
 inline
 lw_shared_ptr<T> make_lw_shared(A&&... a) {
     return lw_shared_ptr<T>::make(std::forward<A>(a)...);
-}
-
-template <typename T>
-inline
-lw_shared_ptr<T> make_lw_shared(T&& a) {
-    return lw_shared_ptr<T>::make(std::move(a));
-}
-
-template <typename T>
-inline
-lw_shared_ptr<T> make_lw_shared(T& a) {
-    return lw_shared_ptr<T>::make(a);
 }
 
 template <typename T>

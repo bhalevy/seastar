@@ -65,7 +65,7 @@ native_server_socket_impl<Protocol>::accept() {
         auto ip = conn.foreign_ip().ip;
         auto port = conn.foreign_port();
         return make_ready_future<accept_result>(accept_result{
-                connected_socket(std::make_unique<native_connected_socket_impl<Protocol>>(make_lw_shared(std::move(conn)))),
+                connected_socket(std::make_unique<native_connected_socket_impl<Protocol>>(make_lw_shared<typename Protocol::connection>(std::move(conn)))),
                 make_ipv4_address(ip, port)});
     });
 }
