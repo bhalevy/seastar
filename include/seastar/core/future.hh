@@ -1668,9 +1668,6 @@ private:
         using futurator = futurize<FuncResult>;
         if (available()) {
             if constexpr (AsSelf) {
-                if (_promise) {
-                    detach_promise();
-                }
                 return futurator::invoke(std::forward<Func>(func), std::move(*this));
             } else {
                 return futurator::invoke(std::forward<Func>(func), future(get_available_state_ref()));
