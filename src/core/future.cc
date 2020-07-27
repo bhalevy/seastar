@@ -88,7 +88,7 @@ void promise_base::clear() noexcept {
         ::seastar::schedule(std::exchange(_task, nullptr));
     }
     if (_future) {
-        _future->detach_promise();
+        _future->_promise = nullptr;
     }
 }
 
