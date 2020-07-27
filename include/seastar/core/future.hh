@@ -1146,7 +1146,8 @@ protected:
 
     void clear() noexcept {
         if (_promise) {
-            detach_promise();
+            _promise->_state = nullptr;
+            _promise->_future = nullptr;
         }
     }
 
