@@ -85,7 +85,7 @@ void promise_base::clear() noexcept {
         set_to_broken_promise(*_state);
     }
     if (__builtin_expect(bool(_task), false)) {
-        ::seastar::schedule(std::exchange(_task, nullptr));
+        ::seastar::schedule(_task);
     }
     if (_future) {
         _future->_promise = nullptr;
