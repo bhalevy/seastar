@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include <seastar/util/alloc_failure_injector.hh>
+
 #include <type_traits>
 #include <utility>
 
@@ -44,7 +46,15 @@ public:
         return *this;
     }
     deferred_action(const deferred_action&) = delete;
-    ~deferred_action() { if (!_cancelled) { _func(); }; }
+    ~deferred_action() {
+        // A destructor is noexcept, but we still want defer() to be
+        // usable in places where we can't handle a std::bad_alloc
+        // anyway.
+        memory::disable_failure_guard dfg;
+        if (!_cancelled) {
+            _func();
+        }
+    }
     void cancel() { _cancelled = true; }
 };
 
