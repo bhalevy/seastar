@@ -240,6 +240,65 @@ inline void unregister_injector(syscall_type type, injector* i) {
 
 #else // SEASTAR_ENABLE_FILESYSTEM_ERROR_INJECTION
 
+class injector {
+    using predicate_func = std::function<bool (std::optional<sstring>, std::optional<sstring>, ulong flags)>;
+
+    syscall_type _type;
+    int _error;
+
+public:
+    injector(syscall_type type, int error, predicate_func func = [] (std::optional<sstring>, std::optional<sstring>, ulong) {
+        return true;
+    }) : _type(type), _error(error) {};
+
+    void fail_after(uint64_t count, uint64_t how_long = std::numeric_limits<uint64_t>::max(), int error = 0) noexcept {
+        if (error) {
+            _error = error;
+        }
+    }
+
+    void fail() noexcept {
+    }
+
+    void fail_for(uint64_t how_long) noexcept {
+    }
+
+    void fail_once() noexcept {
+    }
+
+    void fail_once_after(uint64_t count) noexcept {
+    }
+
+    void cancel() noexcept {
+    }
+
+    syscall_type type() const noexcept {
+        return _type;
+    }
+
+    int error() const noexcept {
+        return _error;
+    }
+
+    uint64_t count() const noexcept {
+        return 0;
+    }
+
+    uint64_t fail_at() const noexcept {
+        return 0;
+    }
+
+    uint64_t fail_until() const noexcept {
+        return 0;
+    }
+
+    virtual sstring description() const {
+        return "";
+    }
+
+    virtual std::optional<ssize_t> inject(std::optional<sstring> path1, std::optional<sstring> path2, ulong flags) noexcept;
+};
+
 struct disable_guard {
 };
 
