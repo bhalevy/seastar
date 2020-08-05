@@ -1370,6 +1370,7 @@ private:
     }
     void schedule(continuation_base<T SEASTAR_ELLIPSIS>* tws) noexcept {
         future_base::schedule(tws, &tws->_state);
+        _state._u.st = future_state_base::state::invalid;
     }
     template <typename Pr, typename Func, typename Wrapper>
     void schedule(Pr&& pr, Func&& func, Wrapper&& wrapper) noexcept {
@@ -1389,7 +1390,6 @@ private:
         }
 #endif
         schedule(tws);
-        _state._u.st = future_state_base::state::invalid;
     }
 
     [[gnu::always_inline]]
