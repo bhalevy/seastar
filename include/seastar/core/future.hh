@@ -1492,6 +1492,15 @@ public:
         return _state.failed();
     }
 
+    /// Checks if this future is valid.
+    ///
+    /// An invalid future is one that has already been used. That is,
+    /// it has either been moved or consumed by a function like then
+    /// or then_wrapped.
+    bool valid() const noexcept {
+        return _state.valid();
+    }
+
     /// \brief Schedule a block of code to run when the future is ready.
     ///
     /// Schedules a function (often a lambda) to run when the future becomes
