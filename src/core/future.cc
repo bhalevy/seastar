@@ -252,6 +252,12 @@ void internal::future_base::do_wait() noexcept {
     thread_impl::switch_out(thread);
 }
 
+void internal::future_base::schedule(task* tws, future_state_base* state) noexcept {
+    promise_base* p = detach_promise();
+    p->_state = state;
+    p->_task = tws;
+}
+
 #ifdef SEASTAR_COROUTINES_ENABLED
 void internal::future_base::set_coroutine(task& coroutine) noexcept {
     assert(_promise);

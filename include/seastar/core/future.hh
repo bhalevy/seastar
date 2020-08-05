@@ -1171,12 +1171,7 @@ protected:
         return std::exchange(_promise, nullptr);
     }
 
-    void schedule(task* tws, future_state_base* state) noexcept {
-        promise_base* p = detach_promise();
-        p->_state = state;
-        p->_task = tws;
-    }
-
+    void schedule(task* tws, future_state_base* state) noexcept;
     void do_wait() noexcept;
 
 #ifdef SEASTAR_COROUTINES_ENABLED
