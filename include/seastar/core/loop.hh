@@ -50,7 +50,9 @@ class repeater final : public continuation_base<stop_iteration> {
     promise<> _promise;
     AsyncAction _action;
 public:
-    explicit repeater(AsyncAction&& action) : _action(std::move(action)) {}
+    explicit repeater(AsyncAction&& action) : _action(std::move(action)) {
+        _state.set(stop_iteration::no);
+    }
     future<> get_future() { return _promise.get_future(); }
     task* waiting_task() noexcept override { return _promise.waiting_task(); }
     virtual void run_and_dispose() noexcept override {
@@ -104,7 +106,6 @@ future<> repeat(AsyncAction& action) noexcept = delete;
 /// \param action a callable taking no arguments, returning a future<stop_iteration>.  Will
 ///               be called again as soon as the future resolves, unless the
 ///               future fails, action throws, or it resolves with \c stop_iteration::yes.
-///               If \c action is an r-value it can be moved in the middle of iteration.
 /// \return a ready future if we stopped successfully, or a failed future if
 ///         a call to to \c action failed.
 template<typename AsyncAction>
@@ -113,23 +114,13 @@ inline
 future<> repeat(AsyncAction&& action) noexcept {
     using futurator = futurize<std::result_of_t<AsyncAction()>>;
     static_assert(std::is_same<future<stop_iteration>, typename futurator::type>::value, "bad AsyncAction signature");
-    for (;;) {
-        // Do not type-erase here in case this is a short repeat()
-        auto f = futurator::invoke(action);
-
-        if (!f.available() || f.failed() || need_preempt()) {
-            return [&] () noexcept {
-                memory::disable_failure_guard dfg;
-                auto repeater = new internal::repeater<AsyncAction>(std::move(action));
-                auto ret = repeater->get_future();
-                internal::set_callback(f, repeater);
-                return ret;
-            }();
-        }
-
-        if (f.get0() == stop_iteration::yes) {
-            return make_ready_future<>();
-        }
+    try {
+        auto repeater = new internal::repeater<AsyncAction>(std::move(action));
+        auto ret = repeater->get_future();
+        schedule(repeater);
+        return ret;
+    } catch (...) {
+        return make_exception_future(std::current_exception());
     }
 }
 
