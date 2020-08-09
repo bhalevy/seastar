@@ -89,6 +89,15 @@ public:
     }
 };
 
+template<typename AsyncAction>
+future<> repeat_aux(future<stop_iteration>&& f, AsyncAction&& action) noexcept {
+    memory::disable_failure_guard dfg;
+    auto repeater = new internal::repeater<AsyncAction>(std::move(action));
+    auto ret = repeater->get_future();
+    internal::set_callback(f, repeater);
+    return ret;
+}
+
 } // namespace internal
 
 // Delete these overloads so that the actual implementation can use a
@@ -118,19 +127,20 @@ future<> repeat(AsyncAction&& action) noexcept {
         auto f = futurator::invoke(action);
 
         if (!f.available() || f.failed() || need_preempt()) {
-            return [&] () noexcept {
-                memory::disable_failure_guard dfg;
-                auto repeater = new internal::repeater<AsyncAction>(std::move(action));
-                auto ret = repeater->get_future();
-                internal::set_callback(f, repeater);
-                return ret;
-            }();
+            return internal::repeat_aux(std::move(f), std::move(action));
         }
 
         if (f.get0() == stop_iteration::yes) {
             return make_ready_future<>();
         }
     }
+}
+
+template<typename AsyncAction>
+SEASTAR_CONCEPT( requires seastar::InvokeReturns<AsyncAction, stop_iteration> || seastar::InvokeReturns<AsyncAction, future<stop_iteration>> )
+inline
+future<> repeat_with(AsyncAction&& action) noexcept {
+    return internal::repeat_aux(make_ready_future<stop_iteration>(stop_iteration::no), std::move(action));
 }
 
 /// \cond internal
