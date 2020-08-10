@@ -73,14 +73,6 @@ public:
         return temporary_buffer<char>(size);
     }
     virtual future<> put(net::packet data) = 0;
-    virtual future<> put(std::vector<temporary_buffer<char>> data) {
-        net::packet p;
-        p.reserve(data.size());
-        for (auto& buf : data) {
-            p = net::packet(std::move(p), net::fragment{buf.get_write(), buf.size()}, buf.release());
-        }
-        return put(std::move(p));
-    }
     virtual future<> put(temporary_buffer<char> buf) {
         return put(net::packet(net::fragment{buf.get_write(), buf.size()}, buf.release()));
     }
@@ -99,9 +91,6 @@ public:
     data_sink& operator=(data_sink&& x) noexcept = default;
     temporary_buffer<char> allocate_buffer(size_t size) {
         return _dsi->allocate_buffer(size);
-    }
-    future<> put(std::vector<temporary_buffer<char>> data) {
-        return _dsi->put(std::move(data));
     }
     future<> put(temporary_buffer<char> data) {
         return _dsi->put(std::move(data));
