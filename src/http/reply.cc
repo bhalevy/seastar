@@ -119,9 +119,12 @@ class http_chunked_data_sink_impl : public data_sink_impl {
 public:
     http_chunked_data_sink_impl(output_stream<char>& out) : _out(out) {
     }
-    virtual future<> put(net::packet data)  override { abort(); }
     using data_sink_impl::put;
-    virtual future<> put(temporary_buffer<char> buf) override {
+    virtual future<> put(net::packet data) override {
+        auto frags = data.release();
+        assert(frags.size() == 1 && "Multiple fragments are not supported");
+        temporary_buffer<char> buf = std::move(frags[0]);
+
         if (buf.size() == 0) {
             // size 0 buffer should be ignored, some server
             // may consider it an end of message

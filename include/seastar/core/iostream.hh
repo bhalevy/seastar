@@ -73,9 +73,6 @@ public:
         return temporary_buffer<char>(size);
     }
     virtual future<> put(net::packet data) = 0;
-    virtual future<> put(temporary_buffer<char> buf) {
-        return put(net::packet(net::fragment{buf.get_write(), buf.size()}, buf.release()));
-    }
     virtual future<> flush() {
         return make_ready_future<>();
     }

@@ -344,12 +344,15 @@ public:
             : _file(std::move(f)), _options(options) {
         _write_behind_sem.ensure_space_for_waiters(1); // So that wait() doesn't throw
     }
-    future<> put(net::packet data) override { abort(); }
     virtual temporary_buffer<char> allocate_buffer(size_t size) override {
         return temporary_buffer<char>::aligned(_file.memory_dma_alignment(), size);
     }
     using data_sink_impl::put;
-    virtual future<> put(temporary_buffer<char> buf) override {
+    future<> put(net::packet data) override {
+        auto frags = data.release();
+        assert(frags.size() == 1 && "Multiple fragments are not supported");
+        temporary_buffer<char> buf = std::move(frags[0]);
+
         uint64_t pos = _pos;
         _pos += buf.size();
         if (!_options.write_behind) {

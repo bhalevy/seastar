@@ -613,11 +613,6 @@ std::vector<iovec> to_iovec(std::vector<temporary_buffer<char>>& buf_vec) {
 }
 
 future<>
-posix_data_sink_impl::put(temporary_buffer<char> buf) {
-    return _fd.write_all(buf.get(), buf.size()).then([d = buf.release()] {});
-}
-
-future<>
 posix_data_sink_impl::put(packet p) {
     _p = std::move(p);
     return _fd.write_all(_p).then([this] { _p.reset(); });
