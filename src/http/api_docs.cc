@@ -26,6 +26,7 @@
 #include <seastar/core/fstream.hh>
 #include <seastar/core/seastar.hh>
 #include <seastar/http/transformers.hh>
+#include <seastar/core/for_each.hh>
 
 using namespace std;
 

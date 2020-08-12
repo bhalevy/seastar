@@ -22,6 +22,7 @@
 #pragma once
 
 #include <seastar/core/future.hh>
+#include <seastar/core/for_each.hh>
 #include <seastar/core/semaphore.hh>
 #include <seastar/core/metrics.hh>
 #include <seastar/core/posix.hh>

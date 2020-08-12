@@ -34,6 +34,7 @@
 #include <seastar/core/seastar.hh>
 #include <seastar/core/sstring.hh>
 #include <seastar/core/temporary_buffer.hh>
+#include <seastar/core/for_each.hh>
 #include <seastar/util/log.hh>
 #include <seastar/util/tmp_file.hh>
 

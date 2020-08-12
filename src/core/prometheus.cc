@@ -35,6 +35,7 @@
 #include <boost/range/algorithm.hpp>
 #include <boost/range/combine.hpp>
 #include <seastar/core/thread.hh>
+#include <seastar/core/for_each.hh>
 
 namespace seastar {
 

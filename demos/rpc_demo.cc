@@ -25,6 +25,7 @@
 #include <seastar/core/sleep.hh>
 #include <seastar/rpc/lz4_compressor.hh>
 #include <seastar/util/log.hh>
+#include <seastar/core/for_each.hh>
 
 using namespace seastar;
 

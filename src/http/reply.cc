@@ -31,6 +31,7 @@
 #include <seastar/http/reply.hh>
 #include <seastar/core/print.hh>
 #include <seastar/http/httpd.hh>
+#include <seastar/core/for_each.hh>
 
 namespace seastar {
 
