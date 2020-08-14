@@ -469,6 +469,7 @@ struct future_state_base {
             return ret;
         }
         void move_it(any&& x) noexcept {
+            assert(x.valid());
 #ifdef __GLIBCXX__
             // Unfortunally gcc cannot fully optimize the regular
             // implementation:
