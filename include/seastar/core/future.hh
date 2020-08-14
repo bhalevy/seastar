@@ -592,7 +592,7 @@ struct future_state :  public future_state_base, private internal::uninitialized
             memmove(reinterpret_cast<char*>(&this->uninitialized_get()),
                    &x.uninitialized_get(),
                    internal::used_size<internal::maybe_wrap_ref<T>>::value);
-        } else if (_u.has_result()) {
+        } else if (_u.st == state::result) {
             this->uninitialized_set(std::move(x.uninitialized_get()));
             std::destroy_at(&x.uninitialized_get());
         }
