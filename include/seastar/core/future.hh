@@ -500,9 +500,6 @@ struct future_state_base {
             move_it(std::move(x));
             return *this;
         }
-        bool has_result() const noexcept {
-            return st == state::result || st == state::result_unavailable;
-        }
         state st;
         std::exception_ptr ex;
     } _u;
@@ -604,7 +601,7 @@ struct future_state :  public future_state_base, private internal::uninitialized
     }
 
     void clear() noexcept {
-        if (_u.has_result()) {
+        if (_u.st == state::result || _u.st == state::result_unavailable) {
             std::destroy_at(&this->uninitialized_get());
         } else {
             _u.check_failure();
