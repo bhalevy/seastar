@@ -280,7 +280,7 @@ public:
 
     void update_xstats() {
         auto len = rte_eth_xstats_get(_port_id, _xstats, _len);
-        assert(len == _len);
+        SEASTAR_ASSERT(len == _len);
     }
 
     uint64_t get_value(const xstat_id id) {
@@ -317,7 +317,7 @@ private:
 
     void update_xstat_names() {
         auto len = rte_eth_xstats_get_names(_port_id, _xstat_names, _len);
-        assert(len == _len);
+        SEASTAR_ASSERT(len == _len);
     }
 
     void update_offsets() {
@@ -496,7 +496,7 @@ public:
     virtual future<> link_ready() { return _link_ready_promise.get_future(); }
     virtual std::unique_ptr<qp> init_local_queue(boost::program_options::variables_map opts, uint16_t qid) override;
     virtual unsigned hash2qid(uint32_t hash) override {
-        assert(_redir_table.size());
+        SEASTAR_ASSERT(_redir_table.size());
         return _redir_table[hash & (_redir_table.size() - 1)];
     }
     uint16_t port_idx() { return _port_idx; }
@@ -632,7 +632,7 @@ class dpdk_qp : public net::qp {
                     head->l3_len = oi.ip_hdr_len;
 
                     if (oi.tso_seg_size) {
-                        assert(oi.needs_ip_csum);
+                        SEASTAR_ASSERT(oi.needs_ip_csum);
                         head->ol_flags |= PKT_TX_TCP_SEG;
                         head->l4_len = oi.tcp_hdr_len;
                         head->tso_segsz = oi.tso_seg_size;
@@ -764,7 +764,7 @@ build_mbuf_cluster:
                     cur_seg_offset = 0;
 
                     // FIXME: assert in a fast-path - remove!!!
-                    assert(cur_seg);
+                    SEASTAR_ASSERT(cur_seg);
                 }
             }
         }
@@ -850,7 +850,7 @@ build_mbuf_cluster:
             rte_mbuf* m;
 
             // TODO: assert() in a fast path! Remove me ASAP!
-            assert(frag.size);
+            SEASTAR_ASSERT(frag.size);
 
             // Create a HEAD of mbufs' cluster and set the first bytes into it
             len = do_one_buf(qp, head, base, left_to_set);
@@ -1269,7 +1269,7 @@ private:
         if (_tx_burst.size() == 0) {
             for (auto&& p : pb) {
                 // TODO: assert() in a fast path! Remove me ASAP!
-                assert(p.len());
+                SEASTAR_ASSERT(p.len());
 
                 tx_buf* buf = packet_to_tx_buf_p(std::move(p));
                 if (!buf) {
@@ -1424,7 +1424,7 @@ private:
 
 int dpdk_device::init_port_start()
 {
-    assert(_port_idx < rte_eth_dev_count_avail());
+    SEASTAR_ASSERT(_port_idx < rte_eth_dev_count_avail());
 
     rte_eth_dev_info_get(_port_idx, &_dev_info);
 
@@ -1531,7 +1531,7 @@ int dpdk_device::init_port_start()
     if (_num_queues > 1) {
         if (_dev_info.reta_size) {
             // RETA size should be a power of 2
-            assert((_dev_info.reta_size & (_dev_info.reta_size - 1)) == 0);
+            SEASTAR_ASSERT((_dev_info.reta_size & (_dev_info.reta_size - 1)) == 0);
 
             // Set the RSS table to the correct size
             _redir_table.resize(_dev_info.reta_size);
@@ -1564,7 +1564,7 @@ int dpdk_device::init_port_start()
     // all together. If this assumption breaks we need to rework the below logic
     // by splitting the csum offload feature bit into separate bits for IPv4,
     // TCP and UDP.
-    assert(((_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_IPV4_CKSUM) &&
+    SEASTAR_ASSERT(((_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_IPV4_CKSUM) &&
             (_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_UDP_CKSUM) &&
             (_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_TCP_CKSUM)) ||
            (!(_dev_info.rx_offload_capa & DEV_RX_OFFLOAD_IPV4_CKSUM) &&
@@ -1603,7 +1603,7 @@ int dpdk_device::init_port_start()
     // or not set all together. If this assumption breaks we need to rework the
     // below logic by splitting the csum offload feature bit into separate bits
     // for TCP and UDP.
-    assert(((_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_UDP_CKSUM) &&
+    SEASTAR_ASSERT(((_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_UDP_CKSUM) &&
             (_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_TCP_CKSUM)) ||
            (!(_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_UDP_CKSUM) &&
             !(_dev_info.tx_offload_capa & DEV_TX_OFFLOAD_TCP_CKSUM)));
@@ -1836,7 +1836,7 @@ bool dpdk_qp<HugetlbfsMemBackend>::init_rx_mbuf_pool()
         //
         for (int i = 0; i < mbufs_per_queue_rx; i++) {
             rte_mbuf* m = rte_pktmbuf_alloc(_pktmbuf_pool_rx);
-            assert(m);
+            SEASTAR_ASSERT(m);
             _rx_free_bufs.push_back(m);
         }
 
@@ -2125,13 +2125,13 @@ bool dpdk_qp<HugetlbfsMemBackend>::rx_gc()
                                  _rx_free_bufs.size());
 
             // TODO: assert() in a fast path! Remove me ASAP!
-            assert(_num_rx_free_segs >= _rx_free_bufs.size());
+            SEASTAR_ASSERT(_num_rx_free_segs >= _rx_free_bufs.size());
 
             _num_rx_free_segs -= _rx_free_bufs.size();
             _rx_free_bufs.clear();
 
             // TODO: assert() in a fast path! Remove me ASAP!
-            assert((_rx_free_pkts.empty() && !_num_rx_free_segs) ||
+            SEASTAR_ASSERT((_rx_free_pkts.empty() && !_num_rx_free_segs) ||
                    (!_rx_free_pkts.empty() && _num_rx_free_segs));
         }
     }
@@ -2273,8 +2273,8 @@ std::unique_ptr<net::device> create_dpdk_net_device(
 {
     static bool called = false;
 
-    assert(!called);
-    assert(dpdk::eal::initialized);
+    SEASTAR_ASSERT(!called);
+    SEASTAR_ASSERT(dpdk::eal::initialized);
 
     called = true;
 

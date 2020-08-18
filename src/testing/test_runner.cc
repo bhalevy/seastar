@@ -50,7 +50,7 @@ test_runner::start(int ac, char** av) {
     // Don't interfere with seastar signal handling
     sigset_t mask;
     sigfillset(&mask);            
-    for (auto sig : { SIGSEGV }) {
+    for (auto sig : { SIGSEGV, SIGILL }) {
         sigdelset(&mask, sig);
     }
     auto r = ::pthread_sigmask(SIG_BLOCK, &mask, NULL);

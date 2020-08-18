@@ -23,8 +23,8 @@
 #pragma once
 
 #include <unordered_map>
-#include <assert.h>
 #include <seastar/core/shared_ptr.hh>
+#include <seastar/core/assert.hh>
 #include <seastar/net/api.hh>
 #include <seastar/net/const.hh>
 #include <seastar/net/net.hh>

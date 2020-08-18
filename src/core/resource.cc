@@ -280,7 +280,7 @@ static size_t alloc_from_node(cpu& this_cpu, hwloc_obj_t node, std::unordered_ma
     if (taken) {
         used_mem[node] += taken;
         auto node_id = hwloc_bitmap_first(node->nodeset);
-        assert(node_id != -1);
+        SEASTAR_ASSERT(node_id != -1);
         this_cpu.mem.push_back({taken, unsigned(node_id)});
     }
     return taken;
@@ -296,7 +296,7 @@ static hwloc_obj_t get_numa_node_for_pu(hwloc_topology_t& topology, hwloc_obj_t 
             return tmp;
         }
     }
-    assert(false && "PU not inside any NUMA node");
+    SEASTAR_ASSERT(false && "PU not inside any NUMA node");
     abort();
 }
 
@@ -370,7 +370,7 @@ allocate_io_queues(hwloc_topology_t& topology, std::vector<cpu> cpus, unsigned n
             }
             idx++;
         }
-        assert(0);
+        SEASTAR_ASSERT(0);
     };
 
     auto cpu_sets = distribute_objects(topology, num_io_queues);
@@ -383,7 +383,7 @@ allocate_io_queues(hwloc_topology_t& topology, std::vector<cpu> cpus, unsigned n
         auto io_coordinator = find_shard(hwloc_bitmap_first(cs));
 
         ret.coordinator_to_idx[io_coordinator] = ret.nr_coordinators++;
-        assert(!ret.coordinator_to_idx_valid[io_coordinator]);
+        SEASTAR_ASSERT(!ret.coordinator_to_idx_valid[io_coordinator]);
         ret.coordinator_to_idx_valid[io_coordinator] = true;
         // If a processor is a coordinator, it is also obviously a coordinator of itself
         ret.shard_to_coordinator[io_coordinator] = io_coordinator;
@@ -450,7 +450,7 @@ resources allocate(configuration c) {
         }
     }
     auto machine_depth = hwloc_get_type_depth(topology, HWLOC_OBJ_MACHINE);
-    assert(hwloc_get_nbobjs_by_depth(topology, machine_depth) == 1);
+    SEASTAR_ASSERT(hwloc_get_nbobjs_by_depth(topology, machine_depth) == 1);
     auto machine = hwloc_get_obj_by_depth(topology, machine_depth, 0);
 #if HWLOC_API_VERSION >= 0x00020000
     auto available_memory = machine->total_memory;
@@ -478,7 +478,7 @@ resources allocate(configuration c) {
     // Divide local memory to cpus
     for (auto&& cs : cpu_sets()) {
         auto cpu_id = hwloc_bitmap_first(cs);
-        assert(cpu_id != -1);
+        SEASTAR_ASSERT(cpu_id != -1);
         auto pu = hwloc_get_pu_obj_by_os_index(topology, cpu_id);
         auto node = get_numa_node_for_pu(topology, pu);
         cpu this_cpu;
@@ -506,7 +506,7 @@ resources allocate(configuration c) {
             if (obj == node)
                 break;
         }
-        assert(!remain);
+        SEASTAR_ASSERT(!remain);
         ret.cpus.push_back(std::move(this_cpu));
     }
 

@@ -98,7 +98,7 @@ public:
     /// all current requests call \ref leave(), the returned future will be
     /// made ready.
     future<> close() noexcept {
-        assert(!_stopped && "seastar::gate::close() cannot be called more than once");
+        SEASTAR_ASSERT(!_stopped && "seastar::gate::close() cannot be called more than once");
         _stopped = std::make_optional(promise<>());
         if (!_count) {
             _stopped->set_value();

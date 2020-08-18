@@ -222,7 +222,7 @@ SEASTAR_TEST_CASE(test_iov_max) {
     while (left) {
         auto written = f.dma_write(position, iovecs).get0();
         iovecs.erase(iovecs.begin(), iovecs.begin() + written / buffer_size);
-        assert(written % buffer_size == 0);
+        SEASTAR_ASSERT(written % buffer_size == 0);
         position += written;
         left -= written;
     }
@@ -241,7 +241,7 @@ SEASTAR_TEST_CASE(test_iov_max) {
     while (left) {
         auto read = f.dma_read(position, iovecs).get0();
         iovecs.erase(iovecs.begin(), iovecs.begin() + read / buffer_size);
-        assert(read % buffer_size == 0);
+        SEASTAR_ASSERT(read % buffer_size == 0);
         position += read;
         left -= read;
     }
@@ -646,7 +646,7 @@ SEASTAR_TEST_CASE(test_nowait_flag_correctness) {
         auto is_tmpfs = [&] (sstring filename) {
             struct ::statfs buf;
             int fd = ::open(filename.c_str(), static_cast<int>(open_flags::ro));
-            assert(fd != -1);
+            SEASTAR_ASSERT(fd != -1);
             auto r = ::fstatfs(fd, &buf);
             if (r == -1) {
                 return false;

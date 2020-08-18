@@ -400,7 +400,7 @@ static future<> run_echo_test(sstring message,
     auto server = ::make_shared<seastar::sharded<echoserver>>();
     auto addr = ::make_ipv4_address( {0x7f000001, port});
 
-    assert(do_read || loops == 1);
+    SEASTAR_ASSERT(do_read || loops == 1);
 
     future<> f = make_ready_future();
 

@@ -26,7 +26,7 @@
 #include <seastar/core/app-template.hh>
 #include <seastar/core/thread.hh>
 #include <seastar/util/defer.hh>
-#include <cassert>
+#include <seastar/core/assert.hh>
 
 // This is some service that we wish to run on all shards.
 class service_one {
@@ -71,7 +71,7 @@ int main(int ac, char** av) {
             seastar::defer([&] { s2.stop().get(); });
 
             s2.invoke_on_all([] (service_two& s2) {
-                assert(s2.get_resource_allocation() == 3);
+                SEASTAR_ASSERT(s2.get_resource_allocation() == 3);
             }).get();
         });
     });

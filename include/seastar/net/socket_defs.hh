@@ -27,7 +27,7 @@
 #include <netinet/ip.h>
 #include <seastar/net/byteorder.hh>
 #include <seastar/net/unix_address.hh>
-#include <cassert>
+#include <seastar/core/assert.hh>
 
 namespace seastar {
 

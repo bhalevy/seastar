@@ -373,7 +373,7 @@ template <typename BufferChain, typename Completion>
 inline
 unsigned
 vring<BufferChain, Completion>::allocate_desc() {
-    assert(_free_head != -1);
+    SEASTAR_ASSERT(_free_head != -1);
     auto desc = _free_head;
     if (desc == _free_last) {
         _free_last = _free_head = -1;
@@ -646,7 +646,7 @@ qp::txq::post(circular_buffer<packet>& pb) {
         packet q = packet(fragment{reinterpret_cast<char*>(&vhdr), _dev._header_len},
                 std::move(p));
         auto fut = _ring.available_descriptors().wait(q.nr_frags());
-        assert(fut.available()); // how it cannot?
+        SEASTAR_ASSERT(fut.available()); // how it cannot?
         _packets.emplace_back(packet_as_buffer_chain{ std::move(q) });
     }
     _ring.post(_packets.begin(), _packets.end());
@@ -710,7 +710,7 @@ qp::rxq::complete_buffer(single_buffer&& bc, size_t len) {
     // First buffer
     if (_remaining_buffers == 0) {
         auto hdr = reinterpret_cast<net_hdr_mrg*>(frag_buf);
-        assert(hdr->num_buffers >= 1);
+        SEASTAR_ASSERT(hdr->num_buffers >= 1);
         _remaining_buffers = hdr->num_buffers;
         frag_buf += _dev._header_len;
         frag_len -= _dev._header_len;
@@ -749,7 +749,7 @@ qp::rxq::complete_buffer(single_buffer&& bc, size_t len) {
 static std::unique_ptr<char[], free_deleter> virtio_buffer(size_t size) {
     void* ret;
     auto r = posix_memalign(&ret, 4096, size);
-    assert(r == 0);
+    SEASTAR_ASSERT(r == 0);
     bzero(ret, size);
     return std::unique_ptr<char[], free_deleter>(reinterpret_cast<char*>(ret));
 }
@@ -840,7 +840,7 @@ qp_vhost::qp_vhost(device *dev, boost::program_options::variables_map opts)
     // this fd to VHOST_NET_SET_BACKEND, the Linux kernel keeps the reference
     // to it and it's fine to close the file descriptor.
     file_desc tap_fd(file_desc::open("/dev/net/tun", O_RDWR | O_NONBLOCK));
-    assert(tap_device.size() + 1 <= IFNAMSIZ);
+    SEASTAR_ASSERT(tap_device.size() + 1 <= IFNAMSIZ);
     ifreq ifr = {};
     ifr.ifr_flags = IFF_TAP | IFF_NO_PI | IFF_ONE_QUEUE | IFF_VNET_HDR;
     strcpy(ifr.ifr_ifrn.ifrn_name, tap_device.c_str());
@@ -935,7 +935,7 @@ qp_osv::qp_osv(device *dev, osv::assigned_virtio &virtio,
 //    bool _guest_ufo = subset & VIRTIO_NET_F_GUEST_UFO;
 
     // Get the MAC address set by the host
-    assert(subset & VIRTIO_NET_F_MAC);
+    SEASTAR_ASSERT(subset & VIRTIO_NET_F_MAC);
     struct net_config {
         /* The ring_config defining mac address (if VIRTIO_NET_F_MAC) */
         uint8_t mac[6];
@@ -977,8 +977,8 @@ qp_osv::qp_osv(device *dev, osv::assigned_virtio &virtio,
 
 std::unique_ptr<net::qp> device::init_local_queue(boost::program_options::variables_map opts, uint16_t qid) {
     static bool called = false;
-    assert(!qid);
-    assert(!called);
+    SEASTAR_ASSERT(!qid);
+    SEASTAR_ASSERT(!called);
     called = true;
 
 #ifdef HAVE_OSV

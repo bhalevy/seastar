@@ -111,7 +111,7 @@ future<> output_stream<CharType>::write(net::packet p) {
     static_assert(std::is_same<CharType, char>::value, "packet works on char");
 
     if (p.len() != 0) {
-        assert(!_end && "Mixing buffered writes and zero-copy writes not supported yet");
+        SEASTAR_ASSERT(!_end && "Mixing buffered writes and zero-copy writes not supported yet");
 
         if (_zc_bufs) {
             _zc_bufs.append(std::move(p));
@@ -135,7 +135,7 @@ future<> output_stream<CharType>::write(temporary_buffer<CharType> p) {
     if (p.empty()) {
         return make_ready_future<>();
     }
-    assert(!_end && "Mixing buffered writes and zero-copy writes not supported yet");
+    SEASTAR_ASSERT(!_end && "Mixing buffered writes and zero-copy writes not supported yet");
 
     return write(net::packet(std::move(p)));
 }
@@ -306,7 +306,7 @@ input_stream<CharType>::detach() && {
 template <typename CharType>
 future<>
 output_stream<CharType>::split_and_put(temporary_buffer<CharType> buf) {
-    assert(_end == 0);
+    SEASTAR_ASSERT(_end == 0);
 
     return repeat([this, buf = std::move(buf)] () mutable {
         if (buf.size() < _size) {
@@ -339,7 +339,7 @@ output_stream<CharType>::write(const char_type* buf, size_t n) {
 template <typename CharType>
 future<>
 output_stream<CharType>::slow_write(const char_type* buf, size_t n) {
-    assert(!_zc_bufs && "Mixing buffered writes and zero-copy writes not supported yet");
+    SEASTAR_ASSERT(!_zc_bufs && "Mixing buffered writes and zero-copy writes not supported yet");
     auto bulk_threshold = _end ? (2 * _size - _end) : _size;
     if (n >= bulk_threshold) {
         if (_end) {

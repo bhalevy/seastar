@@ -115,10 +115,10 @@ public:
 
     virtual future<connected_socket> connect(socket_address sa, socket_address local, transport proto = transport::TCP) override {
         //TODO: implement SCTP
-        assert(proto == transport::TCP);
+        SEASTAR_ASSERT(proto == transport::TCP);
 
         // FIXME: local is ignored since native stack does not support multiple IPs yet
-        assert(sa.as_posix_sockaddr().sa_family == AF_INET);
+        SEASTAR_ASSERT(sa.as_posix_sockaddr().sa_family == AF_INET);
 
         _conn = make_lw_shared<typename Protocol::connection>(_proto.connect(sa));
         return _conn->connected().then([conn = _conn]() mutable {

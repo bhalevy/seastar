@@ -71,7 +71,7 @@ private:
         }
 
         auto index = bitsets::count_leading_zeros(timestamp ^ _last);
-        assert(index < n_buckets - 1);
+        SEASTAR_ASSERT(index < n_buckets - 1);
         return index;
     }
 

@@ -215,7 +215,7 @@ bool aio_storage_context::reap_completions()
     if (n == -1 && errno == EINTR) {
         n = 0;
     }
-    assert(n >= 0);
+    SEASTAR_ASSERT(n >= 0);
     for (size_t i = 0; i < size_t(n); ++i) {
         auto iocb = get_iocb(_ev_buffer[i]);
         if (_ev_buffer[i].res == -EAGAIN) {
@@ -256,7 +256,7 @@ size_t aio_general_context::flush() {
         auto nr = last - iocbs.get();
         last = iocbs.get();
         auto r = io_submit(io_context, nr, iocbs.get());
-        assert(r >= 0);
+        SEASTAR_ASSERT(r >= 0);
         return nr;
     }
     return 0;
@@ -354,7 +354,7 @@ void preempt_io_context::reset_preemption_monitor() {
 bool preempt_io_context::service_preempting_io() {
     linux_abi::io_event a[2];
     auto r = io_getevents(_context.io_context, 0, 2, a, 0);
-    assert(r != -1);
+    SEASTAR_ASSERT(r != -1);
     bool did_work = r > 0;
     for (unsigned i = 0; i != unsigned(r); ++i) {
         auto desc = reinterpret_cast<kernel_completion*>(a[i].data);
@@ -388,7 +388,7 @@ bool reactor_backend_aio::await_events(int timeout, const sigset_t* active_sigma
         if (r == -1 && errno == EINTR) {
             return true;
         }
-        assert(r != -1);
+        SEASTAR_ASSERT(r != -1);
         for (unsigned i = 0; i != unsigned(r); ++i) {
             did_work = true;
             auto& event = batch[i];
@@ -421,7 +421,7 @@ reactor_backend_aio::reactor_backend_aio(reactor* r)
 
     sigset_t mask = make_sigset_mask(hrtimer_signal());
     auto e = ::pthread_sigmask(SIG_BLOCK, &mask, NULL);
-    assert(e == 0);
+    SEASTAR_ASSERT(e == 0);
 }
 
 bool reactor_backend_aio::reap_kernel_completions() {
@@ -605,7 +605,7 @@ reactor_backend_epoll::reactor_backend_epoll(reactor* r)
     sev._sigev_un._tid = syscall(SYS_gettid);
     sev.sigev_signo = hrtimer_signal();
     ret = timer_create(CLOCK_MONOTONIC, &sev, &_steady_clock_timer);
-    assert(ret >= 0);
+    SEASTAR_ASSERT(ret >= 0);
 
     _r->_signals.handle_signal(hrtimer_signal(), [r = _r] {
         r->service_highres_timer();
@@ -645,7 +645,7 @@ reactor_backend_epoll::wait_and_process(int timeout, const sigset_t* active_sigm
     if (nr == -1 && errno == EINTR) {
         return false; // gdb can cause this
     }
-    assert(nr != -1);
+    SEASTAR_ASSERT(nr != -1);
     for (int i = 0; i < nr; ++i) {
         auto& evt = eevt[i];
         auto pfd = reinterpret_cast<pollable_fd_state*>(evt.data.ptr);
@@ -768,7 +768,7 @@ future<> reactor_backend_epoll::get_epoll_future(pollable_fd_state& pfd, int eve
         eevt.events = pfd.events_epoll;
         eevt.data.ptr = &pfd;
         int r = ::epoll_ctl(_epollfd.get(), ctl, pfd.fd.get(), &eevt);
-        assert(r == 0);
+        SEASTAR_ASSERT(r == 0);
         _need_epoll_events = true;
     }
 

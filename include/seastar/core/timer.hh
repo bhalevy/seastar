@@ -92,7 +92,7 @@ private:
     bool _expired = false;
     void readd_periodic();
     void arm_state(time_point until, std::optional<duration> period) noexcept {
-        assert(!_armed);
+        SEASTAR_ASSERT(!_armed);
         _period = period;
         _armed = true;
         _expired = false;

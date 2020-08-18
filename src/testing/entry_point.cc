@@ -67,7 +67,7 @@ int entry_point(int argc, char** argv) {
     // constructed.
     // If we are using ASAN, it has already installed a signal handler
     // that does its own stack printing.
-    for (int sig : {SIGSEGV, SIGABRT}) {
+    for (int sig : {SIGSEGV, SIGABRT, SIGILL}) {
         install_dummy_handler(sig);
     }
 #else

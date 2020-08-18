@@ -157,7 +157,7 @@ SEASTAR_TEST_CASE(test_consume_skip_bytes) {
                     if (_count == 8000) {
                         return make_ready_future<consumption_result_type>(skip_bytes{2000 - buf.size()});
                     } else {
-                        assert(buf.empty());
+                        SEASTAR_ASSERT(buf.empty());
                         return make_ready_future<consumption_result_type>(continue_consuming{});
                     }
                     return make_ready_future<consumption_result_type>(continue_consuming{});
@@ -452,7 +452,7 @@ SEASTAR_TEST_CASE(test_fstream_slow_start) {
             mock_file->set_allowed_read_requests(requests_at_full_speed);
             auto buf = fstr.read().get0();
             BOOST_CHECK_EQUAL(buf.size(), 0u);
-            assert(buf.size() == 0);
+            SEASTAR_ASSERT(buf.size() == 0);
         };
 
         auto read_while_file_at_full_speed = [&] (auto fstr) {

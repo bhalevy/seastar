@@ -16,33 +16,19 @@
  * under the License.
  */
 /*
- * Copyright (C) 2018 ScyllaDB
+ * Copyright (C) 2020 ScyllaDB.
  */
 
 #pragma once
 
-#include <chrono>
-#include <time.h>
-#include <seastar/core/assert.hh>
+#include <assert.h>
 
-namespace seastar {
+// SEASTAR_DEBUG is always enabled, but in a release build we drop the
+// error messages. We will still get a backtrace from the signal
+// handler.
 
-class thread_cputime_clock {
-public:
-    using rep = int64_t;
-    using period = std::chrono::nanoseconds::period;
-    using duration = std::chrono::duration<rep, period>;
-    using time_point = std::chrono::time_point<thread_cputime_clock, duration>;
-public:
-    static time_point now() {
-        using namespace std::chrono_literals;
-
-        struct timespec tp;
-        [[gnu::unused]] auto ret = clock_gettime(CLOCK_THREAD_CPUTIME_ID, &tp);
-        SEASTAR_ASSERT(ret == 0);
-        return time_point(tp.tv_nsec * 1ns + tp.tv_sec * 1s);
-    }
-};
-
-}
-
+#ifdef SEASTAR_DEBUG
+#define SEASTAR_ASSERT(x) assert(x)
+#else
+#define SEASTAR_ASSERT(x) ((x) ? ((void)(0)) : __builtin_trap())
+#endif

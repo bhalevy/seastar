@@ -140,7 +140,7 @@ snd_buf lz4_fragmented_compressor::compress(size_t head_space, snd_buf data) {
         auto src_ptr = src->get() + src_current_offset;
         if (src->size() - src_current_offset < size) {
             auto left = size;
-            assert(lin_buf_size > size);
+            SEASTAR_ASSERT(lin_buf_size > size);
             if (lin_buf_size - lin_off < size) {
                 lin_off = 0;
             }

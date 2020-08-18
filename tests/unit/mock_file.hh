@@ -42,7 +42,7 @@ private:
             _verify_length(length);
         }
         BOOST_CHECK(_allowed_read_requests);
-        assert(_allowed_read_requests);
+        SEASTAR_ASSERT(_allowed_read_requests);
         _allowed_read_requests--;
         return length;
     }

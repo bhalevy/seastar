@@ -498,7 +498,7 @@ append_challenged_posix_file_impl::append_challenged_posix_file_impl(int fd, ope
 append_challenged_posix_file_impl::~append_challenged_posix_file_impl() {
     // If the file has not been closed we risk having running tasks
     // that will try to access freed memory.
-    assert(_closing_state == state::closed);
+    SEASTAR_ASSERT(_closing_state == state::closed);
 }
 
 bool

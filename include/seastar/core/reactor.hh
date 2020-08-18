@@ -27,6 +27,7 @@
 #include <seastar/core/cacheline.hh>
 #include <seastar/core/circular_buffer_fixed_capacity.hh>
 #include <seastar/core/idle_cpu_handler.hh>
+#include <seastar/core/assert.hh>
 #include <memory>
 #include <type_traits>
 #include <sys/epoll.h>
@@ -35,7 +36,6 @@
 #include <unordered_map>
 #include <netinet/ip.h>
 #include <cstring>
-#include <cassert>
 #include <stdexcept>
 #include <unistd.h>
 #include <vector>

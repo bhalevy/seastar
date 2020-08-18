@@ -27,7 +27,7 @@
 
 #include <ostream>
 #include <seastar/net/socket_defs.hh>
-#include <cassert>
+#include <seastar/core/assert.hh>
 
 namespace seastar {
 

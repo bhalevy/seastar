@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <chrono>
 #include <deque>
+#include <seastar/core/assert.hh>
 #include <seastar/core/circular_buffer.hh>
 
 using namespace seastar;
@@ -71,8 +72,8 @@ BOOST_AUTO_TEST_CASE(test_erasing_at_beginning_or_end_does_not_invalidate_iterat
 
     int* ptr_to_3 = &buf[2];
     auto iterator_to_3 = buf.begin() + 2;
-    assert(*ptr_to_3 == 3);
-    assert(*iterator_to_3 == 3);
+    SEASTAR_ASSERT(*ptr_to_3 == 3);
+    SEASTAR_ASSERT(*iterator_to_3 == 3);
 
     buf.erase(buf.begin(), buf.begin() + 2);
 

@@ -56,7 +56,7 @@ public:
         return end_idx;
     }
     void push_back(uint8_t b) {
-        assert(end_idx < sizeof(data));
+        SEASTAR_ASSERT(end_idx < sizeof(data));
         data[end_idx++] = b;
     }
     void push_back(uint16_t b) {

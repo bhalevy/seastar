@@ -39,7 +39,7 @@ void thread_pool::work(sstring name) {
     while (true) {
         uint64_t count;
         auto r = ::read(inter_thread_wq._start_eventfd.get_read_fd(), &count, sizeof(count));
-        assert(r == sizeof(count));
+        SEASTAR_ASSERT(r == sizeof(count));
         if (_stopped.load(std::memory_order_relaxed)) {
             break;
         }

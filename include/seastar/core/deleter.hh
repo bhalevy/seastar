@@ -23,7 +23,7 @@
 
 #include <memory>
 #include <cstdlib>
-#include <assert.h>
+#include <seastar/core/assert.hh>
 #include <type_traits>
 
 namespace seastar {

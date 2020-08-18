@@ -47,7 +47,7 @@ const char* de_type_desc(directory_entry_type t)
     case directory_entry_type::socket:
         return "socket";
     }
-    assert(0 && "should not get here");
+    SEASTAR_ASSERT(0 && "should not get here");
     return nullptr;
 }
 
@@ -65,9 +65,9 @@ int main(int ac, char** av) {
         future<> report(directory_entry de) {
             return file_stat(de.name, follow_symlink::no).then([de = std::move(de)] (stat_data sd) {
                 if (de.type) {
-                    assert(*de.type == sd.type);
+                    SEASTAR_ASSERT(*de.type == sd.type);
                 } else {
-                    assert(sd.type == directory_entry_type::unknown);
+                    SEASTAR_ASSERT(sd.type == directory_entry_type::unknown);
                 }
                 fmt::print("{} (type={})\n", de.name, de_type_desc(sd.type));
                 return make_ready_future<>();

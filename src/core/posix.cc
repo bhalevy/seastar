@@ -106,11 +106,11 @@ posix_thread::posix_thread(posix_thread&& x)
 }
 
 posix_thread::~posix_thread() {
-    assert(!_valid);
+    SEASTAR_ASSERT(!_valid);
 }
 
 void posix_thread::join() {
-    assert(_valid);
+    SEASTAR_ASSERT(_valid);
     pthread_join(_pthread, NULL);
     _valid = false;
 }

@@ -44,9 +44,9 @@ constexpr size_t aligned_size = 4096;
 
 future<> verify_data_file(file& f, temporary_buffer<char>& rbuf, const temporary_buffer<char>& wbuf) {
     return f.dma_read(0, rbuf.get_write(), aligned_size).then([&rbuf, &wbuf] (size_t count) {
-        assert(count == aligned_size);
+        SEASTAR_ASSERT(count == aligned_size);
         fmt::print("    verifying {} bytes\n", count);
-        assert(!memcmp(rbuf.get(), wbuf.get(), aligned_size));
+        SEASTAR_ASSERT(!memcmp(rbuf.get(), wbuf.get(), aligned_size));
     });
 }
 
@@ -54,7 +54,7 @@ future<file> open_data_file(sstring meta_filename, temporary_buffer<char>& rbuf)
     fmt::print("    retrieving data filename from {}\n", meta_filename);
     return with_file(open_file_dma(meta_filename, open_flags::ro), [&rbuf] (file& f) {
         return f.dma_read(0, rbuf.get_write(), aligned_size).then([&rbuf] (size_t count) {
-            assert(count == aligned_size);
+            SEASTAR_ASSERT(count == aligned_size);
             auto data_filename = sstring(rbuf.get());
             fmt::print("    opening {}\n", data_filename);
             return open_file_dma(data_filename, open_flags::ro);
@@ -76,7 +76,7 @@ future<> demo_with_file() {
             auto count = with_file(open_file_dma(filename, open_flags::rw | open_flags::create), [&wbuf] (file& f) {
                 return f.dma_write(0, wbuf.get(), aligned_size);
             }).get0();
-            assert(count == aligned_size);
+            SEASTAR_ASSERT(count == aligned_size);
         };
 
         // print the data_filename into the write buffer

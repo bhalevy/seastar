@@ -372,7 +372,7 @@ public:
     ///
     /// \return the updated semaphore_units object
     void adopt(semaphore_units&& other) noexcept {
-        assert(other._sem == _sem);
+        SEASTAR_ASSERT(other._sem == _sem);
         _n += other.release();
     }
 

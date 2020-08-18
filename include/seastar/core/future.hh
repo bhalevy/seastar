@@ -27,9 +27,9 @@
 #include <atomic>
 #include <memory>
 #include <type_traits>
-#include <assert.h>
 #include <cstdlib>
 #include <seastar/core/function_traits.hh>
+#include <seastar/core/assert.hh>
 #include <seastar/util/alloc_failure_injector.hh>
 #include <seastar/util/attribute-compat.hh>
 #include <seastar/util/concepts.hh>
@@ -443,7 +443,7 @@ struct future_state_base {
         any(state s) noexcept { st = s; }
         void set_exception(std::exception_ptr&& e) noexcept {
             new (&ex) std::exception_ptr(std::move(e));
-            assert(st >= state::exception_min);
+            SEASTAR_ASSERT(st >= state::exception_min);
         }
         any(std::exception_ptr&& e) noexcept {
             set_exception(std::move(e));
@@ -533,21 +533,21 @@ public:
     void ignore() noexcept;
 
     void set_exception(std::exception_ptr&& ex) noexcept {
-        assert(_u.st == state::future);
+        SEASTAR_ASSERT(_u.st == state::future);
         _u.set_exception(std::move(ex));
     }
     future_state_base& operator=(future_state_base&& x) noexcept = default;
     void set_exception(future_state_base&& state) noexcept {
-        assert(_u.st == state::future);
+        SEASTAR_ASSERT(_u.st == state::future);
         *this = std::move(state);
     }
     std::exception_ptr get_exception() && noexcept {
-        assert(_u.st >= state::exception_min);
+        SEASTAR_ASSERT(_u.st >= state::exception_min);
         // Move ex out so future::~future() knows we've handled it
         return _u.take_exception();
     }
     const std::exception_ptr& get_exception() const& noexcept {
-        assert(_u.st >= state::exception_min);
+        SEASTAR_ASSERT(_u.st >= state::exception_min);
         return _u.ex;
     }
     template <typename U>
@@ -631,7 +631,7 @@ struct future_state :  public future_state_base, private internal::uninitialized
     }
     template <typename... A>
     void set(A&&... a) noexcept {
-        assert(_u.st == state::future);
+        SEASTAR_ASSERT(_u.st == state::future);
         new (this) future_state(ready_future_marker(), std::forward<A>(a)...);
     }
     future_state(exception_future_marker m, std::exception_ptr&& ex) noexcept : future_state_base(std::move(ex)) { }
@@ -640,21 +640,21 @@ struct future_state :  public future_state_base, private internal::uninitialized
     future_state(nested_exception_marker m, future_state_base&& old) noexcept : future_state_base(m, std::move(old)) { }
     future_state(nested_exception_marker m, future_state_base&& n, future_state_base&& old) noexcept : future_state_base(m, std::move(n), std::move(old)) { }
     T&& get_value() && noexcept {
-        assert(_u.st == state::result);
+        SEASTAR_ASSERT(_u.st == state::result);
         return static_cast<T&&>(this->uninitialized_get());
     }
     T&& take_value() && noexcept {
-        assert(_u.st == state::result);
+        SEASTAR_ASSERT(_u.st == state::result);
         _u.st = state::result_unavailable;
         return static_cast<T&&>(this->uninitialized_get());
     }
     template<typename U = T>
     const std::enable_if_t<std::is_copy_constructible<U>::value, U>& get_value() const& noexcept(copy_noexcept) {
-        assert(_u.st == state::result);
+        SEASTAR_ASSERT(_u.st == state::result);
         return this->uninitialized_get();
     }
     T&& take() && {
-        assert(available());
+        SEASTAR_ASSERT(available());
         if (_u.st >= state::exception_min) {
             std::move(*this).rethrow_exception();
         }
@@ -662,14 +662,14 @@ struct future_state :  public future_state_base, private internal::uninitialized
         return static_cast<T&&>(this->uninitialized_get());
     }
     T&& get() && {
-        assert(available());
+        SEASTAR_ASSERT(available());
         if (_u.st >= state::exception_min) {
             std::move(*this).rethrow_exception();
         }
         return static_cast<T&&>(this->uninitialized_get());
     }
     const T& get() const& {
-        assert(available());
+        SEASTAR_ASSERT(available());
         if (_u.st >= state::exception_min) {
             rethrow_exception();
         }
@@ -913,7 +913,7 @@ public:
             // FIXME: This is a fairly expensive assert. It would be a
             // good candidate for being disabled in release builds if
             // we had such an assert.
-            assert(ptr->_u.st == future_state_base::state::future);
+            SEASTAR_ASSERT(ptr->_u.st == future_state_base::state::future);
             new (ptr) future_state(std::move(state));
             make_ready<urgent::yes>();
         }
@@ -1362,7 +1362,7 @@ private:
             : _state(std::move(state)) {
     }
     internal::promise_base_with_type<T SEASTAR_ELLIPSIS> get_promise() noexcept {
-        assert(!_promise);
+        SEASTAR_ASSERT(!_promise);
         return internal::promise_base_with_type<T SEASTAR_ELLIPSIS>(this);
     }
     internal::promise_base_with_type<T SEASTAR_ELLIPSIS>* detach_promise() noexcept {
@@ -1881,7 +1881,7 @@ private:
             callback->set_state(get_available_state_ref());
             ::seastar::schedule(callback);
         } else {
-            assert(_promise);
+            SEASTAR_ASSERT(_promise);
             schedule(callback);
         }
 
@@ -2030,7 +2030,7 @@ template <typename SEASTAR_ELLIPSIS T>
 inline
 future<T SEASTAR_ELLIPSIS>
 promise<T SEASTAR_ELLIPSIS>::get_future() noexcept {
-    assert(!this->_future && this->_state && !this->_task);
+    SEASTAR_ASSERT(!this->_future && this->_state && !this->_task);
     return future<T SEASTAR_ELLIPSIS>(this);
 }
 

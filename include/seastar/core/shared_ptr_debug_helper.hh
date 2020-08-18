@@ -24,7 +24,7 @@
 #ifdef SEASTAR_DEBUG_SHARED_PTR
 
 #include <thread>
-#include <cassert>
+#include <seastar/core/assert.hh>
 
 namespace seastar {
 
@@ -60,7 +60,7 @@ public:
     }
 private:
     void check() const {
-        assert(_cpu == std::this_thread::get_id());
+        SEASTAR_ASSERT(_cpu == std::this_thread::get_id());
     }
 };
 

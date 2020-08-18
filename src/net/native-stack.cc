@@ -211,7 +211,7 @@ native_network_stack::native_network_stack(boost::program_options::variables_map
 
 server_socket
 native_network_stack::listen(socket_address sa, listen_options opts) {
-    assert(sa.family() == AF_INET || sa.is_unspecified());
+    SEASTAR_ASSERT(sa.family() == AF_INET || sa.is_unspecified());
     return tcpv4_listen(_inet.get_tcp(), ntohs(sa.as_posix_sockaddr_in().sin_port), opts);
 }
 

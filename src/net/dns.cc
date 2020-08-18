@@ -485,11 +485,11 @@ private:
         while (*p != nullptr) {
             switch (host.h_addrtype) {
             case AF_INET:
-                assert(size_t(host.h_length) >= sizeof(in_addr));
+                SEASTAR_ASSERT(size_t(host.h_length) >= sizeof(in_addr));
                 e.addr_list.emplace_back(*reinterpret_cast<const in_addr*>(*p));
                 break;
             case AF_INET6:
-                assert(size_t(host.h_length) >= sizeof(in6_addr));
+                SEASTAR_ASSERT(size_t(host.h_length) >= sizeof(in6_addr));
                 e.addr_list.emplace_back(*reinterpret_cast<const in6_addr*>(*p));
                 break;
             default:
@@ -598,7 +598,7 @@ private:
 
             dns_log.trace("Connect {}({})->{}", fd, int(e.typ), sa);
 
-            assert(e.avail == 0);
+            SEASTAR_ASSERT(e.avail == 0);
 
             e.avail = POLLOUT|POLLIN; // until we know otherwise
 

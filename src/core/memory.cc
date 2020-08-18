@@ -74,7 +74,7 @@ void* internal::allocate_aligned_buffer_impl(size_t size, size_t align) {
     } else if (r == EINVAL) {
         throw std::runtime_error(format("Invalid alignment of {:d}; allocating {:d} bytes", align, size));
     } else {
-        assert(r == 0);
+        SEASTAR_ASSERT(r == 0);
         return ret;
     }
 }
@@ -104,11 +104,11 @@ std::pmr::polymorphic_allocator<char>* malloc_allocator{&static_malloc_allocator
 #include <seastar/core/align.hh>
 #include <seastar/core/posix.hh>
 #include <seastar/core/shared_ptr.hh>
+#include <seastar/core/assert.hh>
 #include <new>
 #include <cstdint>
 #include <algorithm>
 #include <limits>
-#include <cassert>
 #include <atomic>
 #include <mutex>
 #include <seastar/util/std-compat.hh>
@@ -528,7 +528,7 @@ cpu_pages::link(page_list& list, page* span) {
 }
 
 void cpu_pages::free_span_no_merge(uint32_t span_start, uint32_t nr_pages) {
-    assert(nr_pages);
+    SEASTAR_ASSERT(nr_pages);
     nr_free_pages += nr_pages;
     auto span = &pages[span_start];
     auto span_end = &pages[span_start + nr_pages - 1];
@@ -734,7 +734,7 @@ void*
 cpu_pages::allocate_small(unsigned size) {
     auto idx = small_pool::size_to_idx(size);
     auto& pool = small_pools[idx];
-    assert(size <= pool.object_size());
+    SEASTAR_ASSERT(size <= pool.object_size());
     auto ptr = pool.allocate();
 #ifdef SEASTAR_HEAPPROF
     if (!ptr) {
@@ -858,7 +858,7 @@ cpu_pages::try_cross_cpu_free(void* ptr) {
 
 void cpu_pages::shrink(void* ptr, size_t new_size) {
     auto obj_cpu = object_cpu_id(ptr);
-    assert(obj_cpu == cpu_id);
+    SEASTAR_ASSERT(obj_cpu == cpu_id);
     page* span = to_page(ptr);
     if (span->pool) {
         return;
@@ -898,7 +898,7 @@ bool cpu_pages::initialize() {
         return false;
     }
     cpu_id = cpu_id_gen.fetch_add(1, std::memory_order_relaxed);
-    assert(cpu_id < max_cpus);
+    SEASTAR_ASSERT(cpu_id < max_cpus);
     all_cpus[cpu_id] = this;
     auto base = mem_base() + (size_t(cpu_id) << cpu_id_shift);
     auto size = 32 << 20;  // Small size for bootstrap
@@ -1045,7 +1045,7 @@ void cpu_pages::schedule_reclaim() {
 }
 
 memory::memory_layout cpu_pages::memory_layout() {
-    assert(is_initialized());
+    SEASTAR_ASSERT(is_initialized());
     return {
         reinterpret_cast<uintptr_t>(memory),
         reinterpret_cast<uintptr_t>(memory) + nr_pages * page_size
@@ -1541,7 +1541,7 @@ void* calloc(size_t nmemb, size_t size) {
         return nullptr;
     }
     auto s1 = __int128(nmemb) * __int128(size);
-    assert(s1 == size_t(s1));
+    SEASTAR_ASSERT(s1 == size_t(s1));
     size_t s = s1;
     auto p = malloc(s);
     if (p) {

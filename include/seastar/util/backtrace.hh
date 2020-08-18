@@ -188,7 +188,7 @@ public:
      * @return original exception message followed by a backtrace
      */
     virtual const char* what() const noexcept override {
-        assert(_backtrace);
+        SEASTAR_ASSERT(_backtrace);
         return _backtrace->c_str();
     }
 };

@@ -47,7 +47,7 @@ struct async_service : public seastar::async_sharded_service<async_service> {
         });
     }
     virtual void check() {
-        assert(!deleted);
+        SEASTAR_ASSERT(!deleted);
     }
     future<> stop() { return make_ready_future<>(); }
 };
@@ -215,8 +215,8 @@ SEASTAR_TEST_CASE(test_smp_service_groups) {
         bunch1.get();
         bunch2.get();
         if (smp::count > 1) {
-            assert(rm1.max_concurrent_observed == 1);
-            assert(rm2.max_concurrent_observed == 1000);
+            SEASTAR_ASSERT(rm1.max_concurrent_observed == 1);
+            SEASTAR_ASSERT(rm2.max_concurrent_observed == 1000);
         }
         destroy_smp_service_group(ssg1).get();
         destroy_smp_service_group(ssg2).get();

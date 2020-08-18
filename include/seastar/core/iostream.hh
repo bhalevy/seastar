@@ -315,7 +315,7 @@ public:
         : _fd(std::move(fd)), _size(size), _trim_to_size(trim_to_size), _batch_flushes(batch_flushes) {}
     output_stream(output_stream&&) noexcept = default;
     output_stream& operator=(output_stream&&) noexcept = default;
-    ~output_stream() { assert(!_in_batch && "Was this stream properly closed?"); }
+    ~output_stream() { SEASTAR_ASSERT(!_in_batch && "Was this stream properly closed?"); }
     future<> write(const char_type* buf, size_t n);
     future<> write(const char_type* buf);
 

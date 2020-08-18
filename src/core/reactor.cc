@@ -53,6 +53,7 @@
 #include <seastar/core/internal/io_desc.hh>
 #include <seastar/core/internal/buffer_allocator.hh>
 #include <seastar/core/scheduling_specific.hh>
+#include <seastar/core/assert.hh>
 #include <seastar/util/log.hh>
 #include "core/file-impl.hh"
 #include "core/reactor_backend.hh"
@@ -61,7 +62,6 @@
 #include "syscall_work_queue.hh"
 #include "cgroup.hh"
 #include "uname.hh"
-#include <cassert>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/eventfd.h>
@@ -170,7 +170,7 @@ seastar::logger seastar_logger("seastar");
 seastar::logger sched_logger("scheduler");
 
 shard_id reactor::cpu_id() const {
-    assert(_id == this_shard_id());
+    SEASTAR_ASSERT(_id == this_shard_id());
     return _id;
 }
 
@@ -351,7 +351,7 @@ reactor::write_all_part(pollable_fd_state& fd, const void* buffer, size_t len, s
 
 future<>
 reactor::write_all(pollable_fd_state& fd, const void* buffer, size_t len) {
-    assert(len);
+    SEASTAR_ASSERT(len);
     return write_all_part(fd, buffer, len, 0);
 }
 
@@ -901,7 +901,7 @@ reactor::reactor(unsigned id, reactor_backend_selector rbs, reactor_config cfg)
     sigemptyset(&mask);
     sigaddset(&mask, cpu_stall_detector::signal_number());
     auto r = ::pthread_sigmask(SIG_UNBLOCK, &mask, NULL);
-    assert(r == 0);
+    SEASTAR_ASSERT(r == 0);
 #endif
     memory::set_reclaim_hook([this] (std::function<void ()> reclaim_fn) {
         add_high_priority_task(make_task(default_scheduling_group(), [fn = std::move(reclaim_fn)] {
@@ -915,7 +915,7 @@ reactor::~reactor() {
     sigemptyset(&mask);
     sigaddset(&mask, cpu_stall_detector::signal_number());
     auto r = ::pthread_sigmask(SIG_BLOCK, &mask, NULL);
-    assert(r == 0);
+    SEASTAR_ASSERT(r == 0);
 
     _backend->stop_tick();
     auto eraser = [](auto& list) {
@@ -2045,7 +2045,7 @@ void reactor::del_timer(timer<manual_clock>* tmr) noexcept {
 }
 
 void reactor::at_exit(noncopyable_function<future<> ()> func) {
-    assert(!_stopping);
+    SEASTAR_ASSERT(!_stopping);
     _exit_funcs.push_back(std::move(func));
 }
 
@@ -2059,7 +2059,7 @@ future<> reactor::run_exit_tasks() {
 }
 
 void reactor::stop() {
-    assert(_id == 0);
+    SEASTAR_ASSERT(_id == 0);
     smp::cleanup_cpu();
     if (!_stopping) {
         // Run exit tasks locally and then stop all other engines
@@ -2716,7 +2716,7 @@ int reactor::run() {
     sa_block_notifier.sa_handler = &reactor::block_notifier;
     sa_block_notifier.sa_flags = SA_RESTART;
     auto r = sigaction(cpu_stall_detector::signal_number(), &sa_block_notifier, nullptr);
-    assert(r == 0);
+    SEASTAR_ASSERT(r == 0);
 
     bool idle = false;
 
@@ -3172,14 +3172,14 @@ readable_eventfd writeable_eventfd::read_side() {
 }
 
 file_desc writeable_eventfd::try_create_eventfd(size_t initial) {
-    assert(size_t(int(initial)) == initial);
+    SEASTAR_ASSERT(size_t(int(initial)) == initial);
     return file_desc::eventfd(initial, EFD_CLOEXEC);
 }
 
 void writeable_eventfd::signal(size_t count) {
     uint64_t c = count;
     auto r = _fd.write(&c, sizeof(c));
-    assert(r == sizeof(c));
+    SEASTAR_ASSERT(r == sizeof(c));
 }
 
 writeable_eventfd readable_eventfd::write_side() {
@@ -3187,7 +3187,7 @@ writeable_eventfd readable_eventfd::write_side() {
 }
 
 file_desc readable_eventfd::try_create_eventfd(size_t initial) {
-    assert(size_t(int(initial)) == initial);
+    SEASTAR_ASSERT(size_t(int(initial)) == initial);
     return file_desc::eventfd(initial, EFD_CLOEXEC | EFD_NONBLOCK);
 }
 
@@ -3195,7 +3195,7 @@ future<size_t> readable_eventfd::wait() {
     return engine().readable(*_fd._s).then([this] {
         uint64_t count;
         int r = ::read(_fd.get_fd(), &count, sizeof(count));
-        assert(r == sizeof(count));
+        SEASTAR_ASSERT(r == sizeof(count));
         return make_ready_future<size_t>(count);
     });
 }
@@ -3412,13 +3412,13 @@ void smp::arrive_at_event_loop_end() {
 }
 
 void smp::allocate_reactor(unsigned id, reactor_backend_selector rbs, reactor_config cfg) {
-    assert(!reactor_holder);
+    SEASTAR_ASSERT(!reactor_holder);
 
     // we cannot just write "local_engin = new reactor" since reactor's constructor
     // uses local_engine
     void *buf;
     int r = posix_memalign(&buf, cache_line_size, sizeof(reactor));
-    assert(r == 0);
+    SEASTAR_ASSERT(r == 0);
     local_engine = reinterpret_cast<reactor*>(buf);
     *internal::this_shard_id_ptr() = id;
     new (buf) reactor(id, std::move(rbs), cfg);
@@ -3482,6 +3482,10 @@ static void sigsegv_action() noexcept {
 
 static void sigabrt_action() noexcept {
     print_with_backtrace("Aborting");
+}
+
+static void sigill_action() noexcept {
+    print_with_backtrace("SEASTAR_ASSERT failed, aborting");
 }
 
 void smp::qs_deleter::operator()(smp_message_queue** qs) const {
@@ -3681,6 +3685,7 @@ void smp::configure(boost::program_options::variables_map configuration, reactor
     (void)sigsegv_action;
 #endif
     install_oneshot_signal_handler<SIGABRT, sigabrt_action>();
+    install_oneshot_signal_handler<SIGILL, sigill_action>();
 
 #ifdef SEASTAR_HAVE_DPDK
     _using_dpdk = configuration.count("dpdk-pmd");
@@ -3844,12 +3849,12 @@ void smp::configure(boost::program_options::variables_map configuration, reactor
         auto io_info = ioq_topology.at(id);
         auto cid = io_info.shard_to_coordinator[shard];
         auto vec_idx = io_info.coordinator_to_idx[cid];
-        assert(io_info.coordinator_to_idx_valid[cid]);
+        SEASTAR_ASSERT(io_info.coordinator_to_idx_valid[cid]);
         if (shard == cid) {
             struct io_queue::config cfg = disk_config.generate_config(id);
             cfg.coordinator = cid;
-            assert(vec_idx < all_io_queues[id].size());
-            assert(!all_io_queues[id][vec_idx]);
+            SEASTAR_ASSERT(vec_idx < all_io_queues[id].size());
+            SEASTAR_ASSERT(!all_io_queues[id][vec_idx]);
             all_io_queues[id][vec_idx] = new io_queue(std::move(cfg));
         }
     };
@@ -4257,7 +4262,7 @@ create_scheduling_group(sstring name, float shares) noexcept {
         return make_exception_future<scheduling_group>(std::runtime_error("Scheduling group limit exceeded"));
     }
     auto id = static_cast<unsigned>(aid);
-    assert(id < max_scheduling_groups());
+    SEASTAR_ASSERT(id < max_scheduling_groups());
     auto sg = scheduling_group(id);
     return smp::invoke_on_all([sg, name, shares] {
         return engine().init_scheduling_group(sg, name, shares);

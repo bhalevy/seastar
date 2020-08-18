@@ -113,7 +113,7 @@ uint8_t tcp_option::fill(void* h, const tcp_hdr* th, uint8_t options_size) {
         eol.write(off);
         size += option_len::eol;
     }
-    assert(size == options_size);
+    SEASTAR_ASSERT(size == options_size);
 
     return size;
 }

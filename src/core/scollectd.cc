@@ -220,7 +220,7 @@ struct cpwriter {
                 write(v.ui()); // big endian
                 break;
             default:
-                assert(0);
+                SEASTAR_ASSERT(0);
         }
     }
     cpwriter & write(const sstring & s) {

@@ -169,7 +169,7 @@ class rpc_test_env {
 
         future<> unregister_handler(MsgType t) {
             auto it = std::find(_handlers.begin(), _handlers.end(), t);
-            assert(it != _handlers.end());
+            SEASTAR_ASSERT(it != _handlers.end());
             _handlers.erase(it);
             return proto().unregister_handler(t);
         }

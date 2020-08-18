@@ -92,10 +92,10 @@ void fair_queue::push_priority_class(priority_class_ptr pc) {
 }
 
 priority_class_ptr fair_queue::pop_priority_class() {
-    assert(!_handles.empty());
+    SEASTAR_ASSERT(!_handles.empty());
     auto h = _handles.top();
     _handles.pop();
-    assert(h->_queued);
+    SEASTAR_ASSERT(h->_queued);
     h->_queued = false;
     return h;
 }
@@ -124,7 +124,7 @@ priority_class_ptr fair_queue::register_priority_class(uint32_t shares) {
 }
 
 void fair_queue::unregister_priority_class(priority_class_ptr pclass) {
-    assert(pclass->_queue.empty());
+    SEASTAR_ASSERT(pclass->_queue.empty());
     _all_classes.erase(pclass);
 }
 

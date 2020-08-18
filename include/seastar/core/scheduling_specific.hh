@@ -69,7 +69,7 @@ template<typename T>
 T* scheduling_group_get_specific_ptr(scheduling_group sg, scheduling_group_key key) noexcept {
     auto& data = internal::get_scheduling_group_specific_thread_local_data();
 #ifdef SEASTAR_DEBUG
-    assert(std::type_index(typeid(T)) == data.scheduling_group_key_configs[key.id()].type_index);
+    SEASTAR_ASSERT(std::type_index(typeid(T)) == data.scheduling_group_key_configs[key.id()].type_index);
 #endif
     auto sg_id = internal::scheduling_group_index(sg);
     if (__builtin_expect(sg_id < data.per_scheduling_group_data.size() &&
@@ -112,7 +112,7 @@ T& scheduling_group_get_specific(scheduling_group_key key) noexcept {
     // return a reference to an element whose queue_is_initialized is
     // false.
     auto& data = internal::get_scheduling_group_specific_thread_local_data();
-    assert(std::type_index(typeid(T)) == data.scheduling_group_key_configs[key.id()].type_index);
+    SEASTAR_ASSERT(std::type_index(typeid(T)) == data.scheduling_group_key_configs[key.id()].type_index);
     auto sg_id = internal::scheduling_group_index(current_scheduling_group());
     return *reinterpret_cast<T*>(data.per_scheduling_group_data[sg_id].specific_vals[key.id()]);
 }

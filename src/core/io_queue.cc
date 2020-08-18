@@ -129,7 +129,7 @@ io_priority_class io_queue::register_one_priority_class(sstring name, uint32_t s
             // make sure it was registered with the same number shares
             // Note: those may change dynamically later on in the
             // fair queue priority_class_ptr
-            assert(_registered_shares[i] == shares);
+            SEASTAR_ASSERT(_registered_shares[i] == shares);
         }
         return io_priority_class(i);
     }

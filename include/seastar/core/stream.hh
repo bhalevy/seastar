@@ -24,7 +24,7 @@
 #include <seastar/core/future.hh>
 #include <exception>
 #include <functional>
-#include <cassert>
+#include <seastar/core/assert.hh>
 
 namespace seastar {
 

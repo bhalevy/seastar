@@ -187,7 +187,7 @@ public:
     virtual ~file_data_source_impl() override {
         // If the data source hasn't been closed, we risk having reads in progress
         // that will try to access freed memory.
-        assert(_reads_in_progress == 0);
+        SEASTAR_ASSERT(_reads_in_progress == 0);
     }
     virtual future<temporary_buffer<char>> get() override {
         if (!_read_buffers.empty() && !_read_buffers.front()._ready.available()) {
@@ -209,7 +209,7 @@ public:
         uint64_t dropped = 0;
         while (n) {
             if (_read_buffers.empty()) {
-                assert(n <= _remain);
+                SEASTAR_ASSERT(n <= _remain);
                 _pos += n;
                 _remain -= n;
                 break;
@@ -394,7 +394,7 @@ public:
         // put() must usually be of chunks multiple of file::dma_alignment.
         // Only the last part can have an unaligned length. If put() was
         // called again with an unaligned pos, we have a bug in the caller.
-        assert(!(pos & (_file.disk_write_dma_alignment() - 1)));
+        SEASTAR_ASSERT(!(pos & (_file.disk_write_dma_alignment() - 1)));
         bool truncate = false;
         auto p = static_cast<const char*>(buf.get());
         size_t buf_size = buf.size();

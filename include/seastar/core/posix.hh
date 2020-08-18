@@ -22,11 +22,11 @@
 #pragma once
 
 #include <seastar/core/sstring.hh>
+#include <seastar/core/assert.hh>
 #include "abort_on_ebadf.hh"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <assert.h>
 #include <utility>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -89,7 +89,7 @@ public:
         return *this;
     }
     void close() {
-        assert(_fd != -1);
+        SEASTAR_ASSERT(_fd != -1);
         auto r = ::close(_fd);
         throw_system_error_on(r == -1, "close");
         _fd = -1;
@@ -483,7 +483,7 @@ void pin_this_thread(unsigned cpu_id) {
     CPU_ZERO(&cs);
     CPU_SET(cpu_id, &cs);
     auto r = pthread_setaffinity_np(pthread_self(), sizeof(cs), &cs);
-    assert(r == 0);
+    SEASTAR_ASSERT(r == 0);
     (void)r;
 }
 

@@ -955,7 +955,7 @@ public:
     }
 
     ~session() {
-        assert(_output_pending.available());
+        SEASTAR_ASSERT(_output_pending.available());
     }
 
     typedef temporary_buffer<char> buf_type;
@@ -1201,7 +1201,7 @@ public:
     typedef net::fragment* frag_iter;
 
     future<> do_put(frag_iter i, frag_iter e) {
-        assert(_output_pending.available());
+        SEASTAR_ASSERT(_output_pending.available());
         return do_for_each(i, e, [this](net::fragment& f) {
             auto ptr = f.base;
             auto size = f.size;
@@ -1307,7 +1307,7 @@ public:
             case GNUTLS_E_AGAIN:
                 // We only send "bye" alert, letting a "normal" (either pending, or subsequent)
                 // read deal with reading the expected EOF alert.
-                assert(gnutls_record_get_direction(*this) == 1);
+                SEASTAR_ASSERT(gnutls_record_get_direction(*this) == 1);
                 return wait_for_output().then([this] {
                     return do_shutdown();
                 });
