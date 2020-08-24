@@ -942,18 +942,6 @@ SEASTAR_TEST_CASE(test_ignored_future_warning) {
     return make_ready_future<>();
 }
 
-SEASTAR_TEST_CASE(test_futurize_from_tuple) {
-    std::tuple<int> v1 = std::make_tuple(3);
-    std::tuple<> v2 = {};
-    future<int> fut1 = futurize<int>::from_tuple(v1);
-    future<> fut2 = futurize<void>::from_tuple(v2);
-    BOOST_REQUIRE(fut1.get0() == std::get<0>(v1));
-#if SEASTAR_API_LEVEL < 5
-    BOOST_REQUIRE(fut2.get() == v2);
-#endif
-    return make_ready_future<>();
-}
-
 SEASTAR_TEST_CASE(test_repeat_until_value) {
     return do_with(int(), [] (int& counter) {
         return repeat_until_value([&counter] () -> future<std::optional<int>> {
