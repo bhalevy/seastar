@@ -313,15 +313,6 @@ template <typename T>
 struct is_trivially_move_constructible_and_destructible {
     static constexpr bool value = std::is_trivially_move_constructible<T>::value && std::is_trivially_destructible<T>::value;
 };
-
-template <bool... v>
-struct all_true : std::false_type {};
-
-template <>
-struct all_true<> : std::true_type {};
-
-template <bool... v>
-struct all_true<true, v...> : public all_true<v...> {};
 }
 
 //
