@@ -135,16 +135,6 @@ SEASTAR_TEST_CASE(test_reference) {
     return make_ready_future<>();
 }
 
-SEASTAR_TEST_CASE(test_set_future_state_with_tuple) {
-    future_state<std::tuple<int>> s1;
-    promise<int> p1;
-    const std::tuple<int> v1(42);
-    s1.set(v1);
-    p1.set_value(v1);
-
-    return make_ready_future<>();
-}
-
 SEASTAR_THREAD_TEST_CASE(test_set_value_make_exception_in_copy) {
     struct throw_in_copy {
         throw_in_copy() noexcept = default;
