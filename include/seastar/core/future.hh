@@ -308,11 +308,6 @@ constexpr bool can_inherit =
 template <typename T>
 struct uninitialized_wrapper
     : public uninitialized_wrapper_base<T, can_inherit<T>> {};
-
-template <typename T>
-struct is_trivially_move_constructible_and_destructible {
-    static constexpr bool value = std::is_trivially_move_constructible<T>::value && std::is_trivially_destructible<T>::value;
-};
 }
 
 //
@@ -496,7 +491,8 @@ struct future_for_get_promise_marker {};
 template <typename T>
 struct future_state :  public future_state_base, private internal::uninitialized_wrapper<T> {
     static constexpr bool copy_noexcept = std::is_nothrow_copy_constructible<T>::value;
-    static constexpr bool has_trivial_move_and_destroy = internal::is_trivially_move_constructible_and_destructible<T>::value;
+    static constexpr bool has_trivial_move_and_destroy =
+        std::is_trivially_move_constructible_v<T> && std::is_trivially_destructible_v<T>;
     static_assert(std::is_nothrow_move_constructible<T>::value,
                   "Types must be no-throw move constructible");
     static_assert(std::is_nothrow_destructible<T>::value,
