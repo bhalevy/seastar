@@ -1958,23 +1958,6 @@ struct futurize : public internal::futurize_base<T> {
         return type(future_state_base::current_exception_future_marker());
     }
 
-    /// Convert the tuple representation into a future
-    static type from_tuple(tuple_type&& value) {
-        return type(ready_future_marker(), std::move(value));
-    }
-    /// Convert the tuple representation into a future
-    static type from_tuple(const tuple_type& value) {
-        return type(ready_future_marker(), value);
-    }
-
-    /// Convert the tuple representation into a future
-    static type from_tuple(value_type&& value) {
-        return type(ready_future_marker(), std::move(value));
-    }
-    /// Convert the tuple representation into a future
-    static type from_tuple(const value_type& value) {
-        return type(ready_future_marker(), value);
-    }
 private:
     /// Forwards the result of, or exception thrown by, func() to the
     /// promise. This avoids creating a future if func() doesn't
