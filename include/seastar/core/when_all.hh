@@ -123,7 +123,12 @@ public:
         if (__builtin_expect(this->_state.failed(), false)) {
             *_final_resting_place = futurator::make_exception_future(std::move(this->_state).get_exception());
         } else {
-            *_final_resting_place = futurator::from_tuple(std::move(this->_state).get_value());
+            if constexpr (std::is_same_v<Future, future<>>) {
+                *_final_resting_place = make_ready_future<>();
+            } else {
+                using value_type = typename Future::value_type;
+                *_final_resting_place = make_ready_future<value_type>(std::move(this->_state).get_value());
+            }
         }
         auto base = _base;
         this->~when_all_state_component();
