@@ -71,6 +71,7 @@ template<typename T>
 class async_sharded_service : public enable_shared_from_this<T> {
 protected:
     std::function<void()> _delete_cb;
+    async_sharded_service() noexcept = default;
     virtual ~async_sharded_service() {
         if (_delete_cb) {
             _delete_cb();
@@ -90,14 +91,14 @@ class peering_sharded_service {
     sharded<Service>* _container = nullptr;
 private:
     template <typename T> friend class sharded;
-    void set_container(sharded<Service>* container) { _container = container; }
+    void set_container(sharded<Service>* container) noexcept { _container = container; }
 public:
-    peering_sharded_service() = default;
-    peering_sharded_service(peering_sharded_service<Service>&&) = default;
+    peering_sharded_service() noexcept = default;
+    peering_sharded_service(peering_sharded_service<Service>&&) noexcept = default;
     peering_sharded_service(const peering_sharded_service<Service>&) = delete;
     peering_sharded_service& operator=(const peering_sharded_service<Service>&) = delete;
-    sharded<Service>& container() { return *_container; }
-    const sharded<Service>& container() const { return *_container; }
+    sharded<Service>& container() noexcept { return *_container; }
+    const sharded<Service>& container() const noexcept { return *_container; }
 };
 
 
@@ -128,7 +129,7 @@ class sharded {
 private:
     using invoke_on_all_func_type = std::function<future<> (Service&)>;
 private:
-    void service_deleted() {
+    void service_deleted() noexcept {
         _instances[this_shard_id()].freed.set_value();
     }
     template <typename U, bool async>
@@ -136,13 +137,13 @@ private:
 
     template <typename T>
     std::enable_if_t<std::is_base_of<peering_sharded_service<T>, T>::value>
-    set_container(T& service) {
+    set_container(T& service) noexcept {
         service.set_container(this);
     }
 
     template <typename T>
     std::enable_if_t<!std::is_base_of<peering_sharded_service<T>, T>::value>
-    set_container(T& service) {
+    set_container(T& service) noexcept {
     }
 
     template<typename Func>
@@ -157,18 +158,18 @@ private:
 
     template<typename Func>
     future<>
-    sharded_parallel_for_each(Func&& func) {
+    sharded_parallel_for_each(Func&& func) noexcept {
         return sharded_parallel_for_each(_instances.size(), smp_submit_to_options{}, std::forward<Func>(func));
     }
 public:
     /// Constructs an empty \c sharded object.  No instances of the service are
     /// created.
-    sharded() {}
+    sharded() noexcept {}
     sharded(const sharded& other) = delete;
     sharded& operator=(const sharded& other) = delete;
     /// Sharded object with T that inherits from peering_sharded_service
     /// cannot be moved safely, so disable move operations.
-    sharded(sharded&& other) noexcept = delete;
+    sharded(sharded&& other) = delete;
     sharded& operator=(sharded&& other) = delete;
     /// Destroyes a \c sharded object.  Must not be in a started state.
     ~sharded();
@@ -180,7 +181,7 @@ public:
     /// \return a \ref seastar::future<> that becomes ready when all instances have been
     ///         constructed.
     template <typename... Args>
-    future<> start(Args&&... args);
+    future<> start(Args&&... args) noexcept;
 
     /// Starts \c Service by constructing an instance on a single logical core
     /// with a copy of \c args passed to the constructor.
@@ -189,13 +190,13 @@ public:
     /// \return a \ref seastar::future<> that becomes ready when the instance has been
     ///         constructed.
     template <typename... Args>
-    future<> start_single(Args&&... args);
+    future<> start_single(Args&&... args) noexcept;
 
     /// Stops all started instances and destroys them.
     ///
     /// For every started instance, its \c stop() method is called, and then
     /// it is destroyed.
-    future<> stop();
+    future<> stop() noexcept;
 
     /// Invoke a type-erased function on all instances of `Service`.
     /// The return value becomes ready when all instances have processed
@@ -417,19 +418,19 @@ public:
     }
 
     /// Gets a reference to the local instance.
-    const Service& local() const;
+    const Service& local() const noexcept;
 
     /// Gets a reference to the local instance.
-    Service& local();
+    Service& local() noexcept;
 
     /// Gets a shared pointer to the local instance.
-    shared_ptr<Service> local_shared();
+    shared_ptr<Service> local_shared() noexcept;
 
     /// Checks whether the local instance has been initialized.
-    bool local_is_initialized() const;
+    bool local_is_initialized() const noexcept;
 
 private:
-    void track_deletion(shared_ptr<Service>& s, std::false_type) {
+    void track_deletion(shared_ptr<Service>& s, std::false_type) noexcept {
         // do not wait for instance to be deleted since it is not going to notify us
         service_deleted();
     }
@@ -556,7 +557,8 @@ sharded_parameter<Func, Param...>::evaluate() const {
 template <typename Service>
 template <typename... Args>
 future<>
-sharded<Service>::start(Args&&... args) {
+sharded<Service>::start(Args&&... args) noexcept {
+  try {
     _instances.resize(smp::count);
     return sharded_parallel_for_each([this, args = std::make_tuple(std::forward<Args>(args)...)] () mutable {
         _instances[this_shard_id()].service = std::apply([this] (Args... args) {
@@ -572,12 +574,16 @@ sharded<Service>::start(Args&&... args) {
             });
         }
     });
+  } catch (...) {
+    return current_exception_as_future();
+  }
 }
 
 template <typename Service>
 template <typename... Args>
 future<>
-sharded<Service>::start_single(Args&&... args) {
+sharded<Service>::start_single(Args&&... args) noexcept {
+  try {
     assert(_instances.empty());
     _instances.resize(1);
     return smp::submit_to(0, [this, args = std::make_tuple(std::forward<Args>(args)...)] () mutable {
@@ -594,6 +600,9 @@ sharded<Service>::start_single(Args&&... args) {
             });
         }
     });
+  } catch (...) {
+    return current_exception_as_future();
+  }
 }
 
 namespace internal {
@@ -649,7 +658,7 @@ stop_sharded_instance(Service& instance) {
 
 template <typename Service>
 future<>
-sharded<Service>::stop() {
+sharded<Service>::stop() noexcept {
     return sharded_parallel_for_each([this] {
         auto inst = _instances[this_shard_id()].service;
         if (!inst) {
@@ -706,25 +715,25 @@ sharded<Service>::invoke_on_others(smp_submit_to_options options, Func func, Arg
 }
 
 template <typename Service>
-const Service& sharded<Service>::local() const {
+const Service& sharded<Service>::local() const noexcept {
     assert(local_is_initialized());
     return *_instances[this_shard_id()].service;
 }
 
 template <typename Service>
-Service& sharded<Service>::local() {
+Service& sharded<Service>::local() noexcept {
     assert(local_is_initialized());
     return *_instances[this_shard_id()].service;
 }
 
 template <typename Service>
-shared_ptr<Service> sharded<Service>::local_shared() {
+shared_ptr<Service> sharded<Service>::local_shared() noexcept {
     assert(local_is_initialized());
     return _instances[this_shard_id()].service;
 }
 
 template <typename Service>
-inline bool sharded<Service>::local_is_initialized() const {
+inline bool sharded<Service>::local_is_initialized() const noexcept {
     return _instances.size() > this_shard_id() &&
            _instances[this_shard_id()].service;
 }
