@@ -619,7 +619,6 @@ add_library (seastar STATIC
   src/core/prometheus.cc
   src/core/reactor.cc
   src/core/resource.cc
-  src/core/sharded.cc
   src/core/scollectd.cc
   src/core/scollectd-impl.hh
   src/core/systemwide_memory_barrier.cc

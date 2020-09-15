@@ -144,6 +144,22 @@ private:
     std::enable_if_t<!std::is_base_of<peering_sharded_service<T>, T>::value>
     set_container(T& service) {
     }
+
+    template<typename Func>
+    SEASTAR_CONCEPT( requires std::is_nothrow_move_constructible_v<Func> )
+    static future<> sharded_parallel_for_each(unsigned nr_shards, smp_submit_to_options options, Func&& func) noexcept {
+        static_assert(std::is_same<future<>, typename futurize<std::result_of_t<Func()>>::type>::value, "bad Func signature");
+        static_assert(std::is_nothrow_move_constructible_v<Func>);
+        return parallel_for_each(boost::irange<unsigned>(0, nr_shards), [options, &func] (unsigned id) {
+            return smp::submit_to(id, options, Func(func));
+        });
+    }
+
+    template<typename Func>
+    future<>
+    sharded_parallel_for_each(Func&& func) {
+        return sharded_parallel_for_each(_instances.size(), smp_submit_to_options{}, std::forward<Func>(func));
+    }
 public:
     /// Constructs an empty \c sharded object.  No instances of the service are
     /// created.
@@ -537,26 +553,15 @@ sharded_parameter<Func, Param...>::evaluate() const {
     return std::apply(unwrap_params_and_invoke, _params);
 }
 
-namespace internal {
-
-using on_each_shard_func = std::function<future<> (unsigned shard)>;
-
-future<> sharded_parallel_for_each(unsigned nr_shards, on_each_shard_func on_each_shard);
-
-}
-
 template <typename Service>
 template <typename... Args>
 future<>
 sharded<Service>::start(Args&&... args) {
     _instances.resize(smp::count);
-    return internal::sharded_parallel_for_each(_instances.size(),
-        [this, args = std::make_tuple(std::forward<Args>(args)...)] (unsigned c) mutable {
-            return smp::submit_to(c, [this, args] () mutable {
+    return sharded_parallel_for_each([this, args = std::make_tuple(std::forward<Args>(args)...)] () mutable {
                 _instances[this_shard_id()].service = std::apply([this] (Args... args) {
                     return create_local_service(internal::unwrap_sharded_arg(std::forward<Args>(args))...);
                 }, args);
-            });
     }).then_wrapped([this] (future<> f) {
         try {
             f.get();
@@ -645,23 +650,19 @@ stop_sharded_instance(Service& instance) {
 template <typename Service>
 future<>
 sharded<Service>::stop() {
-    return internal::sharded_parallel_for_each(_instances.size(), [this] (unsigned c) mutable {
-        return smp::submit_to(c, [this] () mutable {
+    return sharded_parallel_for_each([this] {
             auto inst = _instances[this_shard_id()].service;
             if (!inst) {
                 return make_ready_future<>();
             }
             return internal::stop_sharded_instance(*inst);
-        });
     }).then_wrapped([this] (future<> fut) {
-        return internal::sharded_parallel_for_each(_instances.size(), [this] (unsigned c) {
-            return smp::submit_to(c, [this] {
+        return sharded_parallel_for_each([this] {
                 if (_instances[this_shard_id()].service == nullptr) {
                     return make_ready_future<>();
                 }
                 _instances[this_shard_id()].service = nullptr;
                 return _instances[this_shard_id()].freed.get_future();
-            });
         }).finally([this, fut = std::move(fut)] () mutable {
             _instances.clear();
             _instances = std::vector<sharded<Service>::entry>();
@@ -673,10 +674,8 @@ sharded<Service>::stop() {
 template <typename Service>
 future<>
 sharded<Service>::invoke_on_all(smp_submit_to_options options, std::function<future<> (Service&)> func) {
-    return internal::sharded_parallel_for_each(_instances.size(), [this, options, func = std::move(func)] (unsigned c) {
-        return smp::submit_to(c, options, [this, func] {
+    return sharded_parallel_for_each(_instances.size(), options, [this, func = std::move(func)] {
             return func(*get_local_service());
-        });
     });
 }
 
@@ -688,7 +687,7 @@ future<>
 sharded<Service>::invoke_on_all(smp_submit_to_options options, Func func, Args... args) {
     static_assert(std::is_same_v<futurize_t<std::invoke_result_t<Func, Service&, Args...>>, future<>>,
                   "invoke_on_all()'s func must return void or future<>");
-    return invoke_on_all(options, invoke_on_all_func_type([func, args = std::tuple(std::move(args)...)] (Service& service) mutable {
+    return invoke_on_all(options, invoke_on_all_func_type([func = std::move(func), args = std::tuple(std::move(args)...)] (Service& service) mutable {
         return futurize_apply(func, std::tuple_cat(std::forward_as_tuple(service), args));
     }));
 }
