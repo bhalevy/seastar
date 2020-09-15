@@ -559,9 +559,9 @@ future<>
 sharded<Service>::start(Args&&... args) {
     _instances.resize(smp::count);
     return sharded_parallel_for_each([this, args = std::make_tuple(std::forward<Args>(args)...)] () mutable {
-                _instances[this_shard_id()].service = std::apply([this] (Args... args) {
-                    return create_local_service(internal::unwrap_sharded_arg(std::forward<Args>(args))...);
-                }, args);
+        _instances[this_shard_id()].service = std::apply([this] (Args... args) {
+            return create_local_service(internal::unwrap_sharded_arg(std::forward<Args>(args))...);
+        }, args);
     }).then_wrapped([this] (future<> f) {
         try {
             f.get();
@@ -651,18 +651,18 @@ template <typename Service>
 future<>
 sharded<Service>::stop() {
     return sharded_parallel_for_each([this] {
-            auto inst = _instances[this_shard_id()].service;
-            if (!inst) {
-                return make_ready_future<>();
-            }
-            return internal::stop_sharded_instance(*inst);
+        auto inst = _instances[this_shard_id()].service;
+        if (!inst) {
+            return make_ready_future<>();
+        }
+        return internal::stop_sharded_instance(*inst);
     }).then_wrapped([this] (future<> fut) {
         return sharded_parallel_for_each([this] {
-                if (_instances[this_shard_id()].service == nullptr) {
-                    return make_ready_future<>();
-                }
-                _instances[this_shard_id()].service = nullptr;
-                return _instances[this_shard_id()].freed.get_future();
+            if (_instances[this_shard_id()].service == nullptr) {
+                return make_ready_future<>();
+            }
+            _instances[this_shard_id()].service = nullptr;
+            return _instances[this_shard_id()].freed.get_future();
         }).finally([this, fut = std::move(fut)] () mutable {
             _instances.clear();
             _instances = std::vector<sharded<Service>::entry>();
@@ -675,7 +675,7 @@ template <typename Service>
 future<>
 sharded<Service>::invoke_on_all(smp_submit_to_options options, std::function<future<> (Service&)> func) {
     return sharded_parallel_for_each(_instances.size(), options, [this, func = std::move(func)] {
-            return func(*get_local_service());
+        return func(*get_local_service());
     });
 }
 
