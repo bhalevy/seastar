@@ -248,23 +248,6 @@ using future_stored_type_t = typename future_stored_type<T...>::type;
 template<typename T>
 using future_tuple_type_t = std::conditional_t<std::is_same_v<T, monostate>, std::tuple<>, std::tuple<T>>;
 
-// It doesn't seem to be possible to use std::tuple_element_t with an empty tuple. There is an static_assert in it that
-// fails the build even if it is in the non enabled side of std::conditional.
-template <typename T>
-struct get0_return_type;
-
-template <>
-struct get0_return_type<std::tuple<>> {
-    using type = void;
-    static type get0(std::tuple<> v) { }
-};
-
-template <typename T0, typename... T>
-struct get0_return_type<std::tuple<T0, T...>> {
-    using type = T0;
-    static type get0(std::tuple<T0, T...> v) { return std::get<0>(std::move(v)); }
-};
-
 template<typename T>
 using maybe_wrap_ref = std::conditional_t<std::is_reference_v<T>, std::reference_wrapper<std::remove_reference_t<T>>, T>;
 
@@ -1398,7 +1381,7 @@ public:
     /// one type parameter.
     ///
     /// Equivalent to: \c std::get<0>(f.get()).
-    using get0_return_type = typename internal::get0_return_type<tuple_type>::type;
+    using get0_return_type = std::conditional_t<std::is_same_v<value_type, internal::monostate>, void, value_type>;
     get0_return_type get0() {
         return (get0_return_type)get();
     }
