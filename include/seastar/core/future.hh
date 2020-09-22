@@ -291,15 +291,8 @@ struct uninitialized_wrapper_base<T, false> {
 public:
     uninitialized_wrapper_base() noexcept = default;
     template<typename... U>
-    std::enable_if_t<!std::is_same_v<std::tuple<std::remove_cv_t<U>...>, std::tuple<tuple_type>>, void>
-    uninitialized_set(U&&... vs) {
+    void uninitialized_set(U&&... vs) {
         new (&_v.value) maybe_wrap_ref<T>{T(std::forward<U>(vs)...)};
-    }
-    void uninitialized_set(tuple_type&& v) {
-        uninitialized_set(std::move(std::get<0>(v)));
-    }
-    void uninitialized_set(const tuple_type& v) {
-        uninitialized_set(std::get<0>(v));
     }
     maybe_wrap_ref<T>& uninitialized_get() {
         return _v.value;
@@ -313,19 +306,8 @@ template <typename T> struct uninitialized_wrapper_base<T, true> : private T {
     using tuple_type = future_tuple_type_t<T>;
     uninitialized_wrapper_base() noexcept = default;
     template<typename... U>
-    std::enable_if_t<!std::is_same_v<std::tuple<std::remove_cv_t<U>...>, std::tuple<tuple_type>>, void>
-    uninitialized_set(U&&... vs) {
+    void uninitialized_set(U&&... vs) {
         new (this) T(std::forward<U>(vs)...);
-    }
-    void uninitialized_set(tuple_type&& v) {
-        if constexpr (std::tuple_size_v<tuple_type> != 0) {
-            uninitialized_set(std::move(std::get<0>(v)));
-        }
-    }
-    void uninitialized_set(const tuple_type& v) {
-        if constexpr (std::tuple_size_v<tuple_type> != 0) {
-            uninitialized_set(std::get<0>(v));
-        }
     }
     T& uninitialized_get() {
         return *this;

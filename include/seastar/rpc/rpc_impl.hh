@@ -369,6 +369,11 @@ template <typename Payload, typename... T>
 struct rcv_reply_base  {
     bool done = false;
     promise<T...> p;
+    template<typename V>
+    void set_value(std::tuple<V>&& v) {
+        done = true;
+        p.set_value(std::move(std::get<0>(v)));
+    }
     template<typename... V>
     void set_value(V&&... v) {
         done = true;
