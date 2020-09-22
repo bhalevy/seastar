@@ -280,7 +280,6 @@ struct uninitialized_wrapper_base;
 
 template <typename T>
 struct uninitialized_wrapper_base<T, false> {
-    using tuple_type = future_tuple_type_t<T>;
     union any {
         any() noexcept {}
         ~any() {}
@@ -303,7 +302,6 @@ public:
 };
 
 template <typename T> struct uninitialized_wrapper_base<T, true> : private T {
-    using tuple_type = future_tuple_type_t<T>;
     uninitialized_wrapper_base() noexcept = default;
     template<typename... U>
     void uninitialized_set(U&&... vs) {
@@ -631,14 +629,6 @@ struct future_state :  public future_state_base, private internal::uninitialized
             rethrow_exception();
         }
         return this->uninitialized_get();
-    }
-    using get0_return_type = typename internal::get0_return_type<internal::future_tuple_type_t<T>>::type;
-    static get0_return_type get0(T&& x) {
-        return internal::get0_return_type<T>::get0(std::move(x));
-    }
-
-    get0_return_type get0() {
-        return std::move(*this).get();
     }
 };
 
@@ -1408,7 +1398,7 @@ public:
     /// one type parameter.
     ///
     /// Equivalent to: \c std::get<0>(f.get()).
-    using get0_return_type = typename future_state::get0_return_type;
+    using get0_return_type = typename internal::get0_return_type<tuple_type>::type;
     get0_return_type get0() {
         return (get0_return_type)get();
     }
