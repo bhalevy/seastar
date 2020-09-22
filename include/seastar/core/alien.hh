@@ -142,8 +142,7 @@ struct return_type_of {
 };
 template<typename Func>
 struct return_type_of<Func, false> {
-    using return_tuple_t = typename futurize<std::invoke_result_t<Func>>::tuple_type;
-    using type = std::tuple_element_t<0, return_tuple_t>;
+    using type = typename futurize<std::invoke_result_t<Func>>::value_type;
     static void set(std::promise<type>& p, return_value_t<Func>&& t) {
         p.set_value(std::move(t));
     }

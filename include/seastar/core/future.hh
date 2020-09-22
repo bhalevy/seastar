@@ -246,9 +246,6 @@ template <typename... T>
 using future_stored_type_t = typename future_stored_type<T...>::type;
 
 template<typename T>
-using future_tuple_type_t = std::conditional_t<std::is_same_v<T, monostate>, std::tuple<>, std::tuple<T>>;
-
-template<typename T>
 using maybe_wrap_ref = std::conditional_t<std::is_reference_v<T>, std::reference_wrapper<std::remove_reference_t<T>>, T>;
 
 /// \brief Wrapper for keeping uninitialized values of non default constructible types.
@@ -1313,7 +1310,6 @@ private:
 public:
     /// \brief The data type carried by the future.
     using value_type = internal::future_stored_type_t<T SEASTAR_ELLIPSIS>;
-    using tuple_type = internal::future_tuple_type_t<value_type>;
     /// \brief The data type carried by the future.
     using promise_type = promise<T SEASTAR_ELLIPSIS>;
     /// \brief Moves the future into a new object.
@@ -1848,7 +1844,6 @@ struct futurize : public internal::futurize_base<T> {
     using promise_base_with_type = typename base::promise_base_with_type;
     /// The value tuple type associated with \c type
     using value_type = typename type::value_type;
-    using tuple_type = typename type::tuple_type;
     using base::convert;
     using base::make_exception_future;
 
