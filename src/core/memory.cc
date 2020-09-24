@@ -1247,28 +1247,6 @@ static inline cpu_pages& get_cpu_mem()
 static constexpr int debug_allocation_pattern = 0xab;
 #endif
 
-void* allocate(size_t size) {
-    if (size <= sizeof(free_object)) {
-        size = sizeof(free_object);
-    }
-    void* ptr;
-    if (size <= max_small_allocation) {
-        size = object_size_with_alloc_site(size);
-        ptr = get_cpu_mem().allocate_small(size);
-    } else {
-        ptr = allocate_large(size);
-    }
-    if (!ptr) {
-        on_allocation_failure(size);
-    } else {
-#ifdef SEASTAR_DEBUG_ALLOCATIONS
-        std::memset(ptr, debug_allocation_pattern, size);
-#endif
-    }
-    ++g_allocs;
-    return ptr;
-}
-
 void* allocate_aligned(size_t align, size_t size) {
     if (size <= sizeof(free_object)) {
         size = std::max(sizeof(free_object), align);
@@ -1301,12 +1279,17 @@ void free(void* obj) {
     get_cpu_mem().free(obj);
 }
 
-void free(void* obj, size_t size) {
-    if (get_cpu_mem().try_cross_cpu_free(obj)) {
-        return;
-    }
-    ++g_frees;
-    get_cpu_mem().free(obj, size);
+// Pointers returned by new have to be aligned to
+// __STDCPP_DEFAULT_NEW_ALIGNMENT__ in c++17. In c++14 there is
+// nothing specific to new, so we use std::max_align_t.
+#ifdef __STDCPP_DEFAULT_NEW_ALIGNMENT__
+constexpr size_t new_alignment = __STDCPP_DEFAULT_NEW_ALIGNMENT__;
+#else
+constexpr size_t new_alignment = alignof(std::max_align_t);
+#endif
+
+void* allocate(size_t size) {
+    return allocate_aligned(new_alignment, size);
 }
 
 void free_aligned(void* obj, size_t align, size_t size) {
@@ -1317,7 +1300,15 @@ void free_aligned(void* obj, size_t align, size_t size) {
         // Same adjustment as allocate_aligned()
         size = 1 << log2ceil(object_size_with_alloc_site(size));
     }
-    free(obj, size);
+    if (get_cpu_mem().try_cross_cpu_free(obj)) {
+        return;
+    }
+    ++g_frees;
+    get_cpu_mem().free(obj, size);
+}
+
+void free(void* obj, size_t size) {
+    free_aligned(obj, new_alignment, size);
 }
 
 void shrink(void* obj, size_t new_size) {
