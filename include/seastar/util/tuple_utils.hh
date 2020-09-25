@@ -30,16 +30,6 @@ namespace seastar {
 /// \cond internal
 namespace internal {
 
-template<typename Tuple>
-Tuple untuple(Tuple t) {
-    return t;
-}
-
-template<typename T>
-T untuple(std::tuple<T> t) {
-    return std::get<0>(std::move(t));
-}
-
 template<typename Tuple, typename Function, size_t... I>
 void tuple_for_each_helper(Tuple&& t, Function&& f, std::index_sequence<I...>&&) {
     auto ignore_me = { (f(std::get<I>(std::forward<Tuple>(t))), 1)... };
