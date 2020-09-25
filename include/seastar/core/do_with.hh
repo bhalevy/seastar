@@ -41,7 +41,7 @@ public:
     template<typename... T>
     explicit do_with_state(T&&... args) : _held(std::forward<T>(args)...) {}
     virtual void run_and_dispose() noexcept override {
-        _pr.set_urgent_state(std::move(this->_state));
+        _pr.set_urgent_state(this->state());
         delete this;
     }
     task* waiting_task() noexcept override {

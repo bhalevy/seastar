@@ -73,10 +73,10 @@ void parallel_for_each_state::wait_for_one() noexcept {
 }
 
 void parallel_for_each_state::run_and_dispose() noexcept {
-    if (_state.failed()) {
-        _ex = std::move(_state).get_exception();
+    if (_future.failed()) {
+        _ex = state().get_exception();
     }
-    _state = {};
+    set_value();
     wait_for_one();
 }
 

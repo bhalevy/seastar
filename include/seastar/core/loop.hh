@@ -54,17 +54,17 @@ public:
     future<> get_future() { return _promise.get_future(); }
     task* waiting_task() noexcept override { return _promise.waiting_task(); }
     virtual void run_and_dispose() noexcept override {
-        if (_state.failed()) {
-            _promise.set_exception(std::move(_state).get_exception());
+        if (_future.failed()) {
+            _promise.set_exception(std::move(_future).get_exception());
             delete this;
             return;
         } else {
-            if (_state.get0() == stop_iteration::yes) {
+            if (_future.get0() == stop_iteration::yes) {
                 _promise.set_value();
                 delete this;
                 return;
             }
-            _state = {};
+            set_state({});
         }
         try {
             do {
@@ -84,7 +84,7 @@ public:
             delete this;
             return;
         }
-        _state.set(stop_iteration::no);
+        set_state(future_state(ready_future_marker{}, stop_iteration::no));
         schedule(this);
     }
 };
@@ -165,23 +165,23 @@ class repeat_until_value_state final : public continuation_base<std::optional<T>
 public:
     explicit repeat_until_value_state(AsyncAction action) : _action(std::move(action)) {}
     repeat_until_value_state(std::optional<T> st, AsyncAction action) : repeat_until_value_state(std::move(action)) {
-        this->_state.set(std::move(st));
+        this->set_state(future_state<std::optional<T>>(ready_future_marker{}, std::move(st)));
     }
     future<T> get_future() { return _promise.get_future(); }
     task* waiting_task() noexcept override { return _promise.waiting_task(); }
     virtual void run_and_dispose() noexcept override {
-        if (this->_state.failed()) {
-            _promise.set_exception(std::move(this->_state).get_exception());
+        if (this->_future.failed()) {
+            _promise.set_exception(std::move(this->_future).get_exception());
             delete this;
             return;
         } else {
-            auto v = std::move(this->_state).get0();
+            auto v = std::move(this->_future).get0();
             if (v) {
                 _promise.set_value(std::move(*v));
                 delete this;
                 return;
             }
-            this->_state = {};
+            this->set_state({});
         }
         try {
             do {
@@ -202,7 +202,7 @@ public:
             delete this;
             return;
         }
-        this->_state.set(std::nullopt);
+        this->set_value(std::nullopt);
         schedule(this);
     }
 };
@@ -277,13 +277,13 @@ public:
     future<> get_future() { return _promise.get_future(); }
     task* waiting_task() noexcept override { return _promise.waiting_task(); }
     virtual void run_and_dispose() noexcept override {
-        if (_state.available()) {
-            if (_state.failed()) {
-                _promise.set_urgent_state(std::move(_state));
+        if (_future.available()) {
+            if (_future.failed()) {
+                _promise.set_urgent_state(state());
                 delete this;
                 return;
             }
-            _state = {}; // allow next cycle to overrun state
+            set_value(); // allow next cycle to overrun state
         }
         try {
             do {
@@ -382,8 +382,8 @@ public:
     }
     virtual void run_and_dispose() noexcept override {
         std::unique_ptr<do_for_each_state> zis(this);
-        if (_state.failed()) {
-            _pr.set_urgent_state(std::move(_state));
+        if (_future.failed()) {
+            _pr.set_urgent_state(this->state());
             return;
         }
         while (_begin != _end) {
@@ -393,7 +393,7 @@ public:
                 return;
             }
             if (!f.available() || need_preempt()) {
-                _state = {};
+                this->set_value();
                 internal::set_callback(f, this);
                 zis.release();
                 return;

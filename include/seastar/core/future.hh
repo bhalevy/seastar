@@ -697,13 +697,22 @@ template <typename T = void>
 class continuation_base : public task {
 protected:
     using future_state = seastar::future_state<internal::future_stored_type_t<T SEASTAR_ELLIPSIS>>;
-    future_state _state;
+    // We only really need a future_state, but having a full future
+    // saves a move in then_wrapped.
+    future<T> _future;
     using future_type = future<T SEASTAR_ELLIPSIS>;
     using promise_type = promise<T SEASTAR_ELLIPSIS>;
 public:
     continuation_base() noexcept = default;
     void set_state(future_state&& state) noexcept {
-        _state = std::move(state);
+        _future = future<T>(std::move(state));
+    }
+    template <typename... A>
+    void set_value(A&&... a) noexcept {
+        set_state(future_state(ready_future_marker{}, std::forward<A>(a)...));
+    }
+    future_state&& state() {
+        return std::move(_future._state);
     }
     // This override of waiting_task() is needed here because there are cases
     // when backtrace is obtained from the destructor of this class and objects
@@ -764,7 +773,7 @@ struct continuation final : continuation_base_with_promise<Promise, T SEASTAR_EL
         , _wrapper(std::move(wrapper)) {}
     virtual void run_and_dispose() noexcept override {
         try {
-            _wrapper(std::move(this->_pr), _func, std::move(this->_state));
+            _wrapper(this->_pr, _func, std::move(this->_future));
         } catch (...) {
             this->_pr.set_to_current_exception();
         }
@@ -1361,6 +1370,7 @@ private:
     explicit future(future_state&& state) noexcept
             : _state(std::move(state)) {
     }
+    future() noexcept = default;
     internal::promise_base_with_type<T SEASTAR_ELLIPSIS> get_promise() noexcept {
         assert(!_promise);
         return internal::promise_base_with_type<T SEASTAR_ELLIPSIS>(this);
@@ -1369,7 +1379,7 @@ private:
         return static_cast<internal::promise_base_with_type<T SEASTAR_ELLIPSIS>*>(future_base::detach_promise());
     }
     void schedule(continuation_base<T SEASTAR_ELLIPSIS>* tws) noexcept {
-        future_base::schedule(tws, &tws->_state);
+        future_base::schedule(tws, &tws->_future._state);
     }
     template <typename Pr, typename Func, typename Wrapper>
     void schedule(Pr&& pr, Func&& func, Wrapper&& wrapper) noexcept {
@@ -1568,19 +1578,12 @@ private:
         using futurator = futurize<internal::future_result_t<Func, T SEASTAR_ELLIPSIS>>;
         typename futurator::type fut(future_for_get_promise_marker{});
         using pr_type = decltype(fut.get_promise());
-        schedule(fut.get_promise(), std::move(func), [](pr_type&& pr, Func& func, future_state&& state) {
-            if (state.failed()) {
-                pr.set_exception(static_cast<future_state_base&&>(std::move(state)));
+        schedule(fut.get_promise(), std::move(func), [](pr_type& pr, Func& func, future<T>&& fut) {
+            if (fut.failed()) {
+                pr.set_exception(static_cast<future_state_base&&>(std::move(fut._state)));
             } else {
-                futurator::satisfy_with_result_of(std::move(pr), [&func, &state] {
-#if SEASTAR_API_LEVEL < 5
-                    return std::apply(func, std::move(state).get_value());
-#else
-                    // clang thinks that "state" is not used, below, for future<>.
-                    // Make it think it is used to avoid an unused-lambda-capture warning.
-                    (void)state;
-                    return internal::future_invoke(func, std::move(state).get_value());
-#endif
+                futurator::satisfy_with_result_of(std::move(pr), [&func, &fut] {
+                    return internal::future_invoke(func, std::move(fut._state).get_value());
                 });
             }
         });
@@ -1663,9 +1666,9 @@ private:
         using futurator = futurize<FuncResult>;
         typename futurator::type fut(future_for_get_promise_marker{});
         using pr_type = decltype(fut.get_promise());
-        schedule(fut.get_promise(), std::move(func), [](pr_type&& pr, Func& func, future_state&& state) {
-            futurator::satisfy_with_result_of(std::move(pr), [&func, &state] {
-                return func(future(std::move(state)));
+        schedule(fut.get_promise(), std::move(func), [](pr_type& pr, Func& func, future<T>&& fut) {
+            futurator::satisfy_with_result_of(std::move(pr), [&func, &fut] {
+                return func(std::move(fut));
             });
         });
         return fut;
@@ -1894,7 +1897,9 @@ private:
     friend class promise;
     template <typename U>
     friend struct futurize;
-    template <typename SEASTAR_ELLIPSIS U>
+    template <typename U>
+    friend struct continuation_base;
+    template <typename... U>
     friend class internal::promise_base_with_type;
     template <typename... U, typename... A>
     friend future<U...> make_ready_future(A&&... value) noexcept;

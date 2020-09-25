@@ -120,10 +120,10 @@ public:
     task* waiting_task() noexcept override { return _base->waiting_task(); }
     virtual void run_and_dispose() noexcept override {
         using futurator = futurize<Future>;
-        if (__builtin_expect(this->_state.failed(), false)) {
-            *_final_resting_place = futurator::make_exception_future(std::move(this->_state).get_exception());
+        if (__builtin_expect(this->_future.failed(), false)) {
+            *_final_resting_place = futurator::make_exception_future(this->state().get_exception());
         } else {
-            *_final_resting_place = futurator::from_tuple(std::move(this->_state).get_value());
+            *_final_resting_place = futurator::from_tuple(this->state().get_value());
         }
         auto base = _base;
         this->~when_all_state_component();
