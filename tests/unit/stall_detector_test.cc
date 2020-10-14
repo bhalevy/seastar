@@ -34,16 +34,20 @@ using namespace std::chrono_literals;
 
 class temporary_stall_detector_settings {
     std::chrono::milliseconds _old_threshold;
+    std::chrono::milliseconds _old_watchdog_threshold;
     std::function<void ()> _old_report;
 public:
     temporary_stall_detector_settings(std::chrono::duration<double> threshold, std::function<void ()> report)
             : _old_threshold(engine().get_blocked_reactor_notify_ms())
+            , _old_watchdog_threshold(engine().get_blocked_reactor_watchdog_ms())
             , _old_report(engine().get_stall_detector_report_function()) {
         engine().update_blocked_reactor_notify_ms(std::chrono::duration_cast<std::chrono::milliseconds>(threshold));
+        engine().update_blocked_reactor_watchdog_ms(std::chrono::milliseconds(0));
         engine().set_stall_detector_report_function(std::move(report));
     }
     ~temporary_stall_detector_settings() {
         engine().update_blocked_reactor_notify_ms(_old_threshold);
+        engine().update_blocked_reactor_watchdog_ms(_old_watchdog_threshold);
         engine().set_stall_detector_report_function(std::move(_old_report));
     }
 };

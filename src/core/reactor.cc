@@ -1037,14 +1037,20 @@ void cpu_stall_detector::update_config(cpu_stall_detector_config cfg) {
     _config = cfg;
     _threshold = std::chrono::duration_cast<std::chrono::steady_clock::duration>(cfg.threshold);
     _slack = std::chrono::duration_cast<std::chrono::steady_clock::duration>(cfg.threshold * cfg.slack);
+    _watchdog_threshold = std::chrono::duration_cast<std::chrono::steady_clock::duration>(cfg.watchdog_threshold);
     _stall_detector_reports_per_minute = cfg.stall_detector_reports_per_minute;
     _max_reports_per_minute = cfg.stall_detector_reports_per_minute;
     _rearm_timer_at = std::chrono::steady_clock::now();
 }
 
 void cpu_stall_detector::maybe_report() {
+    if (_watchdog_threshold > std::chrono::milliseconds(0)) {
+        if (std::chrono::steady_clock::now() - _run_started_at >= _watchdog_threshold) {
+            generate_trace(true);
+        }
+    }
     if (_reported++ < _max_reports_per_minute) {
-        generate_trace();
+        generate_trace(false);
     }
 }
 // We use a tick at every timer firing so we can report suppressed backtraces.
@@ -1168,6 +1174,22 @@ reactor::get_blocked_reactor_notify_ms() const {
 }
 
 void
+reactor::update_blocked_reactor_watchdog_ms(std::chrono::milliseconds ms) {
+    auto cfg = _cpu_stall_detector->get_config();
+    if (ms != cfg.watchdog_threshold) {
+        cfg.watchdog_threshold = ms;
+        _cpu_stall_detector->update_config(cfg);
+        seastar_logger.info("updated: blocked-reactor-watchdog-ms={}", ms.count());
+    }
+}
+
+std::chrono::milliseconds
+reactor::get_blocked_reactor_watchdog_ms() const {
+    auto d = _cpu_stall_detector->get_config().watchdog_threshold;
+    return std::chrono::duration_cast<std::chrono::milliseconds>(d);
+}
+
+void
 reactor::set_stall_detector_report_function(std::function<void ()> report) {
     auto cfg = _cpu_stall_detector->get_config();
     cfg.report = std::move(report);
@@ -1185,7 +1207,7 @@ reactor::block_notifier(int) {
 }
 
 void
-cpu_stall_detector::generate_trace() {
+cpu_stall_detector::generate_trace(bool do_abort) {
     auto delta = std::chrono::steady_clock::now() - _run_started_at;
 
     _total_reported++;
@@ -1198,7 +1220,13 @@ cpu_stall_detector::generate_trace() {
     buf.append("Reactor stalled for ");
     buf.append_decimal(uint64_t(delta / 1ms));
     buf.append(" ms");
+    if (do_abort) {
+        buf.append("\nWatchdog timer expired. Aborting...");
+    }
     print_with_backtrace(buf);
+    if (do_abort) {
+        abort();
+    }
 }
 
 template <typename T, typename E, typename EnableFunc>
@@ -1304,8 +1332,10 @@ void reactor::configure(boost::program_options::variables_map vm) {
     _task_quota = std::chrono::duration_cast<sched_clock::duration>(task_quota);
 
     auto blocked_time = vm["blocked-reactor-notify-ms"].as<unsigned>() * 1ms;
+    auto watchdog_time = vm["blocked-reactor-watchdog-ms"].as<unsigned>() * 1ms;
     cpu_stall_detector_config csdc;
     csdc.threshold = blocked_time;
+    csdc.watchdog_threshold = watchdog_time;
     csdc.stall_detector_reports_per_minute = vm["blocked-reactor-reports-per-minute"].as<unsigned>();
     _cpu_stall_detector->update_config(csdc);
 
@@ -3284,6 +3314,7 @@ reactor::get_options_description(reactor_config cfg) {
         ("max-task-backlog", bpo::value<unsigned>()->default_value(1000), "Maximum number of task backlog to allow; above this we ignore I/O")
         ("blocked-reactor-notify-ms", bpo::value<unsigned>()->default_value(200), "threshold in miliseconds over which the reactor is considered blocked if no progress is made")
         ("blocked-reactor-reports-per-minute", bpo::value<unsigned>()->default_value(5), "Maximum number of backtraces reported by stall detector per minute")
+        ("blocked-reactor-watchdog-ms", bpo::value<unsigned>()->default_value(0), "threshold in miliseconds over which the stall detector will abort; disabled when set to 0")
         ("relaxed-dma", "allow using buffered I/O if DMA is not available (reduces performance)")
         ("linux-aio-nowait",
                 bpo::value<bool>()->default_value(aio_nowait_supported),

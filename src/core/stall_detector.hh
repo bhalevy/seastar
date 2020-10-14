@@ -40,6 +40,7 @@ struct cpu_stall_detector_config {
     std::chrono::duration<double> threshold = std::chrono::seconds(2);
     unsigned stall_detector_reports_per_minute = 1;
     float slack = 0.3;  // fraction of threshold that we're allowed to overshoot
+    std::chrono::duration<double> watchdog_threshold;
     std::function<void ()> report;  // alternative reporting function for tests
 };
 
@@ -60,6 +61,7 @@ class cpu_stall_detector {
     std::chrono::steady_clock::time_point _run_started_at{};
     std::chrono::steady_clock::duration _threshold;
     std::chrono::steady_clock::duration _slack;
+    std::chrono::steady_clock::duration _watchdog_threshold;
     cpu_stall_detector_config _config;
     seastar::metrics::metric_groups _metrics;
     friend reactor;
@@ -75,7 +77,7 @@ public:
     static int signal_number() { return SIGRTMIN + 1; }
     void start_task_run(std::chrono::steady_clock::time_point now);
     void end_task_run(std::chrono::steady_clock::time_point now);
-    void generate_trace();
+    void generate_trace(bool do_abort);
     void update_config(cpu_stall_detector_config cfg);
     cpu_stall_detector_config get_config() const;
     void on_signal();

@@ -696,7 +696,9 @@ public:
     void set_strict_dma(bool value);
     void set_bypass_fsync(bool value);
     void update_blocked_reactor_notify_ms(std::chrono::milliseconds ms);
+    void update_blocked_reactor_watchdog_ms(std::chrono::milliseconds ms);
     std::chrono::milliseconds get_blocked_reactor_notify_ms() const;
+    std::chrono::milliseconds get_blocked_reactor_watchdog_ms() const;
     // For testing:
     void set_stall_detector_report_function(std::function<void ()> report);
     std::function<void ()> get_stall_detector_report_function() const;
