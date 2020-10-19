@@ -101,7 +101,7 @@ struct named_semaphore_exception_factory {
 /// ExceptionFactory::timeout() and ExceptionFactory::broken() which return corresponding
 /// exception object.
 template<typename ExceptionFactory, typename Clock = typename timer<>::clock>
-class basic_semaphore : private ExceptionFactory {
+class basic_semaphore {
 public:
     using duration = typename timer<Clock>::duration;
     using clock = typename timer<Clock>::clock;
@@ -115,13 +115,15 @@ private:
         size_t nr;
         entry(promise<>&& pr_, size_t nr_) noexcept : pr(std::move(pr_)), nr(nr_) {}
     };
-    struct expiry_handler : public exception_factory {
-        expiry_handler() = default;
-        expiry_handler(exception_factory&& f) : exception_factory(std::move(f)) { }
+    exception_factory _exception_factory;
+    struct expiry_handler {
+        const exception_factory& ef;
+        explicit expiry_handler(const exception_factory& ef_) noexcept : ef(ef_) { }
         void operator()(entry& e) noexcept {
-            e.pr.set_exception(exception_factory::timeout());
+            e.pr.set_exception(ef.timeout());
         }
     };
+    expiry_handler _expiry_handler;
     expiring_fifo<entry, expiry_handler, clock> _wait_list;
     bool has_available_units(size_t nr) const noexcept {
         return _count >= 0 && (static_cast<size_t>(_count) >= nr);
@@ -140,8 +142,10 @@ public:
     /// an unlocked mutex.
     ///
     /// \param count number of initial units present in the counter.
-    basic_semaphore(size_t count) : _count(count) {}
-    basic_semaphore(size_t count, exception_factory&& factory) : exception_factory(factory), _count(count), _wait_list(expiry_handler(std::move(factory))) {}
+    basic_semaphore(size_t count) noexcept(std::is_nothrow_default_constructible_v<exception_factory>)
+            : _count(count), _exception_factory(), _expiry_handler(_exception_factory), _wait_list(_expiry_handler) {}
+    basic_semaphore(size_t count, exception_factory&& factory) noexcept(std::is_nothrow_move_constructible_v<exception_factory>)
+            : _count(count), _exception_factory(std::move(factory)), _expiry_handler(_exception_factory), _wait_list(_expiry_handler) {}
     /// Waits until at least a specific number of units are available in the
     /// counter, and reduces the counter by that amount of units.
     ///
@@ -273,7 +277,7 @@ public:
     /// Signal to waiters that an error occurred.  \ref wait() will see
     /// an exceptional future<> containing a \ref broken_semaphore exception.
     /// The future is made available immediately.
-    void broken() { broken(std::make_exception_ptr(exception_factory::broken())); }
+    void broken() { broken(std::make_exception_ptr(_exception_factory.broken())); }
 
     /// Signal to waiters that an error occurred.  \ref wait() will see
     /// an exceptional future<> containing the provided exception parameter.
