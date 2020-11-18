@@ -1381,13 +1381,7 @@ private:
         auto tws = new continuation<Pr, Func, Wrapper, T SEASTAR_ELLIPSIS>(std::move(pr), std::move(func), std::move(wrapper));
         // In a debug build we schedule ready futures, but not in
         // other build modes.
-#ifdef SEASTAR_DEBUG
-        if (_state.available()) {
-            tws->set_state(std::move(_state));
-            ::seastar::schedule(tws);
-            return;
-        }
-#endif
+        assert(!_state.available());
         schedule(tws);
         _state._u.st = future_state_base::state::invalid;
     }
@@ -1590,7 +1584,6 @@ private:
     template <typename Func, typename Result = futurize_t<internal::future_result_t<Func, T SEASTAR_ELLIPSIS>>>
     Result
     then_impl(Func&& func) noexcept {
-#ifndef SEASTAR_DEBUG
         using futurator = futurize<internal::future_result_t<Func, T SEASTAR_ELLIPSIS>>;
         if (failed()) {
             return futurator::make_exception_future(static_cast<future_state_base&&>(get_available_state_ref()));
@@ -1601,7 +1594,6 @@ private:
             return futurator::invoke(std::forward<Func>(func), get_available_state_ref().take_value());
 #endif
         }
-#endif
         return then_impl_nrvo<Func, Result>(std::forward<Func>(func));
     }
 
@@ -1675,7 +1667,6 @@ private:
     template <bool AsSelf, typename FuncResult, typename Func>
     futurize_t<FuncResult>
     then_wrapped_common(Func&& func) noexcept {
-#ifndef SEASTAR_DEBUG
         using futurator = futurize<FuncResult>;
         if (available()) {
             if constexpr (AsSelf) {
@@ -1687,13 +1678,12 @@ private:
                 return futurator::invoke(std::forward<Func>(func), future(get_available_state_ref()));
             }
         }
-#endif
         return then_wrapped_nrvo<FuncResult, Func>(std::forward<Func>(func));
     }
 
     void forward_to(internal::promise_base_with_type<T SEASTAR_ELLIPSIS>&& pr) noexcept {
         if (_state.available()) {
-            pr.set_urgent_state(std::move(_state));
+            pr.set_urgent_state(std::move(_state), false);
         } else {
             *detach_promise() = std::move(pr);
         }
@@ -1712,7 +1702,7 @@ public:
     /// future.
     void forward_to(promise<T SEASTAR_ELLIPSIS>&& pr) noexcept {
         if (_state.available()) {
-            pr.set_urgent_state(std::move(_state));
+            pr.set_urgent_state(std::move(_state), false);
         } else if (&pr._local_state != pr._state) {
             // The only case when _state points to _local_state is
             // when get_future was never called. Given that pr will
@@ -1879,7 +1869,7 @@ private:
     void set_callback(continuation_base<T SEASTAR_ELLIPSIS>* callback) noexcept {
         if (_state.available()) {
             callback->set_state(get_available_state_ref());
-            ::seastar::schedule(callback);
+            ::seastar::schedule(callback, false);
         } else {
             assert(_promise);
             schedule(callback);

@@ -279,7 +279,7 @@ public:
     virtual void run_and_dispose() noexcept override {
         if (_state.available()) {
             if (_state.failed()) {
-                _promise.set_urgent_state(std::move(_state));
+                _promise.set_urgent_state(std::move(_state), false);
                 delete this;
                 return;
             }
@@ -383,7 +383,7 @@ public:
     virtual void run_and_dispose() noexcept override {
         std::unique_ptr<do_for_each_state> zis(this);
         if (_state.failed()) {
-            _pr.set_urgent_state(std::move(_state));
+            _pr.set_urgent_state(std::move(_state), false);
             return;
         }
         while (_begin != _end) {
