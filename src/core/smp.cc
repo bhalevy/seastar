@@ -29,7 +29,7 @@
 namespace seastar {
 
 void smp_message_queue::work_item::process() {
-    schedule(this);
+    schedule(this, false);
 }
 
 struct smp_service_group_impl {
