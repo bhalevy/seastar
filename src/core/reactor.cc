@@ -2216,10 +2216,22 @@ void reactor::run_tasks(task_queue& tq) {
 
 #ifdef SEASTAR_SHUFFLE_TASK_QUEUE
 void reactor::shuffle(task*& t, task_queue& q) {
-    static thread_local std::mt19937 gen = std::mt19937(std::default_random_engine()());
-    std::uniform_int_distribution<size_t> tasks_dist{0, q._q.size() - 1};
-    auto& to_swap = q._q[tasks_dist(gen)];
-    std::swap(to_swap, t);
+    if (q._q.size() < 2) {
+        return;
+    }
+    static thread_local std::mt19937 gen = std::mt19937(std::random_device{}());
+    std::uniform_int_distribution<size_t> tasks_dist{0, q._q.size() - 2};
+    size_t i = tasks_dist(gen);
+    task* tp = t;
+    auto& qq = q._q;
+    if (t == qq.back()) {
+        std::copy_backward(qq.begin() + i, qq.end() - 1, qq.end());
+    } else {
+        assert(t == qq.front());
+        i++;
+        std::copy(qq.begin() + 1, qq.begin() + i + 1, qq.begin());
+    }
+    qq[i] = tp;
 }
 #endif
 
