@@ -927,6 +927,14 @@ public:
         }
     }
 
+    template <typename... A>
+    void set_value_no_shuffle(A&&... a) noexcept {
+        if (auto *s = get_state()) {
+            s->set(std::forward<A>(a)...);
+            make_ready<urgent::no>(false);
+        }
+    }
+
     /// Set this promise to the current exception.
     ///
     /// This is equivalent to set_exception(std::current_exception()),
@@ -1012,6 +1020,11 @@ public:
     template <typename... A>
     void set_value(A&&... a) noexcept {
         internal::promise_base_with_type<T SEASTAR_ELLIPSIS>::set_value(std::forward<A>(a)...);
+    }
+
+    template <typename... A>
+    void set_value_no_shuffle(A&&... a) noexcept {
+        internal::promise_base_with_type<T SEASTAR_ELLIPSIS>::set_value_no_shuffle(std::forward<A>(a)...);
     }
 
     /// \brief Marks the promise as failed
