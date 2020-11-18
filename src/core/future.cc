@@ -106,18 +106,18 @@ void promise_base::set_to_current_exception() noexcept {
 }
 
 template <promise_base::urgent Urgent>
-void promise_base::make_ready() noexcept {
+void promise_base::make_ready(bool shuffle) noexcept {
     if (_task) {
         if (Urgent == urgent::yes) {
-            ::seastar::schedule_urgent(std::exchange(_task, nullptr));
+            ::seastar::schedule_urgent(std::exchange(_task, nullptr), shuffle);
         } else {
-            ::seastar::schedule(std::exchange(_task, nullptr));
+            ::seastar::schedule(std::exchange(_task, nullptr), shuffle);
         }
     }
 }
 
-template void promise_base::make_ready<promise_base::urgent::no>() noexcept;
-template void promise_base::make_ready<promise_base::urgent::yes>() noexcept;
+template void promise_base::make_ready<promise_base::urgent::no>(bool) noexcept;
+template void promise_base::make_ready<promise_base::urgent::yes>(bool) noexcept;
 }
 
 template

@@ -61,7 +61,13 @@ shared_backtrace task::get_backtrace() const {
 #endif
 }
 
-void schedule(task* t) noexcept;
-void schedule_urgent(task* t) noexcept;
+#ifdef SEASTAR_SHUFFLE_TASK_QUEUE
+constexpr bool SEASTAR_SHUFFLE_DEFAULT = true;
+#else
+constexpr bool SEASTAR_SHUFFLE_DEFAULT = false;
+#endif
+
+void schedule(task* t, bool shuffle = SEASTAR_SHUFFLE_DEFAULT) noexcept;
+void schedule_urgent(task* t, bool shuffle = SEASTAR_SHUFFLE_DEFAULT) noexcept;
 
 }

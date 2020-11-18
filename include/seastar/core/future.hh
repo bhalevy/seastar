@@ -833,7 +833,7 @@ protected:
     promise_base& operator=(promise_base&& x) noexcept;
 
     template<urgent Urgent>
-    void make_ready() noexcept;
+    void make_ready(bool shuffle = SEASTAR_SHUFFLE_DEFAULT) noexcept;
 
     template<typename T>
     void set_exception_impl(T&& val) noexcept {

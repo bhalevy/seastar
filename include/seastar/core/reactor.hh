@@ -549,25 +549,29 @@ public:
 #endif
     task* current_task() const { return _current_task; }
 
-    void add_task(task* t) noexcept {
+    void add_task(task* t, bool do_shuffle = false) noexcept {
         auto sg = t->group();
         auto* q = _task_queues[sg._id].get();
         bool was_empty = q->_q.empty();
         q->_q.push_back(std::move(t));
 #ifdef SEASTAR_SHUFFLE_TASK_QUEUE
+      if (do_shuffle) {
         shuffle(q->_q.back(), *q);
+      }
 #endif
         if (was_empty) {
             activate(*q);
         }
     }
-    void add_urgent_task(task* t) noexcept {
+    void add_urgent_task(task* t, bool do_shuffle = false) noexcept {
         auto sg = t->group();
         auto* q = _task_queues[sg._id].get();
         bool was_empty = q->_q.empty();
         q->_q.push_front(std::move(t));
 #ifdef SEASTAR_SHUFFLE_TASK_QUEUE
+      if (do_shuffle) {
         shuffle(q->_q.front(), *q);
+      }
 #endif
         if (was_empty) {
             activate(*q);

@@ -3214,12 +3214,12 @@ future<size_t> readable_eventfd::wait() {
     });
 }
 
-void schedule(task* t) noexcept {
-    engine().add_task(t);
+void schedule(task* t, bool shuffle) noexcept {
+    engine().add_task(t, shuffle);
 }
 
-void schedule_urgent(task* t) noexcept {
-    engine().add_urgent_task(t);
+void schedule_urgent(task* t, bool shuffle) noexcept {
+    engine().add_urgent_task(t, shuffle);
 }
 
 }
