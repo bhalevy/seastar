@@ -232,7 +232,7 @@ public:
         while (!_wait_list.empty() && has_available_units(_wait_list.front().nr)) {
             auto& x = _wait_list.front();
             _count -= x.nr;
-            x.pr.set_value();
+            x.pr.set_value_no_shuffle();
             _wait_list.pop_front();
         }
     }
@@ -324,7 +324,7 @@ basic_semaphore<ExceptionFactory, Clock>::broken(std::exception_ptr xp) noexcept
     _count = 0;
     while (!_wait_list.empty()) {
         auto& x = _wait_list.front();
-        x.pr.set_exception(xp);
+        x.pr.set_exception(xp, false);
         _wait_list.pop_front();
     }
 }
