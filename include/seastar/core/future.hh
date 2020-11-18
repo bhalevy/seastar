@@ -836,10 +836,10 @@ protected:
     void make_ready(bool shuffle = SEASTAR_SHUFFLE_DEFAULT) noexcept;
 
     template<typename T>
-    void set_exception_impl(T&& val) noexcept {
+    void set_exception_impl(T&& val, bool shuffle) noexcept {
         if (_state) {
             _state->set_exception(std::move(val));
-            make_ready<urgent::no>();
+            make_ready<urgent::no>(shuffle);
         } else {
             // We get here if promise::get_future is called and the
             // returned future is destroyed without creating a
@@ -852,21 +852,21 @@ protected:
         }
     }
 
-    void set_exception(future_state_base&& state) noexcept {
-        set_exception_impl(std::move(state));
+    void set_exception(future_state_base&& state, bool shuffle = SEASTAR_SHUFFLE_DEFAULT) noexcept {
+        set_exception_impl(std::move(state), shuffle);
     }
 
-    void set_exception(std::exception_ptr&& ex) noexcept {
-        set_exception_impl(std::move(ex));
+    void set_exception(std::exception_ptr&& ex, bool shuffle = SEASTAR_SHUFFLE_DEFAULT) noexcept {
+        set_exception_impl(std::move(ex), shuffle);
     }
 
-    void set_exception(const std::exception_ptr& ex) noexcept {
-        set_exception(std::exception_ptr(ex));
+    void set_exception(const std::exception_ptr& ex, bool shuffle = SEASTAR_SHUFFLE_DEFAULT) noexcept {
+        set_exception(std::exception_ptr(ex), shuffle);
     }
 
     template<typename Exception>
-    std::enable_if_t<!std::is_same<std::remove_reference_t<Exception>, std::exception_ptr>::value, void> set_exception(Exception&& e) noexcept {
-        set_exception(make_exception_ptr(std::forward<Exception>(e)));
+    std::enable_if_t<!std::is_same<std::remove_reference_t<Exception>, std::exception_ptr>::value, void> set_exception(Exception&& e, bool shuffle = SEASTAR_SHUFFLE_DEFAULT) noexcept {
+        set_exception(make_exception_ptr(std::forward<Exception>(e)), shuffle);
     }
 
     friend class future_base;
@@ -877,7 +877,7 @@ public:
     ///
     /// This is equivalent to set_exception(std::current_exception()),
     /// but expands to less code.
-    void set_to_current_exception() noexcept;
+    void set_to_current_exception(bool shuffle) noexcept;
 
     /// Returns the task which is waiting for this promise to resolve, or nullptr.
     task* waiting_task() const noexcept { return _task; }
@@ -931,8 +931,8 @@ public:
     ///
     /// This is equivalent to set_exception(std::current_exception()),
     /// but expands to less code.
-    void set_to_current_exception() noexcept {
-        internal::promise_base::set_to_current_exception();
+    void set_to_current_exception(bool shuffle = SEASTAR_SHUFFLE_DEFAULT) noexcept {
+        internal::promise_base::set_to_current_exception(shuffle);
     }
 
     /// Returns the task which is waiting for this promise to resolve, or nullptr.
@@ -983,8 +983,8 @@ public:
     ///
     /// This is equivalent to set_exception(std::current_exception()),
     /// but expands to less code.
-    void set_to_current_exception() noexcept {
-        internal::promise_base::set_to_current_exception();
+    void set_to_current_exception(bool shuffle) noexcept {
+        internal::promise_base::set_to_current_exception(shuffle);
     }
 
     /// Returns the task which is waiting for this promise to resolve, or nullptr.
@@ -1018,12 +1018,12 @@ public:
     ///
     /// Forwards the exception argument to the future and makes it
     /// available.  May be called either before or after \c get_future().
-    void set_exception(std::exception_ptr&& ex) noexcept {
-        internal::promise_base::set_exception(std::move(ex));
+    void set_exception(std::exception_ptr&& ex, bool shuffle = SEASTAR_SHUFFLE_DEFAULT) noexcept {
+        internal::promise_base::set_exception(std::move(ex), shuffle);
     }
 
-    void set_exception(const std::exception_ptr& ex) noexcept {
-        internal::promise_base::set_exception(ex);
+    void set_exception(const std::exception_ptr& ex, bool shuffle = SEASTAR_SHUFFLE_DEFAULT) noexcept {
+        internal::promise_base::set_exception(ex, shuffle);
     }
 
     /// \brief Marks the promise as failed
@@ -1031,8 +1031,8 @@ public:
     /// Forwards the exception argument to the future and makes it
     /// available.  May be called either before or after \c get_future().
     template<typename Exception>
-    std::enable_if_t<!std::is_same<std::remove_reference_t<Exception>, std::exception_ptr>::value, void> set_exception(Exception&& e) noexcept {
-        internal::promise_base::set_exception(std::forward<Exception>(e));
+    std::enable_if_t<!std::is_same<std::remove_reference_t<Exception>, std::exception_ptr>::value, void> set_exception(Exception&& e, bool shuffle = SEASTAR_SHUFFLE_DEFAULT) noexcept {
+        internal::promise_base::set_exception(std::forward<Exception>(e), shuffle);
     }
 
     using internal::promise_base_with_type<T SEASTAR_ELLIPSIS>::set_urgent_state;

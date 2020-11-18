@@ -101,8 +101,8 @@ promise_base& promise_base::operator=(promise_base&& x) noexcept {
     return *this;
 }
 
-void promise_base::set_to_current_exception() noexcept {
-    set_exception(std::current_exception());
+void promise_base::set_to_current_exception(bool shuffle) noexcept {
+    set_exception(std::current_exception(), shuffle);
 }
 
 template <promise_base::urgent Urgent>
