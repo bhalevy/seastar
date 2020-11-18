@@ -905,7 +905,7 @@ public:
     promise_base_with_type& operator=(promise_base_with_type&& x) noexcept = default;
     void operator=(const promise_base_with_type&) = delete;
 
-    void set_urgent_state(future_state&& state) noexcept {
+    void set_urgent_state(future_state&& state, bool shuffle = SEASTAR_SHUFFLE_DEFAULT) noexcept {
         auto* ptr = get_state();
         // The state can be null if the corresponding future has been
         // destroyed without producing a continuation.
@@ -915,7 +915,7 @@ public:
             // we had such an assert.
             assert(ptr->_u.st == future_state_base::state::future);
             new (ptr) future_state(std::move(state));
-            make_ready<urgent::yes>();
+            make_ready<urgent::yes>(shuffle);
         }
     }
 
