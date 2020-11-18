@@ -308,3 +308,27 @@ SEASTAR_THREAD_TEST_CASE(test_named_semaphore_timeout) {
         BOOST_FAIL("Expected an instance of named_semaphore_timed_out with proper semaphore name");
     }
 }
+
+SEASTAR_THREAD_TEST_CASE(test_semaphore_execution_order) {
+    semaphore sem(10);
+    std::vector<int> res;
+    std::vector<future<>> futures;
+    int count = 1000;
+
+    res.reserve(count);
+    futures.reserve(count);
+    for (auto i = 0; i < count; i++) {
+        futures.push_back(sem.wait(1).then([&sem, &res, i] {
+            res.push_back(i);
+            sem.signal(1);
+        }));
+    }
+
+    for (auto i = 0; i < count; i++) {
+        futures[i].get();
+    }
+
+    for (auto i = 0; i < count; i++) {
+        BOOST_REQUIRE_EQUAL(res[i], i);
+    }
+}
