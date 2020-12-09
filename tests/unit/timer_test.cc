@@ -124,15 +124,69 @@ struct timer_test {
     }
 };
 
+template <typename Clock>
+static future<> run_timer_test(const char* kind) {
+    fmt::print("=== Start {} res clock test\n", kind);
+    return do_with(timer_test<Clock>(), [] (timer_test<Clock>& t) {
+        return t.run();
+    });
+}
+
+template <typename Clock>
+struct stoppable_timer_test {
+    stoppable_timer<Clock> t;
+    promise<> cb_called;
+    promise<> cb_done;
+
+    future<> test_timer_stop() {
+        t.set_callback([&] {
+            return sleep(10ms).then([&] {
+                cb_called.set_value();
+                return sleep(10ms).then([&] {
+                    cb_done.set_value();
+                });
+            });
+        });
+        t.arm(20ms);
+        return cb_called.get_future().then([&] {
+            auto f = cb_done.get_future();
+            return t.stop().then([f = std::move(f)] () mutable {
+                assert(f.available());
+            });
+        });
+    }
+};
+
+template <typename Clock>
+static future<> run_stoppable_timer_test(const char* kind) {
+    fmt::print("=== Start {} res clock stoppable_timer test\n", kind);
+
+    // Test that a default constructed stoppable_timer
+    // Doesn't need stop() to be called
+    auto t = std::make_unique<stoppable_timer<Clock>>();
+    t.reset();
+
+    // Test that an unarmed constructed stoppable_timer
+    t = std::make_unique<stoppable_timer<Clock>>([] { return make_ready_future<>(); });
+    t.reset();
+
+    // Test explicit stoppable_timer.stop()
+    return do_with(stoppable_timer_test<Clock>(), [] (stoppable_timer_test<Clock>& t) {
+        return t.test_timer_stop();
+    });
+}
+
 int main(int ac, char** av) {
     app_template app;
     timer_test<steady_clock_type> t1;
     timer_test<lowres_clock> t2;
-    return app.run_deprecated(ac, av, [&t1, &t2] {
-        fmt::print("=== Start High res clock test\n");
-        return t1.run().then([&t2] {
-            fmt::print("=== Start Low  res clock test\n");
-            return t2.run();
+    return app.run_deprecated(ac, av, [] {
+        return run_timer_test<steady_clock_type>("High").then([] {
+            return run_timer_test<lowres_clock>("Low");
+        }).then([] {
+            return run_stoppable_timer_test<steady_clock_type>("High");
+        }).then([] {
+            return run_stoppable_timer_test<lowres_clock>("Low");
         }).then([] {
             fmt::print("Done\n");
             engine().exit(0);
