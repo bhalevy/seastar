@@ -170,6 +170,8 @@ namespace seastar {
 seastar::logger seastar_logger("seastar");
 seastar::logger sched_logger("scheduler");
 
+static void print_with_backtrace(const char* cause) noexcept;
+
 shard_id reactor::cpu_id() const {
     assert(_id == this_shard_id());
     return _id;
@@ -583,6 +585,11 @@ inline
 timer<Clock>::~timer() {
     if (_queued) {
         engine().del_timer(this);
+    }
+    if (_gate.get_count()) {
+        const char* cause = "timer destroyed with outstanding callback";
+        seastar_logger.warn(cause);
+        print_with_backtrace(cause);
     }
 }
 
