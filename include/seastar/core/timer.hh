@@ -28,6 +28,7 @@
 #include <seastar/core/future.hh>
 #include <seastar/core/timer-set.hh>
 #include <seastar/core/scheduling.hh>
+#include <seastar/core/gate.hh>
 
 /// \file
 
@@ -125,7 +126,7 @@ public:
     explicit timer(noncopyable_function<void ()>&& callback) noexcept : timer(current_scheduling_group(), std::move(callback)) {
     }
     /// Destroys the timer. The timer is cancelled if armed.
-    ~timer();
+    virtual ~timer();
     /// Sets the callback function to be called when the timer expires.
     ///
     /// \param sg the scheduling group under which the callback will be executed.
@@ -218,6 +219,85 @@ public:
 
 extern template class timer<steady_clock_type>;
 
+/// stoppable_timer - run a future-returning callback at a certain time point in the future.
+///
+/// Timer callbacks should execute quickly. If more involved computation
+/// is required, the timer should launch it as a fiber (or signal an
+/// existing fiber to continue execution). Fibers launched from a timer
+/// callback are executed under the scheduling group that was current
+/// when the timer was created (see current_scheduling_group()), or the
+/// scheduling that was given explicitly by the caller when the callback
+/// was specified.
+///
+/// Use the \ref stoppable_timer::stop method to wait on any outstanding
+/// callbacks before destroying the timer.
+///
+/// \tparam Clock type of clock used to denote time points; can be
+///        std::chrono::steady_clock_type (default), lowres_clock (more efficient
+///        but with less resolution) or manual_clock_type (fine-grained control
+///        for testing.
+template <typename Clock = steady_clock_type>
+class stoppable_timer : public timer<Clock> {
+public:
+    typedef typename Clock::time_point time_point;
+    typedef typename Clock::duration duration;
+    typedef Clock clock;
+private:
+    gate _gate;
+    auto wrap_callback(noncopyable_function<future<>()>&& func) noexcept {
+        return [this, func = std::move(func)] () mutable {
+            // Don't wait for future.
+            // It is indirectly waited on by stop()
+            (void)with_gate(_gate, [func = std::move(func)] () mutable {
+                return func();
+            });
+        };
+    }
+public:
+    /// Constructs a stoppable_timer with no callback set and no expiration time.
+    stoppable_timer() = default;
+    /// Constructs a stoppable_timer from another stoppable_timer that is moved from.
+    stoppable_timer(stoppable_timer&& t) = default;
+    /// Constructs a stoppable_timer with a callback. The timer is not armed.
+    ///
+    /// \param sg Scheduling group to run the callback under.
+    /// \param callback function (with signature `future<> ()`) to execute after the timer is armed and expired.
+    stoppable_timer(scheduling_group sg, noncopyable_function<future<>()>&& callback) noexcept
+        : timer<Clock>(std::move(sg), wrap_callback(std::move(callback)))
+    { }
+    /// Constructs a stoppable_timer with a callback. The timer is not armed.
+    ///
+    /// \param callback function (with signature `future<> ()`) to execute after the timer is armed and expired.
+    explicit stoppable_timer(noncopyable_function<future<>()>&& callback) noexcept : stoppable_timer(current_scheduling_group(), std::move(callback)) {
+    }
+    /// Destroys the stoppable_timer. The timer is cancelled if armed.
+    virtual ~stoppable_timer();
+    /// Sets the callback function (with signature `future<> ()`) to be called when the timer expires.
+    ///
+    /// \param sg the scheduling group under which the callback will be executed.
+    /// \param callback the callback function (with signature `future<> ()`) to be executed when the timer expires.
+    void set_callback(scheduling_group sg, noncopyable_function<future<>()>&& callback) noexcept {
+        timer<Clock>::set_callback(std::move(sg), wrap_callback(std::move(callback)));
+    }
+    /// Sets the callback function to be called when the timer expires.
+    ///
+    /// \param callback the callback function (with signature `future<> ()`) to be executed when the timer expires.
+    void set_callback(noncopyable_function<future<>()>&& callback) noexcept {
+        set_callback(current_scheduling_group(), std::move(callback));
+    }
+    /// Cancels an armed timer and waits for callback, if any is outstanding.
+    ///
+    /// If the timer was armed, it is disarmed. If the timer was not
+    /// armed, does nothing.
+    future<> stop() noexcept {
+        this->cancel();
+        return _gate.close();
+    }
+
+    friend class reactor;
+};
+
+extern template class stoppable_timer<steady_clock_type>;
 
 /// @}
 

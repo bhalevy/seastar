@@ -46,6 +46,7 @@ public:
 };
 
 extern template class timer<manual_clock>;
+extern template class stoppable_timer<manual_clock>;
 
 }
 

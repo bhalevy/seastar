@@ -618,6 +618,24 @@ template class timer<steady_clock_type>;
 template class timer<lowres_clock>;
 template class timer<manual_clock>;
 
+static_assert(std::is_nothrow_default_constructible_v<timer<>>);
+static_assert(std::is_nothrow_move_constructible_v<timer<>>);
+
+template <typename Clock>
+inline
+stoppable_timer<Clock>::~stoppable_timer() {
+    if (_gate.get_count()) {
+        seastar_logger.warn("stoppable_timer destroyed with outstanding callback");
+    }
+}
+
+template class stoppable_timer<steady_clock_type>;
+template class stoppable_timer<lowres_clock>;
+template class stoppable_timer<manual_clock>;
+
+static_assert(std::is_nothrow_default_constructible_v<stoppable_timer<>>);
+static_assert(std::is_nothrow_move_constructible_v<stoppable_timer<>>);
+
 reactor::signals::signals() : _pending_signals(0) {
 }
 

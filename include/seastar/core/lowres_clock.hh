@@ -155,6 +155,7 @@ public:
 };
 
 extern template class timer<lowres_clock>;
+extern template class stoppable_timer<lowres_clock>;
 
 }
 
