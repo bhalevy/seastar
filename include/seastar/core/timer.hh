@@ -28,6 +28,7 @@
 #include <seastar/core/future.hh>
 #include <seastar/core/timer-set.hh>
 #include <seastar/core/scheduling.hh>
+#include <seastar/core/gate.hh>
 
 /// \file
 
@@ -87,6 +88,7 @@ private:
     callback_t _callback;
     time_point _expiry;
     std::optional<duration> _period;
+    gate _gate;
     bool _armed = false;
     bool _queued = false;
     bool _expired = false;
@@ -99,10 +101,20 @@ private:
         _expiry = until;
         _queued = true;
     }
+    template <typename Func>
+    SEASTAR_CONCEPT( requires std::invocable<Func> && std::is_nothrow_move_constructible_v<Func> )
+    callback_t wrap_callback(Func&& func) noexcept {
+        return [this, func = std::move(func)] () mutable {
+            // Don't wait for future.
+            // It is indirectly waited on by stop()
+            (void)with_gate(_gate, [func = std::move(func)] () mutable {
+                return futurize_invoke(std::move(func));
+            });
+        };
+    }
 public:
     /// Constructs a timer with no callback set and no expiration time.
-    timer() noexcept {};  // implementation is required (instead of = default) for noexcept due to a bug in gcc 9.3.1,
-                          // since boost::intrusive::list_member_hook default constructor is not specified as noexcept.
+    timer() noexcept : timer([] {}) {}
     /// Constructs a timer from another timer that is moved from.
     ///
     /// \note care should be taken when moving a timer whose callback captures `this`,
@@ -117,12 +129,18 @@ public:
     ///
     /// \param sg Scheduling group to run the callback under.
     /// \param callback function (with signature `void ()`) to execute after the timer is armed and expired.
-    timer(scheduling_group sg, noncopyable_function<void ()>&& callback) noexcept : _sg(sg), _callback{std::move(callback)} {
-    }
+    template <typename Func>
+    SEASTAR_CONCEPT( requires std::invocable<Func> )
+    timer(scheduling_group sg, Func&& callback) noexcept
+        : _sg(sg),
+        _callback(wrap_callback(std::forward<Func>(callback)))
+    { }
     /// Constructs a timer with a callback. The timer is not armed.
     ///
     /// \param callback function (with signature `void ()`) to execute after the timer is armed and expired.
-    explicit timer(noncopyable_function<void ()>&& callback) noexcept : timer(current_scheduling_group(), std::move(callback)) {
+    template <typename Func>
+    SEASTAR_CONCEPT( requires std::invocable<Func> )
+    explicit timer(Func&& callback) noexcept : timer(current_scheduling_group(), std::forward<Func>(callback)) {
     }
     /// Destroys the timer. The timer is cancelled if armed.
     ~timer();
@@ -130,15 +148,19 @@ public:
     ///
     /// \param sg the scheduling group under which the callback will be executed.
     /// \param callback the callback to be executed when the timer expires.
-    void set_callback(scheduling_group sg, noncopyable_function<void ()>&& callback) noexcept {
+    template <typename Func>
+    SEASTAR_CONCEPT( requires std::invocable<Func> )
+    void set_callback(scheduling_group sg, Func&& callback) noexcept {
         _sg = sg;
-        _callback = std::move(callback);
+        _callback = wrap_callback(std::forward<Func>(callback));
     }
     /// Sets the callback function to be called when the timer expires.
     ///
     /// \param callback the callback to be executed when the timer expires.
-    void set_callback(noncopyable_function<void ()>&& callback) noexcept {
-        set_callback(current_scheduling_group(), std::move(callback));
+    template <typename Func>
+    SEASTAR_CONCEPT( requires std::invocable<Func> )
+    void set_callback(Func&& callback) noexcept {
+        set_callback(current_scheduling_group(), std::forward<Func>(callback));
     }
     /// Sets the timer expiration time.
     ///
@@ -205,6 +227,14 @@ public:
     ///
     /// \return `true` if the timer was armed before the call.
     bool cancel() noexcept;
+    /// Cancels an armed timer and waits for callback, if any is outstanding.
+    ///
+    /// If the timer was armed, it is disarmed. If the timer was not
+    /// armed, does nothing.
+    future<> stop() noexcept {
+        cancel();
+        return _gate.close();
+    }
     /// Gets the expiration time of an armed timer.
     ///
     /// \return the time at which the timer is scheduled to expire (undefined if the

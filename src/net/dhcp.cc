@@ -364,9 +364,8 @@ public:
         if (timeout.count()) {
             _timer.arm(timeout);
         }
-        _retry_timer.set_callback([this, l] {
-            // FIXME: ignoring return
-            (void)send_discover(l.ip);
+        _retry_timer.set_callback([this, ip = l.ip] {
+            return send_discover(ip);
         });
         _retry_timer.arm_periodic(1s);
         return _result.get_future();
