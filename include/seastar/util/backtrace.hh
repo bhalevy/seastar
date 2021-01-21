@@ -70,12 +70,15 @@ public:
 private:
     vector_type _frames;
     size_t _hash;
+    char _delimeter;
 private:
     size_t calculate_hash() const noexcept;
 public:
-    simple_backtrace() = default;
-    simple_backtrace(vector_type f) noexcept : _frames(std::move(f)) {}
+    simple_backtrace(char delimeter = ' ') noexcept : _delimeter(delimeter) {}
+    simple_backtrace(vector_type f, char delimeter) noexcept : _frames(std::move(f)), _delimeter(delimeter) {}
+
     size_t hash() const noexcept { return _hash; }
+    char delimeter() const noexcept { return _delimeter; }
 
     friend std::ostream& operator<<(std::ostream& out, const simple_backtrace&);
 
@@ -162,12 +165,13 @@ namespace seastar {
 
 using saved_backtrace = tasktrace;
 
-saved_backtrace current_backtrace() noexcept;
+saved_backtrace current_backtrace(char delimeter = '\n') noexcept;
 
+// The tasktrace is always delimited by newline.
 tasktrace current_tasktrace() noexcept;
 
 // Collects backtrace only within the currently executing task.
-simple_backtrace current_backtrace_tasklocal() noexcept;
+simple_backtrace current_backtrace_tasklocal(char delimeter = '\n') noexcept;
 
 std::ostream& operator<<(std::ostream& out, const tasktrace& b);
 

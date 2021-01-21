@@ -81,14 +81,14 @@ frame decorate(uintptr_t addr) noexcept {
     return {&so, addr - so.begin};
 }
 
-simple_backtrace current_backtrace_tasklocal() noexcept {
+simple_backtrace current_backtrace_tasklocal(char delimeter) noexcept {
     simple_backtrace::vector_type v;
     backtrace([&] (frame f) {
         if (v.size() < v.capacity()) {
             v.emplace_back(std::move(f));
         }
     });
-    return simple_backtrace(std::move(v));
+    return simple_backtrace(std::move(v), delimeter);
 }
 
 size_t simple_backtrace::calculate_hash() const noexcept {
@@ -109,7 +109,7 @@ std::ostream& operator<<(std::ostream& out, const frame& f) {
 
 std::ostream& operator<<(std::ostream& out, const simple_backtrace& b) {
     for (auto f : b._frames) {
-        out << "   " << f << "\n";
+        out << "   " << f << b.delimeter();
     }
     return out;
 }
@@ -131,8 +131,8 @@ std::ostream& operator<<(std::ostream& out, const task_entry& e) {
     return out << seastar::pretty_type_name(*e._task_type);
 }
 
-tasktrace current_tasktrace() noexcept {
-    auto main = current_backtrace_tasklocal();
+tasktrace current_tasktrace(char delimeter) noexcept {
+    auto main = current_backtrace_tasklocal(delimeter);
 
     tasktrace::vector_type prev;
     size_t hash = 0;
@@ -164,8 +164,8 @@ tasktrace current_tasktrace() noexcept {
     return tasktrace(std::move(main), std::move(prev), hash, current_scheduling_group());
 }
 
-saved_backtrace current_backtrace() noexcept {
-    return current_tasktrace();
+saved_backtrace current_backtrace(char delimeter) noexcept {
+    return current_tasktrace(delimeter);
 }
 
 tasktrace::tasktrace(simple_backtrace main, tasktrace::vector_type prev, size_t prev_hash, scheduling_group sg) noexcept
