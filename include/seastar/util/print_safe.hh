@@ -70,6 +70,21 @@ void convert_zero_padded_hex_safe(char *buf, size_t bufsz, Integral n) noexcept 
     }
 }
 
+// Fills a buffer with a hexadecimal representation of an integer
+// and returns a pointer to the first character.
+// For example, convert_hex_safe(buf, 4, uint16_t(12)) fills the buffer with "   c".
+template<typename Integral>
+char* convert_hex_safe(char *buf, size_t bufsz, Integral n) noexcept {
+    const char *digits = "0123456789abcdef";
+    memset(buf, ' ', bufsz);
+    buf += bufsz;
+    do {
+        *--buf = digits[n & 0xf];
+        n >>= 4;
+    } while (n);
+    return buf;
+}
+
 // Prints zero-padded hexadecimal representation of an integer to stderr.
 // For example, print_zero_padded_hex_safe(uint16_t(12)) prints "000c".
 // Async-signal safe.
