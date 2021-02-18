@@ -74,3 +74,27 @@ BOOST_AUTO_TEST_CASE(test_defer_does_not_run_when_moved_after_cancelled) {
     }
     BOOST_REQUIRE_EQUAL(0, ran);
 }
+
+BOOST_AUTO_TEST_CASE(test_defer_run_now) {
+    int ran = 0;
+    {
+        auto d = defer([&] {
+            ++ran;
+        });
+        d.run_now();
+        BOOST_REQUIRE_EQUAL(1, ran);
+    }
+    BOOST_REQUIRE_EQUAL(1, ran);
+}
+
+BOOST_AUTO_TEST_CASE(test_defer_run_now_after_cancel) {
+    int ran = 0;
+    {
+        auto d = defer([&] {
+            ++ran;
+        });
+        d.cancel();
+        BOOST_CHECK_THROW(d.run_now(), std::runtime_error);
+    }
+    BOOST_REQUIRE_EQUAL(0, ran);
+}

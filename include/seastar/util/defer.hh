@@ -26,12 +26,15 @@
 
 namespace seastar {
 
+/// Facility to defer an action using RAII.
 template <typename Func>
 class deferred_action {
     Func _func;
     bool _cancelled = false;
 public:
     static_assert(std::is_nothrow_move_constructible<Func>::value, "Func(Func&&) must be noexcept");
+
+    /// Defers the invocation of the action \c func until the object is destroyed.
     deferred_action(Func&& func) noexcept : _func(std::move(func)) {}
     deferred_action(deferred_action&& o) noexcept : _func(std::move(o._func)), _cancelled(o._cancelled) {
         o._cancelled = true;
@@ -45,7 +48,19 @@ public:
     }
     deferred_action(const deferred_action&) = delete;
     ~deferred_action() { if (!_cancelled) { _func(); }; }
+
+    /// Cancels the deferred action.
     void cancel() { _cancelled = true; }
+
+    /// Runs the deferred action once, if not cancelled, and cancels it.
+    /// so it won't run again when destroyed.
+    void run_now() {
+        if (_cancelled) {
+            throw std::runtime_error("Deferred action is already cancelled");
+        }
+        _cancelled = true;
+        _func();
+    }
 };
 
 template <typename Func>
