@@ -151,7 +151,7 @@ SEASTAR_TEST_CASE(test_invoke_on_others) {
             smp::submit_to(c, [c] {
                 return seastar::async([c] {
                     sharded<my_service> s;
-                    s.start().get();
+                    auto s_controller = sharded_controller(s);
                     s.invoke_on_others([](auto& s) { s.up(); }).get();
                     if (s.local().counter != 0) {
                         throw std::runtime_error("local modified");
@@ -163,7 +163,6 @@ SEASTAR_TEST_CASE(test_invoke_on_others) {
                             }
                         }
                     }).get();
-                    s.stop().get();
                 });
             }).get();
         }
@@ -301,17 +300,15 @@ SEASTAR_THREAD_TEST_CASE(test_sharded_parameter) {
         }
     };
     sharded<dependency> s_dep;
-    s_dep.start().get();
-    auto undo1 = defer([&] { s_dep.stop().get(); });
+    auto s_dep_controller = sharded_controller(s_dep);
 
     sharded<some_service> s_service;
-    s_service.start(
+    auto s_service_controller = sharded_controller(s_service,
             43, // should be copied verbatim
             sharded_parameter([] { return this_shard_id() * 3; }),
             std::ref(s_dep),
             sharded_parameter([] (dependency& d) { return -d.val; }, std::ref(s_dep))
-            ).get();
-    auto undo2 = defer([&] { s_service.stop().get(); });
+            );
 
     auto all_ok = s_service.map_reduce0(std::mem_fn(&some_service::ok), true, std::multiplies<>()).get0();
     BOOST_REQUIRE(all_ok);

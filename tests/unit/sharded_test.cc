@@ -46,8 +46,7 @@ public:
 
 SEASTAR_THREAD_TEST_CASE(invoke_on_during_stop_test) {
     sharded<invoke_on_during_stop> s;
-    s.start().get();
-    s.stop().get();
+    auto s_controller = sharded_controller(s);
 }
 
 class mydata {
@@ -60,7 +59,7 @@ public:
 
 SEASTAR_THREAD_TEST_CASE(invoke_map_returns_non_future_value) {
     seastar::sharded<mydata> s;
-    s.start().get();
+    auto s_controller = sharded_controller(s);
     s.map([] (mydata& m) {
         return m.x;
     }).then([] (std::vector<int> results) {
@@ -68,12 +67,11 @@ SEASTAR_THREAD_TEST_CASE(invoke_map_returns_non_future_value) {
             assert(x == 1);
         }
     }).get();
-    s.stop().get();
 };
 
 SEASTAR_THREAD_TEST_CASE(invoke_map_returns_future_value) {
     seastar::sharded<mydata> s;
-    s.start().get();
+    auto s_controller = sharded_controller(s);
     s.map([] (mydata& m) {
         return make_ready_future<int>(m.x);
     }).then([] (std::vector<int> results) {
@@ -81,12 +79,11 @@ SEASTAR_THREAD_TEST_CASE(invoke_map_returns_future_value) {
             assert(x == 1);
         }
     }).get();
-    s.stop().get();
 }
 
 SEASTAR_THREAD_TEST_CASE(invoke_map_returns_future_value_from_thread) {
     seastar::sharded<mydata> s;
-    s.start().get();
+    auto s_controller = sharded_controller(s);
     s.map([] (mydata& m) {
         return seastar::async([&m] {
             return m.x;
@@ -96,7 +93,6 @@ SEASTAR_THREAD_TEST_CASE(invoke_map_returns_future_value_from_thread) {
             assert(x == 1);
         }
     }).get();
-    s.stop().get();
 }
 
 SEASTAR_THREAD_TEST_CASE(failed_sharded_start_doesnt_hang) {
@@ -107,4 +103,27 @@ SEASTAR_THREAD_TEST_CASE(failed_sharded_start_doesnt_hang) {
 
     seastar::sharded<fail_to_start> s;
     s.start().then_wrapped([] (auto&& fut) { fut.ignore_ready_future(); }).get();
+}
+
+SEASTAR_THREAD_TEST_CASE(failed_sharded_start_in_controller) {
+    class expected_exception : public std::runtime_error {
+    public:
+        expected_exception() : runtime_error("expected") {}
+    };
+    struct fail_to_start {
+        fail_to_start() {
+            BOOST_TEST_MESSAGE("fail_to_start");
+            throw expected_exception();
+        }
+    };
+
+    seastar::sharded<fail_to_start> s1;
+    BOOST_CHECK_THROW(s1.start().get(), expected_exception);
+
+    seastar::sharded<fail_to_start> s2;
+    std::unique_ptr<sharded_controller<fail_to_start>> s2_controller;
+    auto make_s2_controller = [&s2, &s2_controller] {
+        s2_controller = std::make_unique<sharded_controller<fail_to_start>>(s2);
+    };
+    BOOST_CHECK_THROW(make_s2_controller(), expected_exception);
 }

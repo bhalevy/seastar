@@ -768,6 +768,29 @@ inline bool sharded<Service>::local_is_initialized() const noexcept {
            _instances[this_shard_id()].service;
 }
 
+/// Template helper to start and stop a sharded \c Service.
+///
+/// The \c sharded_controller template manages a sharded service.
+/// Creating the controller starts the service on all cores and destroying
+/// it stops the service on all cores.
+///
+/// \tparam Service a class to be instantiated on each core.
+///         May expose a \c start() method that returns a \c future<> that will be called when the controller is constructed.
+///         Must expose a \c stop() method that returns a \c future<> to be called when the controller is destroyed.
+template <typename Service>
+class sharded_controller {
+    sharded<Service>& _service;
+public:
+    template <typename... Args>
+    sharded_controller(sharded<Service>& service, Args... args)
+            : _service(service) {
+        _service.start(std::forward<Args>(args)...).get();
+    }
+    ~sharded_controller() {
+        _service.stop().get();
+    }
+};
+
 /// \addtogroup smp-module
 /// @{
 
