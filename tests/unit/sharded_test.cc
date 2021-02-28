@@ -51,7 +51,8 @@ SEASTAR_THREAD_TEST_CASE(invoke_on_during_stop_test) {
 
 class mydata {
 public:
-    int x = 1;
+    int x;
+    mydata(int value = 1) noexcept : x(value) {}
     future<> stop() {
         return make_ready_future<>();
     }
@@ -126,4 +127,18 @@ SEASTAR_THREAD_TEST_CASE(failed_sharded_start_in_controller) {
         s2_controller = std::make_unique<sharded_controller<fail_to_start>>(s2);
     };
     BOOST_CHECK_THROW(make_s2_controller(), expected_exception);
+}
+
+SEASTAR_THREAD_TEST_CASE(sharded_controller_start_with_value) {
+    seastar::sharded<mydata> s;
+    auto s_controller = sharded_controller(s, 42);
+    s.map([] (mydata& m) {
+        return seastar::async([&m] {
+            return m.x;
+        });
+    }).then([] (std::vector<int> results) {
+        for (auto& x : results) {
+            assert(x == 42);
+        }
+    }).get();
 }
