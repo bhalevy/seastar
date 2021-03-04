@@ -71,7 +71,7 @@ class BacktraceResolver(object):
     object_address_re = re.compile('^(?:(\w*)\W+)?(((/[^/]+)+)\+)?(0x[0-9a-f]+)\W*$', flags=re.IGNORECASE)
     separator_re = re.compile('^\W*-+\W*$')
 
-    def __init__(self, executable, before_lines, context_re, verbose):
+    def __init__(self, executable, before_lines=1, context_re='', verbose=False):
         self._executable = executable
         self._current_backtrace = []
         self._prefix = None
