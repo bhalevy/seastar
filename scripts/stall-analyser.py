@@ -174,6 +174,8 @@ This graph is printed in {direction} order, where {'callers' if top_down else 'c
   out_of - number of siblings
   pct    - percentage of total stall time of this call relative to its siblings
 """)
+        print(f"Command line options used: {args}\n")
+
         def _recursive_print_graph(n:Node, total:int=0, count:int=0, level:int=-1, idx:int=0, out_of:int=0, rel:float=1.0, prefix_list=[]):
             nonlocal top_down
             if level >= 0:
