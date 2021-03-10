@@ -205,7 +205,7 @@ This graph is printed in {direction} order, where {'callers' if top_down else 'c
                             l += f"{prefix}{p}{' '*cont_indent}{li.strip()}\n"
                 self.smart_print(l, args.width)
                 if n.printed:
-                    print(f"{prefix}{p}(see above)")
+                    print(f"{prefix}-> continued at addr={n.addr} above")
                     return
                 n.printed = True
             next_prefix_list = prefix_list + ["| " if idx < out_of else "  "] if level >= 0 else []
