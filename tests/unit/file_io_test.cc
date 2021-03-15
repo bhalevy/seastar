@@ -638,6 +638,31 @@ SEASTAR_TEST_CASE(test_with_file_close_on_failure) {
     });
 }
 
+SEASTAR_TEST_CASE(test_with_file_close_on_failure_chained) {
+    return tmp_dir::do_with_thread([] (tmp_dir& t) {
+        auto oflags = open_flags::rw | open_flags::create | open_flags::truncate;
+        sstring filename0 = (t.get_path() / "testfile0.tmp").native();
+        sstring filename1 = (t.get_path() / "testfile1.tmp").native();
+        std::vector<file> files;
+
+        auto orig_umask = umask(0);
+
+        BOOST_REQUIRE_THROW(with_file_close_on_failure(open_file_dma(filename0, oflags), [&] (file& f0) {
+            files.push_back(f0);
+            return with_file_close_on_failure(open_file_dma(filename1, oflags), [&] (file& f1) {
+                files.push_back(f1);
+                throw std::runtime_error("expected exception");
+            });
+        }).get(), std::runtime_error);
+
+        // verify that both files were auto-closed on error
+        BOOST_REQUIRE_THROW(files[0].stat().get(), std::system_error);
+        BOOST_REQUIRE_THROW(files[1].stat().get(), std::system_error);
+
+        umask(orig_umask);
+    });
+}
+
 namespace seastar {
     extern bool aio_nowait_supported;
 }
