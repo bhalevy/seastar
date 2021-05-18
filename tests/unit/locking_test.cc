@@ -132,14 +132,20 @@ SEASTAR_THREAD_TEST_CASE(test_gated_rwlock) {
 
     BOOST_REQUIRE_THROW(f3.get(), gate_closed_exception);
     BOOST_REQUIRE_THROW(f4.get(), gate_closed_exception);
+
+    BOOST_REQUIRE(l.is_closed());
 }
 
 SEASTAR_THREAD_TEST_CASE(test_gated_rwlock_double_close) {
     gated_rwlock l;
 
+    BOOST_REQUIRE(!l.is_closed());
+
     auto f = l.close();
     BOOST_REQUIRE(f.available());
     BOOST_REQUIRE_NO_THROW(f.get());
+
+    BOOST_REQUIRE(l.is_closed());
 
     BOOST_REQUIRE_THROW(l.close().get(), gate_closed_exception);
 }

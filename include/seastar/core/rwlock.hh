@@ -197,6 +197,11 @@ public:
             this->_sem.broken(gate_closed_exception());
         });
     }
+
+    /// Check if the basic_gated_rwlock was closed.
+    bool is_closed() const noexcept {
+        return this->_sem.is_broken();
+    }
 };
 
 using gated_rwlock = basic_gated_rwlock<>;
