@@ -111,6 +111,29 @@ SEASTAR_THREAD_TEST_CASE(test_rwlock_failed_func) {
     l.for_write().unlock();
 }
 
+SEASTAR_THREAD_TEST_CASE(test_rwlock_close) {
+    rwlock l;
+    bool closed = false;
+
+    // verify that the rwlock is unlocked when func fails
+    future<bool> f1 = with_lock(l.for_read(), [&] {
+        return sleep(1ms).then([&] {
+            return closed;
+        });
+    });
+
+    closed = true;
+    auto f2 = l.close();
+    auto f3 = with_lock(l.for_read(), [] {});
+    auto f4 = with_lock(l.for_write(), [] {});
+
+    f2.get();
+    BOOST_REQUIRE_EQUAL(f1.get0(), true);
+
+    BOOST_REQUIRE_THROW(f3.get(), seastar::lock_closed_exception);
+    BOOST_REQUIRE_THROW(f4.get(), seastar::lock_closed_exception);
+}
+
 SEASTAR_THREAD_TEST_CASE(test_failed_with_lock) {
     struct test_lock {
         future<> lock() noexcept {

@@ -59,6 +59,15 @@ public:
 /// \addtogroup fiber-module
 /// @{
 
+/// Exception thrown when a \ref rwlock object has been closed
+/// by the \ref basic_rwlock::close() method.
+class lock_closed_exception : public std::exception {
+public:
+    virtual const char* what() const noexcept override {
+        return "lock closed";
+    }
+};
+
 /// Implements a read-write lock mechanism. Beware: this is not a cross-CPU
 /// lock, due to seastar's sharded architecture.
 /// Instead, it can be used to achieve rwlock semantics between two (or more)
@@ -167,6 +176,15 @@ public:
     /// Checks if any read or write locks are currently held.
     bool locked() const noexcept {
         return _sem.available_units() != max_ops;
+    }
+
+    /// Close the read/write lock so that
+    /// and attempt to acquire the lock will fail
+    /// with lock_closed_exception exception
+    future<> close() noexcept {
+        return write_lock().then([this] {
+            _sem.broken(lock_closed_exception());
+        });
     }
 
     friend class rwlock_for_read<Clock>;
