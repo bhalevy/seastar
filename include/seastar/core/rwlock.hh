@@ -187,6 +187,10 @@ public:
         });
     }
 
+    bool is_closed() const noexcept {
+        return _sem.is_broken();
+    }
+
     friend class rwlock_for_read<Clock>;
     friend class rwlock_for_write<Clock>;
 };
