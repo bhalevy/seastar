@@ -22,6 +22,7 @@
 #pragma once
 
 #include <seastar/core/semaphore.hh>
+#include <seastar/core/gate.hh>
 
 namespace seastar {
 
@@ -53,6 +54,10 @@ public:
     }
     friend class basic_rwlock<Clock>;
 };
+
+template<typename Clock = typename timer<>::clock>
+class basic_gated_rwlock;
+
 /// \endcond
 
 
@@ -72,6 +77,8 @@ class basic_rwlock : private rwlock_for_read<Clock>, rwlock_for_write<Clock> {
     static constexpr size_t max_ops = semaphore_type::max_counter();
 
     semaphore_type _sem;
+
+    friend class basic_gated_rwlock<Clock>;
 public:
     basic_rwlock()
             : _sem(max_ops) {
@@ -174,6 +181,25 @@ public:
 };
 
 using rwlock = basic_rwlock<>;
+
+/// Implements a read-write lock mechanism with a \ref close() method.
+/// Beware: this is not a cross-CPU lock, due to seastar's sharded architecture.
+template<typename Clock>
+class basic_gated_rwlock : public basic_rwlock<Clock> {
+public:
+    /// close() waits for all lock holders to unlock the basic_gated_rwlock.
+    /// and prevents any further locks to be acquired, similar to \ref gate::close().
+    ///
+    /// Trying to acquire the lock, or to close it again will
+    /// fail with a future holding a \ref gate_closed_exception.
+    future<> close() noexcept {
+        return this->write_lock().then([this] {
+            this->_sem.broken(gate_closed_exception());
+        });
+    }
+};
+
+using gated_rwlock = basic_gated_rwlock<>;
 
 /// @}
 
