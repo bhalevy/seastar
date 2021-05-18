@@ -225,7 +225,7 @@ public:
     ///
     /// \param nr Number of units to deposit (default 1).
     void signal(size_t nr = 1) noexcept {
-        if (_ex) {
+        if (is_broken()) {
             return;
         }
         _count += nr;
@@ -245,7 +245,7 @@ public:
     ///
     /// \param nr Amount of units to consume (default 1).
     void consume(size_t nr = 1) noexcept {
-        if (_ex) {
+        if (is_broken()) {
             return;
         }
         _count -= nr;
@@ -308,6 +308,11 @@ public:
     /// an exceptional future<> containing the provided exception parameter.
     /// The future is made available immediately.
     void broken(std::exception_ptr ex) noexcept;
+
+    /// Check if the semaphore is broken.
+    bool is_broken() const noexcept {
+        return bool(_ex);
+    }
 
     /// Reserve memory for waiters so that wait() will not throw.
     void ensure_space_for_waiters(size_t n) {
