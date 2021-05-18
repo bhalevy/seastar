@@ -143,7 +143,9 @@ SEASTAR_TEST_CASE(test_broken_semaphore) {
         return make_ready_future<>();
     };
     auto ret = sem->wait().then_wrapped(check_result);
+    BOOST_REQUIRE(!sem->is_broken());
     sem->broken(oops());
+    BOOST_REQUIRE(sem->is_broken());
     return sem->wait().then_wrapped(check_result).then([ret = std::move(ret)] () mutable {
         return std::move(ret);
     });
