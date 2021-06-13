@@ -121,7 +121,7 @@ public:
     explicit loopback_data_source_impl(lw_shared_ptr<loopback_buffer> buffer)
             : _buffer(std::move(buffer)) {
     }
-    future<temporary_buffer<char>> get() override {
+    future<temporary_buffer<char>> get(io_timeout_clock::time_point) override {
         return _buffer->pop().then_wrapped([this] (future<temporary_buffer<char>>&& b) {
             _eof = b.failed();
             if (!_eof) {

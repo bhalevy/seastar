@@ -570,8 +570,9 @@ posix_ap_server_socket_impl::move_connected_socket(int protocol, socket_address 
     }
 }
 
+// FIXME: timeout is ignored
 future<temporary_buffer<char>>
-posix_data_source_impl::get() {
+posix_data_source_impl::get(io_timeout_clock::time_point timeout) {
     return _fd.read_some(static_cast<internal::buffer_allocator*>(this)).then([this] (temporary_buffer<char> b) {
         if (b.size() >= _config.buffer_size) {
             _config.buffer_size *= 2;

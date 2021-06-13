@@ -32,7 +32,7 @@ public:
         : _p(std::move(p))
     {}
 
-    virtual future<temporary_buffer<char>> get() override {
+    virtual future<temporary_buffer<char>> get(io_timeout_clock::time_point) override {
         if (_cur_frag != _p.nr_frags()) {
             auto& f = _p.fragments()[_cur_frag++];
             return make_ready_future<temporary_buffer<char>>(

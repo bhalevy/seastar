@@ -115,7 +115,8 @@ public:
             std::pmr::polymorphic_allocator<char>* allocator=memory::malloc_allocator)
             : _buffer_allocator(allocator), _fd(std::move(fd)), _config(config) {
     }
-    future<temporary_buffer<char>> get() override;
+    // FIXME: timeout is ignored
+    future<temporary_buffer<char>> get(io_timeout_clock::time_point timeout) override;
     future<> close() override;
 };
 

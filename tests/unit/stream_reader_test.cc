@@ -20,6 +20,7 @@
  * Copyright (C) 2020 ScyllaDB.
  */
 
+#include "seastar/core/timed_out_error.hh"
 #include <seastar/core/future.hh>
 #include <seastar/core/temporary_buffer.hh>
 #include <seastar/core/thread.hh>
@@ -44,7 +45,10 @@ public:
     test_source_impl(size_t buffer_size, size_t total_size)
         : _buffer_size(buffer_size), _remaining_size(total_size) {
     }
-    virtual future<temporary_buffer<char>> get() override {
+    virtual future<temporary_buffer<char>> get(io_timeout_clock::time_point timeout) override {
+        if (io_timeout_clock::now() >= timeout) {
+            return make_exception_future<temporary_buffer<char>>(timed_out_error());
+        }
         size_t len = std::min(_buffer_size, _remaining_size);
         temporary_buffer<char> tmp(len);
         for (size_t i = 0; i < len; i++) {
@@ -54,7 +58,10 @@ public:
         _remaining_size -= len;
         return make_ready_future<temporary_buffer<char>>(std::move(tmp));
     }
-    virtual future<temporary_buffer<char>> skip(uint64_t n) override {
+    virtual future<temporary_buffer<char>> skip(uint64_t n, io_timeout_clock::time_point timeout) override {
+        if (io_timeout_clock::now() >= timeout) {
+            return make_exception_future<temporary_buffer<char>>(timed_out_error());
+        }
         _remaining_size -= std::min(_remaining_size, n);
         _current_letter += n %= 26;
         return make_ready_future<temporary_buffer<char>>();
@@ -108,4 +115,9 @@ SEASTAR_TEST_CASE(test_skip_all) {
         BOOST_REQUIRE(empty_inp.eof());
         BOOST_REQUIRE(to_sstring(empty_inp.read().get0()).empty());
     });
+}
+
+SEASTAR_THREAD_TEST_CASE(test_read_timeout) {
+    input_stream<char> inp(data_source(std::make_unique<test_source_impl>(5, 15)));
+    BOOST_REQUIRE_THROW(read_entire_stream(inp, io_timeout_clock::now()).get(), timed_out_error);
 }

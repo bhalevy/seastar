@@ -82,6 +82,8 @@ class file_data_source_impl : public data_source_impl {
     size_t _current_buffer_size;
     bool _in_slow_start = false;
     io_intent _intent;
+    io_timeout_clock::time_point _timeout;
+    timer<io_timeout_clock> _timeout_timer;
     using unused_ratio_target = std::ratio<25, 100>;
 private:
     size_t minimal_buffer_size() const {
@@ -192,6 +194,8 @@ private:
 public:
     file_data_source_impl(file f, uint64_t offset, uint64_t len, file_input_stream_options options)
             : _file(std::move(f)), _options(options), _pos(offset), _remain(len), _current_read_ahead(get_initial_read_ahead())
+            , _timeout(io_timeout_clock::time_point::min())
+            , _timeout_timer([this] { _intent.cancel(); })
     {
         _options.buffer_size = select_buffer_size(_options.buffer_size, _file.disk_read_max_length());
         _current_buffer_size = _options.buffer_size;
@@ -204,11 +208,11 @@ public:
         // that will try to access freed memory.
         assert(_reads_in_progress == 0);
     }
-    virtual future<temporary_buffer<char>> get() override {
+    virtual future<temporary_buffer<char>> get(io_timeout_clock::time_point timeout) override {
         if (!_read_buffers.empty() && !_read_buffers.front()._ready.available()) {
             try_increase_read_ahead();
         }
-        issue_read_aheads(1);
+        issue_read_aheads(1, timeout);
         auto ret = std::move(_read_buffers.front());
         _read_buffers.pop_front();
         update_history_consumed(ret._size);
@@ -220,7 +224,7 @@ public:
         }
         return std::move(ret._ready);
     }
-    virtual future<temporary_buffer<char>> skip(uint64_t n) override {
+    virtual future<temporary_buffer<char>> skip(uint64_t n, io_timeout_clock::time_point timeout) override {
         uint64_t dropped = 0;
         while (n) {
             if (_read_buffers.empty()) {
@@ -269,7 +273,13 @@ public:
         });
     }
 private:
-    void issue_read_aheads(unsigned additional = 0) {
+    void cancel_timeout() noexcept {
+        if (_timeout_timer.armed()) {
+            _timeout_timer.cancel();
+            _timeout = io_timeout_clock::time_point::min();
+        }
+    }
+    void issue_read_aheads(unsigned additional, io_timeout_clock::time_point timeout) {
         if (_done) {
             return;
         }
@@ -284,6 +294,12 @@ private:
                 continue;
             }
             ++_reads_in_progress;
+            if (timeout == io_no_timeout) {
+                cancel_timeout();
+            } else if (timeout > _timeout) {
+                _timeout_timer.rearm(timeout);
+                _timeout = timeout;
+            }
             // if _pos is not dma-aligned, we'll get a short read.  Account for that.
             // Also avoid reading beyond _remain.
             uint64_t align = _file.disk_read_dma_alignment();
@@ -294,10 +310,17 @@ private:
             _read_buffers.emplace_back(_pos, actual_size, futurize_invoke([&] {
                     return _file.dma_read_bulk<char>(start, len, _options.io_priority_class, &_intent);
             }).then_wrapped(
-                    [this, start, pos = _pos, remain = _remain] (future<temporary_buffer<char>> ret) {
+                    [this, start, pos = _pos, remain = _remain, timeout] (future<temporary_buffer<char>> ret) {
                 --_reads_in_progress;
-                if (_done && !_reads_in_progress) {
-                    _done->set_value();
+                if (!_reads_in_progress) {
+                    if (_done) {
+                        _done->set_value();
+                    }
+                    cancel_timeout();
+                }
+                if (io_timeout_clock::now() >= timeout) {
+                    ret.ignore_ready_future();
+                    return make_exception_future<temporary_buffer<char>>(timed_out_error());
                 }
                 if (ret.failed()) {
                     // no games needed

@@ -30,11 +30,11 @@
 
 namespace seastar {
 
-inline future<temporary_buffer<char>> data_source_impl::skip(uint64_t n)
+inline future<temporary_buffer<char>> data_source_impl::skip(uint64_t n, io_timeout_clock::time_point timeout)
 {
-    return do_with(uint64_t(n), [this] (uint64_t& n) {
+    return do_with(uint64_t(n), [this, timeout] (uint64_t& n) {
         return repeat_until_value([&] {
-            return get().then([&] (temporary_buffer<char> buffer) -> std::optional<temporary_buffer<char>> {
+            return get(timeout).then([&] (temporary_buffer<char> buffer) -> std::optional<temporary_buffer<char>> {
                 if (buffer.empty()) {
                     return buffer;
                 }
@@ -151,7 +151,7 @@ future<> output_stream<CharType>::write(temporary_buffer<CharType> p) noexcept {
 
 template <typename CharType>
 future<temporary_buffer<CharType>>
-input_stream<CharType>::read_exactly_part(size_t n, tmp_buf out, size_t completed) noexcept {
+input_stream<CharType>::read_exactly_part(size_t n, tmp_buf out, size_t completed, io_timeout_clock::time_point timeout) noexcept {
     if (available()) {
         auto now = std::min(n - completed, available());
         std::copy(_buf.get(), _buf.get() + now, out.get_write() + completed);
@@ -163,19 +163,19 @@ input_stream<CharType>::read_exactly_part(size_t n, tmp_buf out, size_t complete
     }
 
     // _buf is now empty
-    return _fd.get().then([this, n, out = std::move(out), completed] (auto buf) mutable {
+    return _fd.get(timeout).then([this, n, out = std::move(out), completed, timeout] (auto buf) mutable {
         if (buf.size() == 0) {
             _eof = true;
             return make_ready_future<tmp_buf>(std::move(buf));
         }
         _buf = std::move(buf);
-        return this->read_exactly_part(n, std::move(out), completed);
+        return this->read_exactly_part(n, std::move(out), completed, timeout);
     });
 }
 
 template <typename CharType>
 future<temporary_buffer<CharType>>
-input_stream<CharType>::read_exactly(size_t n) noexcept {
+input_stream<CharType>::read_exactly(size_t n, io_timeout_clock::time_point timeout) noexcept {
     if (_buf.size() == n) {
         // easy case: steal buffer, return to caller
         return make_ready_future<tmp_buf>(std::move(_buf));
@@ -186,7 +186,7 @@ input_stream<CharType>::read_exactly(size_t n) noexcept {
         return make_ready_future<tmp_buf>(std::move(front));
     } else if (_buf.size() == 0) {
         // buffer is empty: grab one and retry
-        return _fd.get().then([this, n] (auto buf) mutable {
+        return _fd.get(timeout).then([this, n] (auto buf) mutable {
             if (buf.size() == 0) {
                 _eof = true;
                 return make_ready_future<tmp_buf>(std::move(buf));
@@ -198,7 +198,7 @@ input_stream<CharType>::read_exactly(size_t n) noexcept {
       try {
         // buffer too small: start copy/read loop
         tmp_buf b(n);
-        return read_exactly_part(n, std::move(b), 0);
+        return read_exactly_part(n, std::move(b), 0, timeout);
       } catch (...) {
         return current_exception_as_future<tmp_buf>();
       }
@@ -209,16 +209,16 @@ template <typename CharType>
 template <typename Consumer>
 SEASTAR_CONCEPT(requires InputStreamConsumer<Consumer, CharType> || ObsoleteInputStreamConsumer<Consumer, CharType>)
 future<>
-input_stream<CharType>::consume(Consumer&& consumer) noexcept(std::is_nothrow_move_constructible_v<Consumer>) {
-    return repeat([consumer = std::move(consumer), this] () mutable {
+input_stream<CharType>::consume(Consumer&& consumer, io_timeout_clock::time_point timeout) noexcept(std::is_nothrow_move_constructible_v<Consumer>) {
+    return repeat([consumer = std::move(consumer), this, timeout] () mutable {
         if (_buf.empty() && !_eof) {
-            return _fd.get().then([this] (tmp_buf buf) {
+            return _fd.get(timeout).then([this] (tmp_buf buf) {
                 _buf = std::move(buf);
                 _eof = _buf.empty();
                 return make_ready_future<stop_iteration>(stop_iteration::no);
             });
         }
-        return consumer(std::move(_buf)).then([this] (consumption_result_type result) {
+        return consumer(std::move(_buf)).then([this, timeout] (consumption_result_type result) {
             return seastar::visit(result.get(), [this] (const continue_consuming&) {
                // If we're here, consumer consumed entire buffer and is ready for
                 // more now. So we do not return, and rather continue the loop.
@@ -229,8 +229,8 @@ input_stream<CharType>::consume(Consumer&& consumer) noexcept(std::is_nothrow_mo
                 // consumer is done
                 this->_buf = std::move(stop.get_buffer());
                 return make_ready_future<stop_iteration>(stop_iteration::yes);
-            }, [this] (const skip_bytes& skip) {
-                return this->_fd.skip(skip.get_value()).then([this](tmp_buf buf) {
+            }, [this, timeout] (const skip_bytes& skip) {
+                return this->_fd.skip(skip.get_value(), timeout).then([this](tmp_buf buf) {
                     if (!buf.empty()) {
                         this->_buf = std::move(buf);
                     }
@@ -245,19 +245,19 @@ template <typename CharType>
 template <typename Consumer>
 SEASTAR_CONCEPT(requires InputStreamConsumer<Consumer, CharType> || ObsoleteInputStreamConsumer<Consumer, CharType>)
 future<>
-input_stream<CharType>::consume(Consumer& consumer) noexcept(std::is_nothrow_move_constructible_v<Consumer>) {
-    return consume(std::ref(consumer));
+input_stream<CharType>::consume(Consumer& consumer, io_timeout_clock::time_point timeout) noexcept(std::is_nothrow_move_constructible_v<Consumer>) {
+    return consume(std::ref(consumer), timeout);
 }
 
 template <typename CharType>
 future<temporary_buffer<CharType>>
-input_stream<CharType>::read_up_to(size_t n) noexcept {
+input_stream<CharType>::read_up_to(size_t n, io_timeout_clock::time_point timeout) noexcept {
     using tmp_buf = temporary_buffer<CharType>;
     if (_buf.empty()) {
         if (_eof) {
             return make_ready_future<tmp_buf>();
         } else {
-            return _fd.get().then([this, n] (tmp_buf buf) {
+            return _fd.get(timeout).then([this, n] (tmp_buf buf) {
                 _eof = buf.empty();
                 _buf = std::move(buf);
                 return read_up_to(n);
@@ -280,13 +280,13 @@ input_stream<CharType>::read_up_to(size_t n) noexcept {
 
 template <typename CharType>
 future<temporary_buffer<CharType>>
-input_stream<CharType>::read() noexcept {
+input_stream<CharType>::read(io_timeout_clock::time_point timeout) noexcept {
     using tmp_buf = temporary_buffer<CharType>;
     if (_eof) {
         return make_ready_future<tmp_buf>();
     }
     if (_buf.empty()) {
-        return _fd.get().then([this] (tmp_buf buf) {
+        return _fd.get(timeout).then([this] (tmp_buf buf) {
             _eof = buf.empty();
             return make_ready_future<tmp_buf>(std::move(buf));
         });
@@ -297,14 +297,14 @@ input_stream<CharType>::read() noexcept {
 
 template <typename CharType>
 future<>
-input_stream<CharType>::skip(uint64_t n) noexcept {
+input_stream<CharType>::skip(uint64_t n, io_timeout_clock::time_point timeout) noexcept {
     auto skip_buf = std::min(n, _buf.size());
     _buf.trim_front(skip_buf);
     n -= skip_buf;
     if (!n) {
         return make_ready_future<>();
     }
-    return _fd.skip(n).then([this] (temporary_buffer<CharType> buffer) {
+    return _fd.skip(n, timeout).then([this] (temporary_buffer<CharType> buffer) {
         _buf = std::move(buffer);
     });
 }

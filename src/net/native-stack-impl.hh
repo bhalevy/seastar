@@ -155,7 +155,7 @@ class native_connected_socket_impl<Protocol>::native_data_source_impl final
 public:
     explicit native_data_source_impl(lw_shared_ptr<connection_type> conn)
         : _conn(std::move(conn)) {}
-    virtual future<temporary_buffer<char>> get() override {
+    virtual future<temporary_buffer<char>> get(io_timeout_clock::time_point timeout) override {
         if (_eof) {
             return make_ready_future<temporary_buffer<char>>(temporary_buffer<char>(0));
         }
@@ -165,11 +165,11 @@ public:
                     temporary_buffer<char>(f.base, f.size,
                             make_deleter(deleter(), [p = _buf.share()] () mutable {})));
         }
-        return _conn->wait_for_data().then([this] {
+        return _conn->wait_for_data(timeout).then([this, timeout] {
             _buf = _conn->read();
             _cur_frag = 0;
             _eof = !_buf.len();
-            return get();
+            return get(timeout);
         });
     }
     future<> close() override {

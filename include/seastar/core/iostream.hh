@@ -39,6 +39,7 @@
 #include <seastar/core/temporary_buffer.hh>
 #include <seastar/core/scattered_message.hh>
 #include <seastar/util/std-compat.hh>
+#include <seastar/core/io_timeout.hh>
 
 namespace seastar {
 
@@ -47,8 +48,8 @@ namespace net { class packet; }
 class data_source_impl {
 public:
     virtual ~data_source_impl() {}
-    virtual future<temporary_buffer<char>> get() = 0;
-    virtual future<temporary_buffer<char>> skip(uint64_t n);
+    virtual future<temporary_buffer<char>> get(io_timeout_clock::time_point timeout) = 0;
+    virtual future<temporary_buffer<char>> skip(uint64_t n, io_timeout_clock::time_point timeout);
     virtual future<> close() { return make_ready_future<>(); }
 };
 
@@ -64,16 +65,16 @@ public:
     data_source(data_source&& x) noexcept = default;
     data_source& operator=(data_source&& x) noexcept = default;
 
-    future<tmp_buf> get() noexcept {
+    future<tmp_buf> get(io_timeout_clock::time_point timeout) noexcept {
         try {
-            return _dsi->get();
+            return _dsi->get(timeout);
         } catch (...) {
             return current_exception_as_future<tmp_buf>();
         }
     }
-    future<tmp_buf> skip(uint64_t n) noexcept {
+    future<tmp_buf> skip(uint64_t n, io_timeout_clock::time_point timeout) noexcept {
         try {
-            return _dsi->skip(n);
+            return _dsi->skip(n, timeout);
         } catch (...) {
             return current_exception_as_future<tmp_buf>();
         }
@@ -277,24 +278,25 @@ public:
     /// stream and returns them. If the end of stream is reached before n
     /// bytes were read, fewer than n bytes will be returned - so despite
     /// the method's name, the caller must not assume the returned buffer
-    /// will always contain exactly n bytes.
+    /// will always contain exactly n bytes.  If timeout has reached before
+    /// all bytes were read a future holding timed_out_error is returned.
     ///
     /// \throws if an I/O error occurs during the read. As explained above,
     /// prematurely reaching the end of stream is *not* an I/O error.
-    future<temporary_buffer<CharType>> read_exactly(size_t n) noexcept;
+    future<temporary_buffer<CharType>> read_exactly(size_t n, io_timeout_clock::time_point timeout = io_no_timeout) noexcept;
     template <typename Consumer>
     SEASTAR_CONCEPT(requires InputStreamConsumer<Consumer, CharType> || ObsoleteInputStreamConsumer<Consumer, CharType>)
-    future<> consume(Consumer&& c) noexcept(std::is_nothrow_move_constructible_v<Consumer>);
+    future<> consume(Consumer&& c, io_timeout_clock::time_point timeout = io_no_timeout) noexcept(std::is_nothrow_move_constructible_v<Consumer>);
     template <typename Consumer>
     SEASTAR_CONCEPT(requires InputStreamConsumer<Consumer, CharType> || ObsoleteInputStreamConsumer<Consumer, CharType>)
-    future<> consume(Consumer& c) noexcept(std::is_nothrow_move_constructible_v<Consumer>);
+    future<> consume(Consumer& c, io_timeout_clock::time_point timeout = io_no_timeout) noexcept(std::is_nothrow_move_constructible_v<Consumer>);
     bool eof() const noexcept { return _eof; }
     /// Returns some data from the stream, or an empty buffer on end of
     /// stream.
-    future<tmp_buf> read() noexcept;
+    future<tmp_buf> read(io_timeout_clock::time_point timeout = io_no_timeout) noexcept;
     /// Returns up to n bytes from the stream, or an empty buffer on end of
     /// stream.
-    future<tmp_buf> read_up_to(size_t n) noexcept;
+    future<tmp_buf> read_up_to(size_t n, io_timeout_clock::time_point timeout = io_no_timeout) noexcept;
     /// Detaches the \c input_stream from the underlying data source.
     ///
     /// Waits for any background operations (for example, read-ahead) to
@@ -308,7 +310,7 @@ public:
         return _fd.close();
     }
     /// Ignores n next bytes from the stream.
-    future<> skip(uint64_t n) noexcept;
+    future<> skip(uint64_t n, io_timeout_clock::time_point timeout = io_no_timeout) noexcept;
 
     /// Detaches the underlying \c data_source from the \c input_stream.
     ///
@@ -323,7 +325,7 @@ public:
     /// \returns the data_source
     data_source detach() &&;
 private:
-    future<temporary_buffer<CharType>> read_exactly_part(size_t n, tmp_buf buf, size_t completed) noexcept;
+    future<temporary_buffer<CharType>> read_exactly_part(size_t n, tmp_buf buf, size_t completed, io_timeout_clock::time_point timeout) noexcept;
 };
 
 struct output_stream_options {

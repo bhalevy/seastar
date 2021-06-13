@@ -32,6 +32,7 @@
 #include <seastar/net/const.hh>
 #include <seastar/net/packet-util.hh>
 #include <seastar/util/std-compat.hh>
+#include <seastar/core/io_timeout.hh>
 #include <unordered_map>
 #include <map>
 #include <functional>
@@ -429,7 +430,8 @@ private:
         void input_handle_syn_sent_state(tcp_hdr* th, packet p);
         void input_handle_other_state(tcp_hdr* th, packet p);
         void output_one(bool data_retransmit = false);
-        future<> wait_for_data();
+        // FIXME: timeout is ignored
+        future<> wait_for_data(io_timeout_clock::time_point timeout = io_no_timeout);
         void abort_reader();
         future<> wait_for_all_data_acked();
         future<> wait_send_available();
@@ -689,8 +691,8 @@ public:
         future<> send(packet p) {
             return _tcb->send(std::move(p));
         }
-        future<> wait_for_data() {
-            return _tcb->wait_for_data();
+        future<> wait_for_data(io_timeout_clock::time_point timeout = io_no_timeout) {
+            return _tcb->wait_for_data(timeout);
         }
         packet read() {
             return _tcb->read();
@@ -1719,8 +1721,9 @@ void tcp<InetTraits>::tcb::output_one(bool data_retransmit) {
     queue_packet(std::move(p));
 }
 
+// FIXME: timeout is ignored
 template <typename InetTraits>
-future<> tcp<InetTraits>::tcb::wait_for_data() {
+future<> tcp<InetTraits>::tcb::wait_for_data(io_timeout_clock::time_point timeout) {
     if (!_rcv.data.empty() || foreign_will_not_send()) {
         return make_ready_future<>();
     }

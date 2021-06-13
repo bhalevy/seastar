@@ -1038,7 +1038,7 @@ public:
         gnutls_free(out.data);
         return s;
     }
-    future<> do_handshake() {
+    future<> do_handshake(io_timeout_clock::time_point timeout) {
         if (_connected) {
             return make_ready_future<>();
         }
@@ -1054,14 +1054,14 @@ public:
                     // If none is pending, it should be a no-op
                 {
                     int dir = gnutls_record_get_direction(*this);
-                    return wait_for_output().then([this, dir] {
+                    return wait_for_output().then([this, dir, timeout] {
                         // we actually E_AGAIN:ed in a write. Don't
                         // wait for input.
                         if (dir == 1) {
-                            return do_handshake();
+                            return do_handshake(timeout);
                         }
-                        return wait_for_input().then([this] {
-                            return do_handshake();
+                        return wait_for_input(timeout).then([this, timeout] {
+                            return do_handshake(timeout);
                         });
                     });
                 }
@@ -1085,18 +1085,18 @@ public:
             return make_exception_future<>(std::current_exception());
         }
     }
-    future<> handshake() {
+    future<> handshake(io_timeout_clock::time_point timeout) {
         // maybe load system certificates before handshake, in case we
         // have not done so yet...
         if (_creds->need_load_system_trust()) {
-            return _creds->maybe_load_system_trust().then([this] {
-               return handshake();
+            return _creds->maybe_load_system_trust().then([this, timeout] {
+               return handshake(timeout);
             });
         }
         // acquire both semaphores to sync both read & write
-        return with_semaphore(_in_sem, 1, [this] {
-            return with_semaphore(_out_sem, 1, [this] {
-                return do_handshake().handle_exception([this](auto ep) {
+        return with_semaphore(_in_sem, 1, [this, timeout] {
+            return with_semaphore(_out_sem, 1, [this, timeout] {
+                return do_handshake(timeout).handle_exception([this](auto ep) {
                     if (!_error) {
                         _error = ep;
                     }
@@ -1112,11 +1112,11 @@ public:
     bool eof() const {
         return _eof;
     }
-    future<> wait_for_input() {
+    future<> wait_for_input(io_timeout_clock::time_point timeout) {
         if (!_input.empty()) {
             return make_ready_future<>();
         }
-        return _in.get().then([this](buf_type buf) {
+        return _in.get(timeout).then([this](buf_type buf) {
             _eof |= buf.empty();
            _input = std::move(buf);
         }).handle_exception([this](auto ep) {
@@ -1204,7 +1204,7 @@ public:
         }
     }
 
-    future<temporary_buffer<char>> get() {
+    future<temporary_buffer<char>> get(io_timeout_clock::time_point timeout = io_no_timeout) {
         if (_error) {
             return make_exception_future<temporary_buffer<char>>(_error);
         }
@@ -1212,9 +1212,9 @@ public:
             return make_ready_future<temporary_buffer<char>>();
         }
         if (!_connected) {
-            return handshake().then(std::bind(&session::get, this));
+            return handshake(timeout).then(std::bind(&session::get, this, timeout));
         }
-        return with_semaphore(_in_sem, 1, std::bind(&session::do_get, this)).then([this](temporary_buffer<char> buf) {
+        return with_semaphore(_in_sem, 1, std::bind(&session::do_get, this, timeout)).then([this, timeout](temporary_buffer<char> buf) {
             if (buf.empty() && !eof()) {
                 // this must mean we got a re-handshake request.
                 // see do_get.
@@ -1222,13 +1222,13 @@ public:
                 // other side requests re-handshake. Now, someone else could have already dealt with it by the
                 // time we are here (continuation reordering). In fact, someone could have dealt with
                 // it and set the eof flag also, but in that case we're still eof...
-                return handshake().then(std::bind(&session::get, this));
+                return handshake(timeout).then(std::bind(&session::get, this, timeout));
             }
             return make_ready_future<temporary_buffer<char>>(std::move(buf));
         });
     }
 
-    future<temporary_buffer<char>> do_get() {
+    future<temporary_buffer<char>> do_get(io_timeout_clock::time_point timeout) {
         // gnutls might have stuff in its buffers.
         auto avail = gnutls_record_check_pending(*this);
         if (avail == 0) {
@@ -1246,7 +1246,7 @@ public:
                     // Assume we got this because we read to little underlying
                     // data to finish a tls packet
                     // Our input buffer should be empty now, so just go again
-                    return do_get();
+                    return do_get(timeout);
                 case GNUTLS_E_REHANDSHAKE:
                     // server requests new HS. must release semaphore, so set new state
                     // and return nada.
@@ -1267,8 +1267,8 @@ public:
             return make_ready_future<temporary_buffer<char>>();
         }
         // No input? wait for out buffers to fill...
-        return wait_for_input().then([this] {
-            return do_get();
+        return wait_for_input(timeout).then([this, timeout] {
+            return do_get(timeout);
         });
     }
 
@@ -1304,7 +1304,8 @@ public:
             return make_exception_future<>(std::system_error(ENOTCONN, std::system_category()));
         }
         if (!_connected) {
-            return handshake().then([this, p = std::move(p)]() mutable {
+            // FIXME: implement timeout also on the put path
+            return handshake(io_no_timeout).then([this, p = std::move(p)]() mutable {
                return put(std::move(p));
             });
         }
@@ -1405,7 +1406,7 @@ public:
                 if (eof()) {
                     return make_ready_future<stop_iteration>(stop_iteration::yes);
                 }
-                return do_get().then([](auto buf) {
+                return do_get(io_no_timeout).then([](auto buf) {
                    return make_ready_future<stop_iteration>(stop_iteration::no);
                 });
             });
@@ -1560,8 +1561,8 @@ class tls_connected_socket_impl::source_impl: public data_source_impl, public se
 public:
     using session_ref::session_ref;
 private:
-    future<temporary_buffer<char>> get() override {
-        return _session->get();
+    future<temporary_buffer<char>> get(io_timeout_clock::time_point timeout) override {
+        return _session->get(timeout);
     }
     future<> close() override {
         _session->close();

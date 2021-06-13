@@ -19,24 +19,14 @@
  * Copyright (C) 2021 ScyllaDB
  */
 
-#include <seastar/core/future.hh>
-#include <seastar/core/iostream.hh>
-#include <seastar/core/temporary_buffer.hh>
-#include <seastar/core/io_timeout.hh>
+#pragma once
+
+#include <seastar/core/lowres_clock.hh>
+#include <seastar/core/timed_out_error.hh>
 
 namespace seastar {
 
-namespace httpd {
-
-/// Returns all bytes from the stream until eof, accessible in chunks
-future<std::vector<temporary_buffer<char>>> read_entire_stream(input_stream<char>& inp, io_timeout_clock::time_point timeout = io_no_timeout);
-
-/// Returns all bytes from the stream until eof as a single buffer, use only on short streams
-future<sstring> read_entire_stream_contiguous(input_stream<char>& inp, io_timeout_clock::time_point timeout = io_no_timeout);
-
-/// Ignores all bytes until eof
-future<> skip_entire_stream(input_stream<char>& inp, io_timeout_clock::time_point timeout = io_no_timeout);
-
-}
+using io_timeout_clock = lowres_clock;
+constexpr io_timeout_clock::time_point io_no_timeout = io_timeout_clock::time_point::max();
 
 }

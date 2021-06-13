@@ -33,13 +33,13 @@ class buf_source_impl : public data_source_impl {
     temporary_buffer<char> _tmp;
 public:
     buf_source_impl(sstring str) : _tmp(str.c_str(), str.size()) {};
-    virtual future<temporary_buffer<char>> get() override {
+    virtual future<temporary_buffer<char>> get(io_timeout_clock::time_point) override {
         if (_tmp.empty()) {
             return make_ready_future<temporary_buffer<char>>();
         }
         return make_ready_future<temporary_buffer<char>>(std::move(_tmp));
     }
-    virtual future<temporary_buffer<char>> skip(uint64_t n) override {
+    virtual future<temporary_buffer<char>> skip(uint64_t n, io_timeout_clock::time_point) override {
         _tmp.trim_front(std::min(_tmp.size(), n));
         return make_ready_future<temporary_buffer<char>>();
     }
@@ -125,7 +125,7 @@ public:
     single_bytes_source_impl(temporary_buffer<char> tmp)
         : _tmp(std::move(tmp)) {
     }
-    virtual future<temporary_buffer<char>> get() override {
+    virtual future<temporary_buffer<char>> get(io_timeout_clock::time_point) override {
         if (_tmp.empty()) {
             return make_ready_future<temporary_buffer<char>>();
         }
@@ -133,7 +133,7 @@ public:
         _tmp.trim_front(1);
         return make_ready_future<temporary_buffer<char>>(std::move(byte));
     }
-    virtual future<temporary_buffer<char>> skip(uint64_t n) override {
+    virtual future<temporary_buffer<char>> skip(uint64_t n, io_timeout_clock::time_point) override {
         _tmp.trim_front(std::min(_tmp.size(), n));
         return make_ready_future<temporary_buffer<char>>();
     }
@@ -146,7 +146,7 @@ SEASTAR_TEST_CASE(test_single_bytes_source) {
         for (auto& ch : input_str) {
             temporary_buffer<char> one_letter_buf(1);
             *one_letter_buf.get_write() = ch;
-            auto get_buf = ds.get().get0();
+            auto get_buf = ds.get(io_no_timeout).get0();
             BOOST_REQUIRE(one_letter_buf == get_buf);
         }
     });

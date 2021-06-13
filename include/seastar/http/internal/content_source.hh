@@ -46,20 +46,20 @@ public:
         : _inp(inp), _remaining_bytes(length) {
     }
 
-    virtual future<temporary_buffer<char>> get() override {
+    virtual future<temporary_buffer<char>> get(io_timeout_clock::time_point timeout) override {
         if (_remaining_bytes == 0) {
             return make_ready_future<temporary_buffer<char>>();
         }
-        return _inp.read_up_to(_remaining_bytes).then([this] (temporary_buffer<char> tmp_buf) {
+        return _inp.read_up_to(_remaining_bytes, timeout).then([this] (temporary_buffer<char> tmp_buf) {
             _remaining_bytes -= tmp_buf.size();
             return tmp_buf;
         });
     }
 
-    virtual future<temporary_buffer<char>> skip(uint64_t n) override {
+    virtual future<temporary_buffer<char>> skip(uint64_t n, io_timeout_clock::time_point timeout) override {
         uint64_t skip_bytes = std::min(n, _remaining_bytes);
         _remaining_bytes -= skip_bytes;
-        return _inp.skip(skip_bytes).then([] {
+        return _inp.skip(skip_bytes, timeout).then([] {
             return temporary_buffer<char>();
         });
     }
@@ -210,8 +210,8 @@ public:
         : _inp(inp), _chunk(chunk_extensions, trailing_headers) {
     }
 
-    virtual future<temporary_buffer<char>> get() override {
-        return _inp.consume(_chunk).then([this] () mutable {
+    virtual future<temporary_buffer<char>> get(io_timeout_clock::time_point timeout) override {
+        return _inp.consume(_chunk, timeout).then([this] () mutable {
             return _chunk.buf();
         });
     }

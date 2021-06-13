@@ -27,24 +27,24 @@ namespace seastar {
 
 namespace httpd {
 
-future<std::vector<temporary_buffer<char>>> read_entire_stream(input_stream<char>& inp) {
+future<std::vector<temporary_buffer<char>>> read_entire_stream(input_stream<char>& inp, io_timeout_clock::time_point timeout) {
     using tmp_buf = temporary_buffer<char>;
     using consumption_result_type = consumption_result<char>;
-    return do_with(std::vector<tmp_buf>(), [&inp] (std::vector<tmp_buf>& bufs) {
+    return do_with(std::vector<tmp_buf>(), [&inp, timeout] (std::vector<tmp_buf>& bufs) {
         return inp.consume([&bufs] (tmp_buf buf) {
             if (buf.empty()) {
                 return make_ready_future<consumption_result_type>(stop_consuming(std::move(buf)));
             }
             bufs.push_back(std::move(buf));
             return make_ready_future<consumption_result_type>(continue_consuming());
-        }).then([&bufs] {
+        }, timeout).then([&bufs] {
             return std::move(bufs);
         });
     });
 }
 
-future<sstring> read_entire_stream_contiguous(input_stream<char>& inp) {
-    return read_entire_stream(inp).then([] (std::vector<temporary_buffer<char>> bufs) {
+future<sstring> read_entire_stream_contiguous(input_stream<char>& inp, io_timeout_clock::time_point timeout) {
+    return read_entire_stream(inp, timeout).then([] (std::vector<temporary_buffer<char>> bufs) {
         size_t total_size = 0;
         for (auto&& buf : bufs) {
             total_size += buf.size();
@@ -59,11 +59,11 @@ future<sstring> read_entire_stream_contiguous(input_stream<char>& inp) {
     });
 };
 
-future<> skip_entire_stream(input_stream<char>& inp) {
+future<> skip_entire_stream(input_stream<char>& inp, io_timeout_clock::time_point timeout) {
     return inp.consume([] (temporary_buffer<char> tmp) {
         return tmp.empty() ? make_ready_future<consumption_result<char>>(stop_consuming(temporary_buffer<char>()))
                            : make_ready_future<consumption_result<char>>(continue_consuming());
-    });
+    }, timeout);
 }
 
 }
