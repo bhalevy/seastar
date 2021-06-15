@@ -56,6 +56,7 @@ namespace internal {
 
 template <typename char_type, typename Size, bool NulTerminate>
 struct shared_string_holder {
+    Size size;
     Size shared;
     char_type data[];
 
@@ -83,6 +84,7 @@ struct shared_string_holder {
         if (!ssh) {
             throw_bad_alloc();
         }
+        ssh->size = size;
         ssh->shared = 0;
         if (data) {
             std::copy(data, data + size, ssh->data);
@@ -93,13 +95,16 @@ struct shared_string_holder {
         return ssh->reference();
     }
 
-    static auto make(std::string_view sv) {
-        return make(sv.data(), sv.size());
+    static auto make(const shared_string_holder& s) {
+        return make(s.data, s.size);
     }
 };
 
 } // namespace internal
 
+#define DEBUG_SHARED_STRING
+
+#ifdef DEBUG_SHARED_STRING
 struct sstring_stats {
     uint64_t allocated = 0;
     uint64_t referenced = 0;
@@ -108,6 +113,9 @@ struct sstring_stats {
 };
 
 extern thread_local sstring_stats g_sstring_stats;
+
+void debug_sstring_stats();
+#endif
 
 template <typename char_type, typename Size, Size max_size, bool NulTerminate>
 class basic_sstring {
@@ -120,7 +128,6 @@ class basic_sstring {
     union contents {
         struct external_type {
             shared_string_holder* sstr;
-            Size size;
             int8_t pad;
         } external;
         struct internal_type {
@@ -140,28 +147,14 @@ class basic_sstring {
         return is_internal() ? u.internal.str : u.external.sstr->data;
     }
 
-#ifdef DEBUG_SHARED_STRING
-    void debug_shared_string() {
-        std::cerr << "sstring alloc=" << g_sstring_stats.allocated
-            << " ref=" << g_sstring_stats.referenced
-            << " cloned=" << g_sstring_stats.cloned
-            << " freed=" << g_sstring_stats.freed << std::endl;
-    }
-#endif
-
     // Copy shared_string before modifying it
     void maybe_clone_shared_string() {
         if (u.external.sstr->shared > 1) {
             auto src = u.external.sstr;
-            u.external.sstr = shared_string_holder::make(src->data, u.external.size);
-            if (src->dereference()) {
-#ifdef DEBUG_SHARED_STRING
-                ++g_sstring_stats.freed;
-#endif
-            }
+            u.external.sstr = shared_string_holder::make(*src);
+            src->dereference();
 #ifdef DEBUG_SHARED_STRING
             ++g_sstring_stats.cloned;
-            debug_shared_string();
 #endif
         }
     }
@@ -203,9 +196,8 @@ public:
         } else {
             u.internal.size = -1;
             u.external.sstr = x.u.external.sstr->reference();
-            u.external.size = x.u.external.size;
 #ifdef DEBUG_SHARED_STRING
-            ++g_sstring_stats.referenced; debug_shared_string();
+            ++g_sstring_stats.referenced;
 #endif
         }
     }
@@ -232,9 +224,8 @@ public:
         } else {
             u.internal.size = -1;
             u.external.sstr = shared_string_holder::make(nullptr, size);
-            u.external.size = size;
 #ifdef DEBUG_SHARED_STRING
-            ++g_sstring_stats.allocated; debug_shared_string();
+            ++g_sstring_stats.allocated;
 #endif
         }
     }
@@ -251,9 +242,8 @@ public:
         } else {
             u.internal.size = -1;
             u.external.sstr = shared_string_holder::make(x, size);
-            u.external.size = size;
 #ifdef DEBUG_SHARED_STRING
-            ++g_sstring_stats.allocated; debug_shared_string();
+            ++g_sstring_stats.allocated;
 #endif
         }
     }
@@ -280,7 +270,7 @@ public:
         if (is_external()) {
             if (u.external.sstr->dereference()) {
 #ifdef DEBUG_SHARED_STRING
-                ++g_sstring_stats.freed; debug_shared_string();
+                ++g_sstring_stats.freed;
 #endif
             }
         }
@@ -302,7 +292,7 @@ public:
     }
 
     size_t size() const noexcept {
-        return is_internal() ? u.internal.size : u.external.size;
+        return is_internal() ? u.internal.size : u.external.sstr->size;
     }
 
     size_t length() const noexcept {
@@ -401,7 +391,6 @@ public:
                 } else if (NulTerminate) {
                     u.external.sstr->data[n] = '\0';
                 }
-                u.external.size = n;
             }
         }
     }
@@ -535,7 +524,7 @@ public:
         if (is_external()) {
             if (u.external.sstr->dereference()) {
 #ifdef DEBUG_SHARED_STRING
-                ++g_sstring_stats.freed; debug_shared_string();
+                ++g_sstring_stats.freed;
 #endif
             }
         }
@@ -549,7 +538,7 @@ public:
         if (is_external()) {
             maybe_clone_shared_string();
             auto sstr = std::exchange(u.external.sstr, nullptr);
-            buf = temporary_buffer<char_type>(sstr->data, u.external.size, make_free_deleter(sstr));
+            buf = temporary_buffer<char_type>(sstr->data, sstr->size, make_free_deleter(sstr));
         } else {
             buf = temporary_buffer<char_type>(u.internal.size);
             std::copy(u.internal.str, u.internal.str + u.internal.size, buf.get_write());

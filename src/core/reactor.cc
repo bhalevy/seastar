@@ -139,7 +139,16 @@
 
 namespace seastar {
 
+#ifdef DEBUG_SHARED_STRING
 thread_local sstring_stats g_sstring_stats;
+
+void debug_sstring_stats() {
+    std::cerr << "sstring alloc=" << g_sstring_stats.allocated
+        << " ref=" << g_sstring_stats.referenced
+        << " cloned=" << g_sstring_stats.cloned
+        << " freed=" << g_sstring_stats.freed << std::endl;
+}
+#endif
 
 struct mountpoint_params {
     std::string mountpoint = "none";
