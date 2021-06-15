@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <iostream>
 #include <stdint.h>
 #include <algorithm>
 #include <string>
@@ -52,10 +53,65 @@ namespace internal {
 [[noreturn]] void throw_bad_alloc();
 [[noreturn]] void throw_sstring_overflow();
 [[noreturn]] void throw_sstring_out_of_range();
-}
+
+template <typename char_type, typename Size, bool NulTerminate>
+struct shared_string_holder {
+    Size shared;
+    char_type data[];
+
+    static constexpr unsigned padding() { return unsigned(NulTerminate); }
+
+    shared_string_holder() = delete;
+    shared_string_holder(const shared_string_holder& x) = delete;
+    shared_string_holder(shared_string_holder&& x) = delete;
+
+    shared_string_holder* reference() noexcept {
+        ++shared;
+        return this;
+    }
+
+    bool dereference() noexcept {
+        if (--shared == 0) {
+            free(this);
+            return true;
+        }
+        return false;
+    }
+
+    static auto make(const char_type *data, size_t size) {
+        auto* ssh = reinterpret_cast<shared_string_holder*>(std::malloc(sizeof(shared_string_holder) + size * sizeof(char_type) + padding()));
+        if (!ssh) {
+            throw_bad_alloc();
+        }
+        ssh->shared = 0;
+        if (data) {
+            std::copy(data, data + size, ssh->data);
+        }
+        if (NulTerminate) {
+            ssh->data[size] = '\0';
+        }
+        return ssh->reference();
+    }
+
+    static auto make(std::string_view sv) {
+        return make(sv.data(), sv.size());
+    }
+};
+
+} // namespace internal
+
+struct sstring_stats {
+    uint64_t allocated = 0;
+    uint64_t referenced = 0;
+    uint64_t cloned = 0;
+    uint64_t freed = 0;
+};
+
+extern thread_local sstring_stats g_sstring_stats;
 
 template <typename char_type, typename Size, Size max_size, bool NulTerminate>
 class basic_sstring {
+    using shared_string_holder = internal::shared_string_holder<char_type, Size, NulTerminate>;
     static_assert(
             (std::is_same<char_type, char>::value
              || std::is_same<char_type, signed char>::value
@@ -63,7 +119,7 @@ class basic_sstring {
             "basic_sstring only supports single byte char types");
     union contents {
         struct external_type {
-            char_type* str;
+            shared_string_holder* sstr;
             Size size;
             int8_t pad;
         } external;
@@ -81,10 +137,40 @@ class basic_sstring {
         return !is_internal();
     }
     const char_type* str() const noexcept {
-        return is_internal() ? u.internal.str : u.external.str;
+        return is_internal() ? u.internal.str : u.external.sstr->data;
     }
-    char_type* str() noexcept {
-        return is_internal() ? u.internal.str : u.external.str;
+
+#ifdef DEBUG_SHARED_STRING
+    void debug_shared_string() {
+        std::cerr << "sstring alloc=" << g_sstring_stats.allocated
+            << " ref=" << g_sstring_stats.referenced
+            << " cloned=" << g_sstring_stats.cloned
+            << " freed=" << g_sstring_stats.freed << std::endl;
+    }
+#endif
+
+    // Copy shared_string before modifying it
+    void maybe_clone_shared_string() {
+        if (u.external.sstr->shared > 1) {
+            auto src = u.external.sstr;
+            u.external.sstr = shared_string_holder::make(src->data, u.external.size);
+            if (src->dereference()) {
+#ifdef DEBUG_SHARED_STRING
+                ++g_sstring_stats.freed;
+#endif
+            }
+#ifdef DEBUG_SHARED_STRING
+            ++g_sstring_stats.cloned;
+            debug_shared_string();
+#endif
+        }
+    }
+    char_type* str() {
+        if (is_internal()) {
+            return u.internal.str;
+        }
+        maybe_clone_shared_string();
+        return u.external.sstr->data;
     }
 
 public:
@@ -116,12 +202,11 @@ public:
             u.internal = x.u.internal;
         } else {
             u.internal.size = -1;
-            u.external.str = reinterpret_cast<char_type*>(std::malloc(x.u.external.size + padding()));
-            if (!u.external.str) {
-                internal::throw_bad_alloc();
-            }
-            std::copy(x.u.external.str, x.u.external.str + x.u.external.size + padding(), u.external.str);
+            u.external.sstr = x.u.external.sstr->reference();
             u.external.size = x.u.external.size;
+#ifdef DEBUG_SHARED_STRING
+            ++g_sstring_stats.referenced; debug_shared_string();
+#endif
         }
     }
     basic_sstring(basic_sstring&& x) noexcept {
@@ -146,14 +231,11 @@ public:
             u.internal.size = size;
         } else {
             u.internal.size = -1;
-            u.external.str = reinterpret_cast<char_type*>(std::malloc(size + padding()));
-            if (!u.external.str) {
-                internal::throw_bad_alloc();
-            }
+            u.external.sstr = shared_string_holder::make(nullptr, size);
             u.external.size = size;
-            if (NulTerminate) {
-                u.external.str[size] = '\0';
-            }
+#ifdef DEBUG_SHARED_STRING
+            ++g_sstring_stats.allocated; debug_shared_string();
+#endif
         }
     }
     basic_sstring(const char_type* x, size_t size) {
@@ -168,15 +250,11 @@ public:
             u.internal.size = size;
         } else {
             u.internal.size = -1;
-            u.external.str = reinterpret_cast<char_type*>(std::malloc(size + padding()));
-            if (!u.external.str) {
-                internal::throw_bad_alloc();
-            }
+            u.external.sstr = shared_string_holder::make(x, size);
             u.external.size = size;
-            std::copy(x, x + size, u.external.str);
-            if (NulTerminate) {
-                u.external.str[size] = '\0';
-            }
+#ifdef DEBUG_SHARED_STRING
+            ++g_sstring_stats.allocated; debug_shared_string();
+#endif
         }
     }
 
@@ -200,7 +278,11 @@ public:
     }
     ~basic_sstring() noexcept {
         if (is_external()) {
-            std::free(u.external.str);
+            if (u.external.sstr->dereference()) {
+#ifdef DEBUG_SHARED_STRING
+                ++g_sstring_stats.freed; debug_shared_string();
+#endif
+            }
         }
     }
     basic_sstring& operator=(const basic_sstring& x) {
@@ -312,12 +394,14 @@ public:
                     u.internal.str[n] = '\0';
                 }
             } else if (n + padding() <= sizeof(u.internal.str)) {
-                *this = basic_sstring(u.external.str, n);
+                *this = basic_sstring(u.external.sstr->data, n);
             } else {
-                u.external.size = n;
-                if (NulTerminate) {
-                    u.external.str[n] = '\0';
+                if (u.external.sstr->shared > 1) {
+                    u.external.sstr = shared_string_holder::make(u.external.sstr->data, n);
+                } else if (NulTerminate) {
+                    u.external.sstr->data[n] = '\0';
                 }
+                u.external.size = n;
             }
         }
     }
@@ -424,14 +508,14 @@ public:
         if (len == 0) {
             return "";
         }
-        return { str() + from , len };
+        return { cbegin() + from , len };
     }
 
     const char_type& at(size_t pos) const {
         if (pos >= size()) {
             internal::throw_sstring_out_of_range();
         }
-        return *(str() + pos);
+        return *(cbegin() + pos);
     }
 
     char_type& at(size_t pos) {
@@ -449,7 +533,11 @@ public:
     [[deprecated("Use = {}")]]
     void reset() noexcept {
         if (is_external()) {
-            std::free(u.external.str);
+            if (u.external.sstr->dereference()) {
+#ifdef DEBUG_SHARED_STRING
+                ++g_sstring_stats.freed; debug_shared_string();
+#endif
+            }
         }
         u.internal.size = 0;
         if (NulTerminate) {
@@ -457,21 +545,20 @@ public:
         }
     }
     temporary_buffer<char_type> release() && {
+        temporary_buffer<char_type> buf;
         if (is_external()) {
-            auto ptr = u.external.str;
-            auto size = u.external.size;
-            u.external.str = nullptr;
-            u.external.size = 0;
-            return temporary_buffer<char_type>(ptr, size, make_free_deleter(ptr));
+            maybe_clone_shared_string();
+            auto sstr = std::exchange(u.external.sstr, nullptr);
+            buf = temporary_buffer<char_type>(sstr->data, u.external.size, make_free_deleter(sstr));
         } else {
-            auto buf = temporary_buffer<char_type>(u.internal.size);
+            buf = temporary_buffer<char_type>(u.internal.size);
             std::copy(u.internal.str, u.internal.str + u.internal.size, buf.get_write());
-            u.internal.size = 0;
-            if (NulTerminate) {
-                u.internal.str[0] = '\0';
-            }
-            return buf;
         }
+        u.internal.size = 0;
+        if (NulTerminate) {
+            u.internal.str[0] = '\0';
+        }
+        return buf;
     }
     int compare(std::basic_string_view<char_type, traits_type> x) const noexcept {
         auto n = traits_type::compare(begin(), x.begin(), std::min(size(), x.size()));

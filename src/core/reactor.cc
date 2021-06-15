@@ -139,6 +139,8 @@
 
 namespace seastar {
 
+thread_local sstring_stats g_sstring_stats;
+
 struct mountpoint_params {
     std::string mountpoint = "none";
     uint64_t read_bytes_rate = std::numeric_limits<uint64_t>::max();
