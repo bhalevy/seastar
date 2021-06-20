@@ -23,6 +23,7 @@
 #include <seastar/core/thread.hh>
 #include <seastar/core/manual_clock.hh>
 #include <seastar/testing/test_case.hh>
+#include <seastar/testing/thread_test_case.hh>
 #include <seastar/core/expiring_fifo.hh>
 #include <seastar/util/later.hh>
 #include <boost/range/irange.hpp>
@@ -187,4 +188,54 @@ SEASTAR_TEST_CASE(test_expiry_operations) {
         fifo.pop_front();
         BOOST_REQUIRE_EQUAL(fifo.size(), 0u);
     });
+}
+
+SEASTAR_THREAD_TEST_CASE(test_fifo_expire) {
+    std::vector<int> expired;
+    struct my_expiry {
+        std::vector<int>& e;
+        void operator()(int& v) { e.push_back(v); }
+    };
+
+    expiring_fifo<int, my_expiry, manual_clock> fifo(my_expiry{expired});
+
+    fifo.push_back(1, manual_clock::now() + 1s);
+    fifo.expire();
+
+    BOOST_REQUIRE(fifo.empty());
+    BOOST_REQUIRE_EQUAL(fifo.size(), 0u);
+    BOOST_REQUIRE(!bool(fifo));
+    BOOST_REQUIRE_EQUAL(expired.size(), 1u);
+    BOOST_REQUIRE_EQUAL(expired[0], 1);
+
+    manual_clock::advance(1s);
+    later().get();
+
+    BOOST_REQUIRE(fifo.empty());
+    BOOST_REQUIRE_EQUAL(fifo.size(), 0u);
+    BOOST_REQUIRE(!bool(fifo));
+
+    expired.clear();
+
+    fifo.push_back(1);
+    fifo.push_back(2, manual_clock::now() + 1s);
+    fifo.push_back(3);
+    fifo.expire();
+
+    BOOST_REQUIRE(fifo.empty());
+    BOOST_REQUIRE_EQUAL(fifo.size(), 0u);
+    BOOST_REQUIRE(!bool(fifo));
+    BOOST_REQUIRE_EQUAL(expired.size(), 3u);
+    BOOST_REQUIRE_EQUAL(expired[0], 1);
+    BOOST_REQUIRE_EQUAL(expired[1], 2);
+    BOOST_REQUIRE_EQUAL(expired[2], 3);
+
+    expired.clear();
+
+    manual_clock::advance(1s);
+    later().get();
+
+    BOOST_REQUIRE(fifo.empty());
+    BOOST_REQUIRE_EQUAL(fifo.size(), 0u);
+    BOOST_REQUIRE(!bool(fifo));
 }

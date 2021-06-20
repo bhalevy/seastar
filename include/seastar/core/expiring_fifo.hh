@@ -212,6 +212,24 @@ public:
         --_size;
         drop_expired_front();
     }
+
+    /// Expires all entries
+    void expire() noexcept {
+        if (_front && _front->payload) {
+            _on_expiry(*_front->payload);
+            _front->payload = std::nullopt;
+            _front.reset();
+        }
+        while (!_list.empty()) {
+            auto& e = _list.front();
+            if (e.payload) {
+                _on_expiry(*e.payload);
+                e.payload = std::nullopt;
+            }
+            _list.pop_front();
+        }
+        _size = 0;
+    }
 };
 
 }
