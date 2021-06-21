@@ -52,6 +52,10 @@ class io_intent {
 
         intents_for_queue(intents_for_queue&&) noexcept = default;
         intents_for_queue& operator=(intents_for_queue&&) noexcept = default;
+
+        void cancel(std::exception_ptr ex) noexcept {
+            cq.cancel(std::move(ex));
+        }
     };
 
     struct references {
@@ -61,8 +65,8 @@ class io_intent {
         references() noexcept : list() {}
         ~references() { clear(); }
 
-        void clear() {
-            list.clear_and_dispose([] (internal::intent_reference* r) { r->on_cancel(); });
+        void clear(std::exception_ptr ex = nullptr) {
+            list.clear_and_dispose([ex] (internal::intent_reference* r) { r->on_cancel(ex); });
         }
 
         void bind(internal::intent_reference& iref) noexcept {
@@ -72,6 +76,7 @@ class io_intent {
 
     boost::container::small_vector<intents_for_queue, 1> _intents;
     references _refs;
+    std::exception_ptr _ex;
     friend internal::intent_reference::intent_reference(io_intent*) noexcept;
 
 public:
@@ -89,14 +94,28 @@ public:
 
     /// Explicitly cancels all the requests attached to this intent
     /// so far. The respective futures are resolved into the \ref
-    /// cancelled_error "cancelled_error"
-    void cancel() noexcept {
-        _refs.clear();
+    /// cancelled_error "cancelled_error" by default, if no \c ex
+    /// is provided.
+    /// Otherwise, all the requests attached to this intent,
+    /// as well as future requests attempting to use it,
+    /// will be resolved into the provided \c ex exception.
+    void cancel(std::exception_ptr ex = nullptr) noexcept {
+        _refs.clear(ex);
+        if (ex) {
+            _ex = std::move(ex);
+            for (auto& i : _intents) {
+                i.cancel(_ex);
+            }
+        }
         _intents.clear();
     }
 
     /// @private
     internal::cancellable_queue& find_or_create_cancellable_queue(dev_t dev, io_priority_class_id qid) {
+        if (_ex) {
+            std::rethrow_exception(_ex);
+        }
+
         for (auto&& i : _intents) {
             if (i.dev == dev && i.qid == qid) {
                 return i.cq;
