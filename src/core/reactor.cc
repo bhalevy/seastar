@@ -866,6 +866,22 @@ reactor::task_queue::register_stats() {
 }
 
 void
+reactor::task_queue::print_stats() {
+    fmt::print("id={} runtime_ms={} waittime_ms={} starvetime_ms={} tasks_processed={} shares={} time_spent_on_task_quota_violations_ms={}\n",
+        _id,
+        std::chrono::duration_cast<std::chrono::milliseconds>(_runtime).count(),
+        std::chrono::duration_cast<std::chrono::milliseconds>(_waittime).count(),
+        std::chrono::duration_cast<std::chrono::milliseconds>(_starvetime).count(),
+        _tasks_processed,
+        _shares,
+        _time_spent_on_task_quota_violations / 1ms);
+}
+
+void reactor::print_scheduling_group_stats(scheduling_group sg) {
+    _task_queues[sg._id]->print_stats();
+}
+
+void
 reactor::task_queue::rename(sstring new_name) {
     if (_name != new_name) {
         _name = new_name;

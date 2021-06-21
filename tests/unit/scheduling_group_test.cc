@@ -19,6 +19,7 @@
  * Copyright (C) 2017 ScyllaDB Ltd.
  */
 
+#include "seastar/core/preempt.hh"
 #include <algorithm>
 #include <vector>
 #include <chrono>
@@ -34,6 +35,8 @@
 #include <seastar/core/smp.hh>
 #include <seastar/core/with_scheduling_group.hh>
 #include <seastar/util/later.hh>
+#include <seastar/core/when_all.hh>
+#include <seastar/core/reactor.hh>
 
 using namespace std::chrono_literals;
 
@@ -246,6 +249,117 @@ SEASTAR_THREAD_TEST_CASE(later_preserves_sg) {
             BOOST_REQUIRE_EQUAL(
                     internal::scheduling_group_index(current_scheduling_group()),
                     internal::scheduling_group_index(sg));
+        });
+    }).get();
+}
+
+SEASTAR_THREAD_TEST_CASE(simple_sg_scheduling) {
+    constexpr std::array<unsigned, 2> shares = { 100, 200 };
+    std::array<scheduling_group, 2> sched_groups;
+    sched_groups[0] = create_scheduling_group("sg0", shares[0]).get0();
+    sched_groups[1] = create_scheduling_group("sg1", shares[1]).get0();
+    auto cleanup = defer([&] {
+        do_for_each(sched_groups, [] (scheduling_group& sg) {
+            return destroy_scheduling_group(sg);
+        }).get();
+    });
+    smp::invoke_on_all([&] {
+        return async([&] {
+            std::array<uint64_t, 2> counters = { 0, 0 };
+            constexpr uint64_t max_count = 1000;
+            bool stop = false;
+            auto func = [&] (int idx) {
+                return with_scheduling_group(sched_groups[idx], [&, idx] {
+                    return do_until([&] { return stop || ++counters[idx] >= max_count; }, [&] {
+                        while (!need_preempt()) {
+                        }
+                        return make_ready_future<>();
+                    }).then([&] {
+                        stop = true;
+                    });
+                });
+            };
+            when_all(func(0), func(1)).discard_result().get();
+            double ratio = double(counters[1]) / double(counters[0]);
+            BOOST_TEST_MESSAGE(format("count[0]={} count[1]={} ratio={:.2f}", counters[0], counters[1], ratio));
+            double allowed_deviation = 0.1;
+            BOOST_REQUIRE_GT(ratio, (1 - allowed_deviation) * shares[1] / shares[0]);
+            BOOST_REQUIRE_LT(ratio, (1 + allowed_deviation) * shares[1] / shares[0]);
+        });
+    }).get();
+}
+
+SEASTAR_THREAD_TEST_CASE(uneven_work_sg_scheduling) {
+    constexpr std::array<unsigned, 2> shares = { 100, 200 };
+    std::array<scheduling_group, 2> sched_groups;
+    sched_groups[0] = create_scheduling_group("sg0", shares[0]).get0();
+    sched_groups[1] = create_scheduling_group("sg1", shares[1]).get0();
+    auto cleanup = defer([&] {
+        do_for_each(sched_groups, [] (scheduling_group& sg) {
+            return destroy_scheduling_group(sg);
+        }).get();
+    });
+    while (!need_preempt()) {
+    }
+    thread::yield();
+    int calibrate = 0;
+    while (!need_preempt()) {
+        calibrate++;
+    }
+    BOOST_TEST_MESSAGE(format("calibrate={}", calibrate));
+
+    smp::invoke_on_all([&] {
+        return async([&] {
+            std::array<uint64_t, 2> counters = { 0, 0 };
+            std::array<std::vector<int>, 2> vectors;
+            auto& eng = testing::local_random_engine;
+            auto dist = std::uniform_int_distribution<int>();
+
+            vectors[0].resize(100 + dist(eng) % 200);
+            vectors[1].resize(10 + dist(eng) % 20);
+            if (dist(eng) & 1) {
+                std::swap(vectors[0], vectors[1]);
+            }
+            for (auto i = 0; i < 2; i++) {
+                auto size = vectors[i].size();
+                BOOST_TEST_MESSAGE(format("vector[{}] size={}", i, size));
+                for (size_t j = 0; j < size; j++) {
+                    vectors[i].push_back(dist(eng));
+                }
+            }
+
+            bool stop = false;
+            auto func = [&] (int idx) {
+                return with_scheduling_group(sched_groups[idx], [&, idx] {
+                  return do_with(int64_t(0), [&, idx] (int64_t& sum) {
+                    return do_until([&] { return stop; }, [&, idx] {
+                        for (auto it = vectors[idx].cbegin(); it != vectors[idx].cend(); it++) {
+                            sum += *it;
+                            ++counters[idx];
+                        }
+                        return make_ready_future<>();
+                    }).then([&] {
+                        return make_ready_future<int64_t>(sum);
+                    });
+                  });
+                });
+            };
+            auto f0 = func(0);
+            auto f1 = func(1);
+            auto stop_fut = sleep(5s).then([&] {
+                stop = true;
+            });
+            when_all(std::move(f0), std::move(f1), std::move(stop_fut)).discard_result().get();
+            double ratio = double(counters[1]) / double(counters[0]);
+            BOOST_TEST_MESSAGE(format("count[0]={} count[1]={} ratio={:.2f}", counters[0], counters[1], ratio));
+            for (auto sg : sched_groups) {
+                engine().print_scheduling_group_stats(sg);
+            }
+
+            //double shares_ratio = double(shares[1]) / double(shares[0]);
+            //double allowed_deviation = 0.1;
+            //BOOST_REQUIRE_GT(ratio, (1.0 - allowed_deviation) * shares_ratio);
+            //BOOST_REQUIRE_LT(ratio, (1.0 + allowed_deviation) * shares_ratio);
         });
     }).get();
 }

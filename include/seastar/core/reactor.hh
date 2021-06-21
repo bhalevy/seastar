@@ -321,6 +321,7 @@ private:
         sched_clock::duration _time_spent_on_task_quota_violations = {};
         seastar::metrics::metric_groups _metrics;
         void rename(sstring new_name);
+        void print_stats();
     private:
         void register_stats();
     };
@@ -392,6 +393,8 @@ private:
 public:
     /// Register a user-defined signal handler
     void handle_signal(int signo, noncopyable_function<void ()>&& handler);
+
+    void print_scheduling_group_stats(scheduling_group sg);
 
 private:
     class signals {
