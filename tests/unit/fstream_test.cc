@@ -40,6 +40,7 @@
 #include "mock_file.hh"
 #include <boost/range/irange.hpp>
 #include <seastar/util/closeable.hh>
+#include <seastar/core/io_intent.hh>
 
 using namespace seastar;
 namespace fs = std::filesystem;
@@ -535,5 +536,54 @@ SEASTAR_TEST_CASE(test_fstream_slow_start) {
         read_whole_file_with_slow_start(make_fstream());
         BOOST_TEST_MESSAGE("Reading file yet again, should've recovered by now");
         read_while_file_at_full_speed(make_fstream());
+    });
+}
+
+SEASTAR_TEST_CASE(test_fstream_io_cancel) {
+    return tmp_dir::do_with_thread([] (tmp_dir& t) {
+        constexpr size_t file_size = 128 << 20;
+        constexpr size_t buf_size = 128 << 10;
+        auto filename = (t.get_path() / "testfile.tmp").native();
+
+        auto out_file = open_file_dma(filename, open_flags::rw | open_flags::create | open_flags::truncate).get0();
+        auto out = make_file_output_stream(std::move(out_file)).get0();
+        auto close_out = deferred_close(out);
+        std::vector<size_t> buf(buf_size / sizeof(size_t));
+        size_t to_write;
+        for (size_t i = 0; i < file_size; i += to_write) {
+            std::fill(buf.begin(), buf.end(), i);
+            to_write = std::min(file_size - i, buf_size);
+            out.write((char*)buf.data(), to_write).get();
+        }
+        out.flush().get();
+
+        auto in_file = open_file_dma(filename, open_flags::ro).get0();
+        io_intent intent;
+        file_input_stream_options opts;
+        opts.read_ahead = 2;
+        opts.intent = &intent;
+        auto in = make_file_input_stream(std::move(in_file), opts);
+        auto close_in = deferred_close(in);
+        bool cancelled = false;
+        int successful_reads = 0;
+        int cancel_at = 3;
+        temporary_buffer<char> tmp;
+        for (size_t i = 0; i < file_size; ) {
+            try {
+                auto fut = in.read();
+                if (successful_reads >= cancel_at) {
+                    intent.cancel();
+                }
+                tmp = fut.get0();
+                successful_reads++;
+            } catch (const cancelled_error&) {
+                cancelled = true;
+                break;
+            }
+            i += tmp.size();
+        }
+        BOOST_REQUIRE(cancelled);
+        BOOST_REQUIRE_GE(successful_reads, cancel_at);
+        BOOST_REQUIRE_LE(successful_reads, cancel_at + opts.read_ahead);
     });
 }

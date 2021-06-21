@@ -56,6 +56,7 @@ struct file_input_stream_options {
     unsigned read_ahead = 0;      ///< Maximum number of extra read-ahead operations
     ::seastar::io_priority_class io_priority_class = default_priority_class();
     lw_shared_ptr<file_input_stream_history> dynamic_adjustments = { }; ///< Input stream history, if null dynamic adjustments are disabled
+    io_intent* intent = nullptr;  ///< Optional caller-provided I/O intent. Can be used for cancelling reads.
 };
 
 /// \brief Creates an input_stream to read a portion of a file.
