@@ -236,8 +236,12 @@ internal::cancellable_queue& internal::cancellable_queue::operator=(cancellable_
 }
 
 internal::cancellable_queue::~cancellable_queue() {
+    cancel();
+}
+
+void internal::cancellable_queue::cancel(std::exception_ptr ex) noexcept {
     while (_first != nullptr) {
-        queued_io_request::from_cq_link(*_first).cancel();
+        queued_io_request::from_cq_link(*_first).cancel(ex);
         pop_front();
     }
 }
