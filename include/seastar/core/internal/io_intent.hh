@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include <exception>
+
 #include <boost/intrusive/list.hpp>
 #include <boost/intrusive/slist.hpp>
 
@@ -100,22 +102,25 @@ public:
 class intent_reference : public bi::list_base_hook<bi::link_mode<bi::auto_unlink>> {
     friend class seastar::io_intent;
     using container_type = bi::list<intent_reference, bi::constant_time_size<false>>;
-    static constexpr uintptr_t _cancelled_intent = 1;
     io_intent* _intent;
+    std::exception_ptr _ex;
 
-    void on_cancel() noexcept;
-    bool is_cancelled() const noexcept { return _intent == reinterpret_cast<io_intent*>(_cancelled_intent); }
+    void on_cancel(std::exception_ptr ex = nullptr) noexcept;
+    bool is_cancelled() const noexcept { return bool(_ex); }
 
 public:
     intent_reference(io_intent* intent) noexcept;
 
-    intent_reference(intent_reference&& o) noexcept : _intent(std::exchange(o._intent, nullptr)) {
+    intent_reference(intent_reference&& o) noexcept
+            : _intent(std::exchange(o._intent, nullptr))
+            , _ex(std::exchange(o._ex, nullptr)) {
         container_type::node_algorithms::swap_nodes(o.this_ptr(), this_ptr());
     }
 
     intent_reference& operator=(intent_reference&& o) noexcept {
         if (this != &o) {
             _intent = std::exchange(o._intent, nullptr);
+            _ex = std::exchange(o._ex, nullptr);
             unlink();
             container_type::node_algorithms::swap_nodes(o.this_ptr(), this_ptr());
         }
