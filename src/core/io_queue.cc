@@ -140,9 +140,9 @@ public:
         delete this;
     }
 
-    void cancel() noexcept {
+    void cancel(std::exception_ptr ex = nullptr) noexcept {
         _pclass.on_cancel();
-        _pr.set_exception(std::make_exception_ptr(default_io_exception_factory::cancelled()));
+        _pr.set_exception(ex ? std::move(ex) : std::make_exception_ptr(default_io_exception_factory::cancelled()));
         delete this;
     }
 
@@ -195,9 +195,9 @@ public:
         delete this;
     }
 
-    void cancel() noexcept {
+    void cancel(std::exception_ptr ex = nullptr) noexcept {
         _ioq.cancel_request(*this);
-        _desc.release()->cancel();
+        _desc.release()->cancel(std::move(ex));
     }
 
     void set_intent(internal::cancellable_queue* cq) noexcept {
