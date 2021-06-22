@@ -90,6 +90,7 @@ public:
     cancellable_queue(cancellable_queue&& o) noexcept;
     cancellable_queue& operator=(cancellable_queue&& o) noexcept;
     ~cancellable_queue();
+    void cancel(std::exception_ptr ex = nullptr) noexcept;
 };
 
 /*
