@@ -103,7 +103,7 @@ class intent_reference : public bi::list_base_hook<bi::link_mode<bi::auto_unlink
     static constexpr uintptr_t _cancelled_intent = 1;
     io_intent* _intent;
 
-    void on_cancel() noexcept { _intent = reinterpret_cast<io_intent*>(_cancelled_intent); }
+    void on_cancel() noexcept;
     bool is_cancelled() const noexcept { return _intent == reinterpret_cast<io_intent*>(_cancelled_intent); }
 
 public:

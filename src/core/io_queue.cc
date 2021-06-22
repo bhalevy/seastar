@@ -270,6 +270,10 @@ internal::intent_reference::intent_reference(io_intent* intent) noexcept : _inte
     }
 }
 
+void internal::intent_reference::on_cancel() noexcept {
+    _intent = reinterpret_cast<io_intent*>(_cancelled_intent);
+}
+
 io_intent* internal::intent_reference::retrieve() const {
     if (is_cancelled()) {
         throw default_io_exception_factory::cancelled();
