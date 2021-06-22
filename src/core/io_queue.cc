@@ -270,13 +270,14 @@ internal::intent_reference::intent_reference(io_intent* intent) noexcept : _inte
     }
 }
 
-void internal::intent_reference::on_cancel() noexcept {
-    _intent = reinterpret_cast<io_intent*>(_cancelled_intent);
+void internal::intent_reference::on_cancel(std::exception_ptr ex) noexcept {
+    _intent = nullptr;
+    _ex = ex ? std::move(ex) : std::make_exception_ptr(default_io_exception_factory::cancelled());
 }
 
 io_intent* internal::intent_reference::retrieve() const {
     if (is_cancelled()) {
-        throw default_io_exception_factory::cancelled();
+        std::rethrow_exception(_ex);
     }
 
     return _intent;
