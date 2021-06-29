@@ -1641,3 +1641,69 @@ SEASTAR_THREAD_TEST_CASE(test_for_each_set) {
     }).get();
     BOOST_REQUIRE_EQUAL(res, 17);
 }
+
+SEASTAR_TEST_CASE(test_do_until_preemption) {
+    struct state {
+        uint64_t count = 0;
+        uint64_t other_prev = 0;
+        uint64_t preempted = 0;
+    };
+    return do_with(state{}, state{}, [] (state& s0, state& s1) {
+        auto loop = [] (state& s, state& o) {
+            return do_until([&] { return s.preempted > 1 && o.preempted > 1; }, [&] {
+                s.count++;
+                if (s.other_prev != o.count) {
+                    s.other_prev = o.count;
+                    ++s.preempted;
+                }
+            });
+        };
+        return when_all(loop(s0, s1), loop(s1, s0)).discard_result();
+    });
+}
+
+SEASTAR_TEST_CASE(test_repeat_preemption) {
+    struct state {
+        uint64_t count = 0;
+        uint64_t other_prev = 0;
+        uint64_t preempted = 0;
+    };
+    return do_with(state{}, state{}, [] (state& s0, state& s1) {
+        auto loop = [] (state& s, state& o) {
+            return repeat([&] {
+                s.count++;
+                if (s.other_prev != o.count) {
+                    s.other_prev = o.count;
+                    ++s.preempted;
+                }
+                return stop_iteration(s.preempted > 1 && o.preempted > 1);
+            });
+        };
+        return when_all(loop(s0, s1), loop(s1, s0)).discard_result();
+    });
+}
+
+SEASTAR_TEST_CASE(test_repeat_until_value_preemption) {
+    struct state {
+        uint64_t count = 0;
+        uint64_t other_prev = 0;
+        uint64_t preempted = 0;
+    };
+    return do_with(state{}, state{}, [] (state& s0, state& s1) {
+        auto loop = [] (state& s, state& o) {
+            return repeat_until_value([&] {
+                s.count++;
+                std::optional<int> ret;
+                if (s.other_prev != o.count) {
+                    s.other_prev = o.count;
+                    ++s.preempted;
+                    if (s.preempted > 1 && o.preempted > 1) {
+                        ret.emplace(0);
+                    }
+                }
+                return ret;
+            });
+        };
+        return when_all(loop(s0, s1), loop(s1, s0)).discard_result();
+    });
+}
