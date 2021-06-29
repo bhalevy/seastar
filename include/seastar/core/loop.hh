@@ -66,10 +66,10 @@ public:
             }
             _state = {};
         }
-        try {
+            // FIXME: indentation
             do {
                 auto f = futurize_invoke(_action);
-                if (!f.available()) {
+                if (!f.available() || f.failed()) {
                     internal::set_callback(f, this);
                     return;
                 }
@@ -79,11 +79,6 @@ public:
                     return;
                 }
             } while (!need_preempt());
-        } catch (...) {
-            _promise.set_exception(std::current_exception());
-            delete this;
-            return;
-        }
         _state.set(stop_iteration::no);
         schedule(this);
     }
@@ -114,12 +109,11 @@ future<> repeat(AsyncAction&& action) noexcept {
     using futurator = futurize<std::result_of_t<AsyncAction()>>;
     static_assert(std::is_same<future<stop_iteration>, typename futurator::type>::value, "bad AsyncAction signature");
   // FIXME: indentation
-  try {
     for (;;) {
         // Do not type-erase here in case this is a short repeat()
         auto f = futurator::invoke(action);
 
-        if (!f.available() || need_preempt()) {
+        if (!f.available() || f.failed() || need_preempt()) {
             return [&] () noexcept {
                 memory::scoped_critical_alloc_section _;
                 auto repeater = new internal::repeater<AsyncAction>(std::move(action));
@@ -133,9 +127,6 @@ future<> repeat(AsyncAction&& action) noexcept {
             return make_ready_future<>();
         }
     }
-  } catch (...) {
-    return current_exception_as_future();
-  }
 }
 
 /// \cond internal
@@ -188,10 +179,10 @@ public:
             }
             this->_state = {};
         }
-        try {
+            // FIXME: indentation
             do {
                 auto f = futurize_invoke(_action);
-                if (!f.available()) {
+                if (!f.available() || f.failed()) {
                     internal::set_callback(f, this);
                     return;
                 }
@@ -202,11 +193,6 @@ public:
                     return;
                 }
             } while (!need_preempt());
-        } catch (...) {
-            _promise.set_exception(std::current_exception());
-            delete this;
-            return;
-        }
         this->_state.set(std::nullopt);
         schedule(this);
     }
@@ -237,12 +223,11 @@ repeat_until_value(AsyncAction action) noexcept {
     // the "T" in the documentation
     using value_type = typename type_helper::value_type;
     using optional_type = typename type_helper::optional_type;
-    try {
     // FIXME: indentation
     do {
         auto f = futurator::invoke(action);
 
-        if (!f.available()) {
+        if (!f.available() || f.failed()) {
           return [&] () noexcept {
             memory::scoped_critical_alloc_section _;
             auto state = new internal::repeat_until_value_state<AsyncAction, value_type>(std::move(action));
@@ -258,13 +243,11 @@ repeat_until_value(AsyncAction action) noexcept {
         }
     } while (!need_preempt());
 
+        memory::scoped_critical_alloc_section _;
         auto state = new internal::repeat_until_value_state<AsyncAction, value_type>(std::nullopt, std::move(action));
         auto f = state->get_future();
         schedule(state);
         return f;
-    } catch (...) {
-        return make_exception_future<value_type>(std::current_exception());
-    }
 }
 
 namespace internal {
@@ -295,13 +278,8 @@ public:
                     return;
                 }
                 auto f = futurize_invoke(_action);
-                if (!f.available()) {
+                if (!f.available() || f.failed()) {
                     internal::set_callback(f, this);
-                    return;
-                }
-                if (f.failed()) {
-                    f.forward_to(std::move(_promise));
-                    delete this;
                     return;
                 }
             } while (!need_preempt());
@@ -334,16 +312,14 @@ SEASTAR_CONCEPT( requires seastar::InvokeReturns<StopCondition, bool> &&
 inline
 future<> do_until(StopCondition stop_cond, AsyncAction action) noexcept {
     using namespace internal;
-    for (;;) {
+      // FIXME: indentation
       try {
+    for (;;) {
         if (stop_cond()) {
             return make_ready_future<>();
         }
-      } catch (...) {
-        return current_exception_as_future();
-      }
         auto f = futurize_invoke(action);
-        if (!f.available() || need_preempt()) {
+        if (!f.available() || f.failed() || need_preempt()) {
             return [&] () noexcept {
                 memory::scoped_critical_alloc_section _;
                 auto task = new do_until_state<StopCondition, AsyncAction>(std::move(stop_cond), std::move(action));
@@ -352,10 +328,10 @@ future<> do_until(StopCondition stop_cond, AsyncAction action) noexcept {
                 return ret;
             }();
         }
-        if (f.failed()) {
-            return f;
-        }
     }
+      } catch (...) {
+        return current_exception_as_future();
+      }
 }
 
 /// Invoke given action until it fails.
@@ -397,11 +373,7 @@ public:
         }
         while (_begin != _end) {
             auto f = futurize_invoke(_action, *_begin++);
-            if (f.failed()) {
-                f.forward_to(std::move(_pr));
-                return;
-            }
-            if (!f.available() || need_preempt()) {
+            if (!f.available() || f.failed() || need_preempt()) {
                 _state = {};
                 internal::set_callback(f, this);
                 zis.release();
@@ -423,13 +395,10 @@ inline
 future<> do_for_each_impl(Iterator begin, Iterator end, AsyncAction action) {
     while (begin != end) {
         auto f = futurize_invoke(action, *begin++);
-        if (!f.available() || need_preempt()) {
+        if (!f.available() || f.failed() || need_preempt()) {
             auto* s = new internal::do_for_each_state<Iterator, AsyncAction>{
                 std::move(begin), std::move(end), std::move(action), std::move(f)};
             return s->get_future();
-        }
-        if (f.failed()) {
-            return f;
         }
     }
     return make_ready_future<>();
