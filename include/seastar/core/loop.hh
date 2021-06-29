@@ -117,7 +117,11 @@ future<> repeat(AsyncAction&& action) noexcept {
         // Do not type-erase here in case this is a short repeat()
         auto f = futurator::invoke(action);
 
-        if (!f.available() || f.failed() || need_preempt()) {
+        if (f.failed()) {
+            return make_exception_future<>(f.get_exception());
+        }
+
+        if (!f.available() || need_preempt()) {
             return [&] () noexcept {
                 memory::scoped_critical_alloc_section _;
                 auto repeater = new internal::repeater<AsyncAction>(std::move(action));
