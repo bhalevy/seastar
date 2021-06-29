@@ -292,7 +292,7 @@ public:
                     delete this;
                     return;
                 }
-                auto f = _action();
+                auto f = futurize_invoke(_action);
                 if (!f.available()) {
                     internal::set_callback(f, this);
                     return;
@@ -326,7 +326,9 @@ public:
 /// \return a ready future if we stopped successfully, or a failed future if
 ///         a call to to \c action or a call to \c stop_cond failed.
 template<typename AsyncAction, typename StopCondition>
-SEASTAR_CONCEPT( requires seastar::InvokeReturns<StopCondition, bool> && seastar::InvokeReturns<AsyncAction, future<>> )
+SEASTAR_CONCEPT( requires seastar::InvokeReturns<StopCondition, bool> &&
+        (seastar::InvokeReturns<AsyncAction, future<>> || seastar::InvokeReturns<AsyncAction, void>)
+)
 inline
 future<> do_until(StopCondition stop_cond, AsyncAction action) noexcept {
     using namespace internal;
