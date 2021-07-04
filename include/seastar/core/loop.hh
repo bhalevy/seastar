@@ -54,19 +54,14 @@ public:
     future<> get_future() { return _promise.get_future(); }
     task* waiting_task() noexcept override { return _promise.waiting_task(); }
     virtual void run_and_dispose() noexcept override {
-        if (_state.failed()) {
-            _promise.set_exception(std::move(_state).get_exception());
-            delete this;
-            return;
-        } else {
+        try {
             if (_state.get0() == stop_iteration::yes) {
                 _promise.set_value();
                 delete this;
                 return;
             }
             _state = {};
-        }
-        try {
+
             do {
                 auto f = futurize_invoke(_action);
                 if (!f.available()) {
@@ -174,11 +169,7 @@ public:
     future<T> get_future() { return _promise.get_future(); }
     task* waiting_task() noexcept override { return _promise.waiting_task(); }
     virtual void run_and_dispose() noexcept override {
-        if (this->_state.failed()) {
-            _promise.set_exception(std::move(this->_state).get_exception());
-            delete this;
-            return;
-        } else {
+        try {
             auto v = std::move(this->_state).get0();
             if (v) {
                 _promise.set_value(std::move(*v));
@@ -186,8 +177,7 @@ public:
                 return;
             }
             this->_state = {};
-        }
-        try {
+
             do {
                 auto f = futurize_invoke(_action);
                 if (!f.available()) {
@@ -277,15 +267,12 @@ public:
     future<> get_future() { return _promise.get_future(); }
     task* waiting_task() noexcept override { return _promise.waiting_task(); }
     virtual void run_and_dispose() noexcept override {
-        if (_state.available()) {
-            if (_state.failed()) {
-                _promise.set_urgent_state(std::move(_state));
-                delete this;
-                return;
-            }
-            _state = {}; // allow next cycle to overrun state
-        }
         try {
+            if (_state.available()) {
+                _state.get();
+                _state = {}; // allow next cycle to overrun state
+            }
+
             do {
                 if (_stop()) {
                     _promise.set_value();
@@ -395,14 +382,14 @@ public:
         }
         while (_begin != _end) {
             auto f = futurize_invoke(_action, *_begin++);
-            if (f.failed()) {
-                f.forward_to(std::move(_pr));
-                return;
-            }
             if (!f.available() || need_preempt()) {
                 _state = {};
                 internal::set_callback(f, this);
                 zis.release();
+                return;
+            }
+            if (f.failed()) {
+                f.forward_to(std::move(_pr));
                 return;
             }
         }
