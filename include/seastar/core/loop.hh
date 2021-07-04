@@ -113,29 +113,28 @@ inline
 future<> repeat(AsyncAction&& action) noexcept {
     using futurator = futurize<std::result_of_t<AsyncAction()>>;
     static_assert(std::is_same<future<stop_iteration>, typename futurator::type>::value, "bad AsyncAction signature");
-  // FIXME: indentation
-  try {
-    for (;;) {
-        // Do not type-erase here in case this is a short repeat()
-        auto f = futurator::invoke(action);
+    try {
+        for (;;) {
+            // Do not type-erase here in case this is a short repeat()
+            auto f = futurator::invoke(action);
 
-        if (!f.available() || need_preempt()) {
-            return [&] () noexcept {
-                memory::scoped_critical_alloc_section _;
-                auto repeater = new internal::repeater<AsyncAction>(std::move(action));
-                auto ret = repeater->get_future();
-                internal::set_callback(f, repeater);
-                return ret;
-            }();
-        }
+            if (!f.available() || need_preempt()) {
+                return [&] () noexcept {
+                    memory::scoped_critical_alloc_section _;
+                    auto repeater = new internal::repeater<AsyncAction>(std::move(action));
+                    auto ret = repeater->get_future();
+                    internal::set_callback(f, repeater);
+                    return ret;
+                }();
+            }
 
-        if (f.get0() == stop_iteration::yes) {
-            return make_ready_future<>();
+            if (f.get0() == stop_iteration::yes) {
+                return make_ready_future<>();
+            }
         }
+    } catch (...) {
+        return current_exception_as_future();
     }
-  } catch (...) {
-    return current_exception_as_future();
-  }
 }
 
 /// \cond internal
@@ -238,25 +237,24 @@ repeat_until_value(AsyncAction action) noexcept {
     using value_type = typename type_helper::value_type;
     using optional_type = typename type_helper::optional_type;
     try {
-    // FIXME: indentation
-    do {
-        auto f = futurator::invoke(action);
+        do {
+            auto f = futurator::invoke(action);
 
-        if (!f.available()) {
-          return [&] () noexcept {
-            memory::scoped_critical_alloc_section _;
-            auto state = new internal::repeat_until_value_state<AsyncAction, value_type>(std::move(action));
-            auto ret = state->get_future();
-            internal::set_callback(f, state);
-            return ret;
-          }();
-        }
+            if (!f.available()) {
+                return [&] () noexcept {
+                    memory::scoped_critical_alloc_section _;
+                    auto state = new internal::repeat_until_value_state<AsyncAction, value_type>(std::move(action));
+                    auto ret = state->get_future();
+                    internal::set_callback(f, state);
+                    return ret;
+                }();
+            }
 
-        optional_type&& optional = std::move(f).get0();
-        if (optional) {
-            return make_ready_future<value_type>(std::move(optional.value()));
-        }
-    } while (!need_preempt());
+            optional_type&& optional = std::move(f).get0();
+            if (optional) {
+                return make_ready_future<value_type>(std::move(optional.value()));
+            }
+        } while (!need_preempt());
 
         auto state = new internal::repeat_until_value_state<AsyncAction, value_type>(std::nullopt, std::move(action));
         auto f = state->get_future();
@@ -335,13 +333,13 @@ inline
 future<> do_until(StopCondition stop_cond, AsyncAction action) noexcept {
     using namespace internal;
     for (;;) {
-      try {
-        if (stop_cond()) {
-            return make_ready_future<>();
+        try {
+            if (stop_cond()) {
+                return make_ready_future<>();
+            }
+        } catch (...) {
+            return current_exception_as_future();
         }
-      } catch (...) {
-        return current_exception_as_future();
-      }
         auto f = futurize_invoke(action);
         if (!f.available() || need_preempt()) {
             return [&] () noexcept {
