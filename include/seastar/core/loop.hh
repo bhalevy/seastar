@@ -66,19 +66,19 @@ public:
             }
             _state = {};
         }
-            // FIXME: indentation
-            do {
-                auto f = futurize_invoke(_action);
-                if (!f.available() || f.failed()) {
-                    internal::set_callback(f, this);
-                    return;
-                }
-                if (f.get0() == stop_iteration::yes) {
-                    _promise.set_value();
-                    delete this;
-                    return;
-                }
-            } while (!need_preempt());
+
+        do {
+            auto f = futurize_invoke(_action);
+            if (!f.available() || f.failed()) {
+                internal::set_callback(f, this);
+                return;
+            }
+            if (f.get0() == stop_iteration::yes) {
+                _promise.set_value();
+                delete this;
+                return;
+            }
+        } while (!need_preempt());
         _state.set(stop_iteration::no);
         schedule(this);
     }
@@ -108,7 +108,7 @@ inline
 future<> repeat(AsyncAction&& action) noexcept {
     using futurator = futurize<std::result_of_t<AsyncAction()>>;
     static_assert(std::is_same<future<stop_iteration>, typename futurator::type>::value, "bad AsyncAction signature");
-  // FIXME: indentation
+
     for (;;) {
         // Do not type-erase here in case this is a short repeat()
         auto f = futurator::invoke(action);
@@ -179,20 +179,20 @@ public:
             }
             this->_state = {};
         }
-            // FIXME: indentation
-            do {
-                auto f = futurize_invoke(_action);
-                if (!f.available() || f.failed()) {
-                    internal::set_callback(f, this);
-                    return;
-                }
-                auto ret = f.get0();
-                if (ret) {
-                    _promise.set_value(std::move(*ret));
-                    delete this;
-                    return;
-                }
-            } while (!need_preempt());
+
+        do {
+            auto f = futurize_invoke(_action);
+            if (!f.available() || f.failed()) {
+                internal::set_callback(f, this);
+                return;
+            }
+            auto ret = f.get0();
+            if (ret) {
+                _promise.set_value(std::move(*ret));
+                delete this;
+                return;
+            }
+        } while (!need_preempt());
         this->_state.set(std::nullopt);
         schedule(this);
     }
@@ -223,7 +223,7 @@ repeat_until_value(AsyncAction action) noexcept {
     // the "T" in the documentation
     using value_type = typename type_helper::value_type;
     using optional_type = typename type_helper::optional_type;
-    // FIXME: indentation
+
     do {
         auto f = futurator::invoke(action);
 
@@ -243,11 +243,11 @@ repeat_until_value(AsyncAction action) noexcept {
         }
     } while (!need_preempt());
 
-        memory::scoped_critical_alloc_section _;
-        auto state = new internal::repeat_until_value_state<AsyncAction, value_type>(std::nullopt, std::move(action));
-        auto f = state->get_future();
-        schedule(state);
-        return f;
+    memory::scoped_critical_alloc_section _;
+    auto state = new internal::repeat_until_value_state<AsyncAction, value_type>(std::nullopt, std::move(action));
+    auto f = state->get_future();
+    schedule(state);
+    return f;
 }
 
 namespace internal {
@@ -313,25 +313,25 @@ inline
 future<> do_until(StopCondition stop_cond, AsyncAction action) noexcept {
     using namespace internal;
       // FIXME: indentation
-      try {
-    for (;;) {
-        if (stop_cond()) {
-            return make_ready_future<>();
+    try {
+        for (;;) {
+            if (stop_cond()) {
+                return make_ready_future<>();
+            }
+            auto f = futurize_invoke(action);
+            if (!f.available() || f.failed() || need_preempt()) {
+                return [&] () noexcept {
+                    memory::scoped_critical_alloc_section _;
+                    auto task = new do_until_state<StopCondition, AsyncAction>(std::move(stop_cond), std::move(action));
+                    auto ret = task->get_future();
+                    internal::set_callback(f, task);
+                    return ret;
+                }();
+            }
         }
-        auto f = futurize_invoke(action);
-        if (!f.available() || f.failed() || need_preempt()) {
-            return [&] () noexcept {
-                memory::scoped_critical_alloc_section _;
-                auto task = new do_until_state<StopCondition, AsyncAction>(std::move(stop_cond), std::move(action));
-                auto ret = task->get_future();
-                internal::set_callback(f, task);
-                return ret;
-            }();
-        }
-    }
-      } catch (...) {
+    } catch (...) {
         return current_exception_as_future();
-      }
+    }
 }
 
 /// Invoke given action until it fails.
