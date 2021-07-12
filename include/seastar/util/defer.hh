@@ -26,11 +26,17 @@
 
 #include <seastar/util/noncopyable_function.hh>
 
+#ifdef SEASTAR_DEFERRED_ACTION_NOEXCEPT
+#define DEFERRED_ACTION_NOEXCEPT noexcept
+#else
+#define DEFERRED_ACTION_NOEXCEPT
+#endif
+
 namespace seastar {
 
 class deferred_action {
 public:
-    using function_type = noncopyable_function<void()>;
+    using function_type = noncopyable_function<void() DEFERRED_ACTION_NOEXCEPT>;
 private:
     function_type _func;
     bool _cancelled = false;
