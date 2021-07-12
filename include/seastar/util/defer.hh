@@ -24,6 +24,16 @@
 #include <type_traits>
 #include <utility>
 
+#include <seastar/util/concepts.hh>
+
+SEASTAR_CONCEPT(
+#ifdef SEASTAR_DEFERRED_ACTION_NOEXCEPT
+#define DEFERRED_ACTION_NOEXCEPT noexcept
+#else
+#define DEFERRED_ACTION_NOEXCEPT
+#endif
+)
+
 namespace seastar {
 
 template <typename Func>
@@ -49,6 +59,9 @@ public:
 };
 
 template <typename Func>
+SEASTAR_CONCEPT( requires requires (Func f) {
+    { f() } DEFERRED_ACTION_NOEXCEPT -> std::same_as<void>;
+})
 inline
 deferred_action<Func>
 defer(Func&& func) {
