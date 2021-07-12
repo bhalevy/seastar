@@ -37,6 +37,9 @@ SEASTAR_CONCEPT(
 namespace seastar {
 
 template <typename Func>
+SEASTAR_CONCEPT( requires requires (Func f) {
+    { f() } DEFERRED_ACTION_NOEXCEPT -> std::same_as<void>;
+})
 class deferred_action {
     Func _func;
     bool _cancelled = false;
@@ -59,9 +62,6 @@ public:
 };
 
 template <typename Func>
-SEASTAR_CONCEPT( requires requires (Func f) {
-    { f() } DEFERRED_ACTION_NOEXCEPT -> std::same_as<void>;
-})
 inline
 deferred_action<Func>
 defer(Func&& func) {

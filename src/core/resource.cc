@@ -22,6 +22,7 @@
 
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
+#include <exception>
 #include <regex>
 #include <seastar/core/resource.hh>
 #include <seastar/core/align.hh>
@@ -456,11 +457,19 @@ allocate_io_queues(hwloc_topology_t& topology, std::vector<cpu> cpus, std::unord
     return ret;
 }
 
+static void destroy_hwloc_topology(hwloc_topology_t& topology) noexcept {
+    try {
+        hwloc_topology_destroy(topology);
+    } catch (...) {
+        seastar_logger.error("Could not destroy hwloc_topology: {}", std::current_exception());
+    }
+}
 
+hwloc_topology_t
 resources allocate(configuration c) {
     hwloc_topology_t topology;
     hwloc_topology_init(&topology);
-    auto free_hwloc = defer([&] { hwloc_topology_destroy(topology); });
+    auto free_hwloc = defer([&] () noexcept { destroy_hwloc_topology(topology); });
     hwloc_topology_load(topology);
     if (c.cpu_set) {
         auto bm = hwloc_bitmap_alloc();
@@ -618,7 +627,7 @@ resources allocate(configuration c) {
 unsigned nr_processing_units() {
     hwloc_topology_t topology;
     hwloc_topology_init(&topology);
-    auto free_hwloc = defer([&] { hwloc_topology_destroy(topology); });
+    auto free_hwloc = defer([&] () noexcept { destroy_hwloc_topology(topology); });
     hwloc_topology_load(topology);
     return hwloc_get_nbobjs_by_type(topology, HWLOC_OBJ_PU);
 }

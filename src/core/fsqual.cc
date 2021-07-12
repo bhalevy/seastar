@@ -19,6 +19,7 @@
  * under the License.
  */
 
+#include "seastar/core/reactor.hh"
 #include <seastar/core/posix.hh>
 #include <seastar/util/defer.hh>
 #include <seastar/core/linux-aio.hh>
@@ -66,7 +67,7 @@ bool filesystem_has_good_aio_support(sstring directory, bool verbose) {
     aio_context_t ioctx = {};
     auto r = io_setup(1, &ioctx);
     throw_system_error_on(r == -1, "io_setup");
-    auto cleanup = defer([&] {
+    auto cleanup = defer([&] () noexcept {
         if (io_destroy(ioctx) < 0) {
             seastar_logger.error("filesystem_has_good_aio_support: failed to destroy aio_context: {}", std::current_exception());
         }

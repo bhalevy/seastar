@@ -21,6 +21,7 @@
 #include "core/reactor_backend.hh"
 #include "core/thread_pool.hh"
 #include "core/syscall_result.hh"
+#include <exception>
 #include <seastar/core/print.hh>
 #include <seastar/core/reactor.hh>
 #include <seastar/core/internal/buffer_allocator.hh>
@@ -725,7 +726,9 @@ reactor_backend_epoll::wait_and_process(int timeout, const sigset_t* active_sigm
     // wake us up from sleep, and timer thread wakeup will just waste CPU time) and enable
     // reactor thread steady clock timer.
     maybe_switch_steady_clock_timers(timeout, _steady_clock_timer_timer_thread, _steady_clock_timer_reactor_thread);
-    auto undo_timer_switch = defer([&] {
+    auto undo_timer_switch = defer([&] () noexcept {
+        // maybe_switch_steady_clock_timers might theoretically throw
+        // the will terminate the program.
         maybe_switch_steady_clock_timers(timeout, _steady_clock_timer_reactor_thread, _steady_clock_timer_timer_thread);
     });
     std::array<epoll_event, 128> eevt;
@@ -774,6 +777,9 @@ reactor_backend_epoll::wait_and_process(int timeout, const sigset_t* active_sigm
             ::epoll_ctl(_epollfd.get(), op, pfd->fd.get(), &evt);
         }
     }
+    // call maybe_switch_steady_clock_timers explicitly here, in case it throws.
+    undo_timer_switch.cancel();
+    maybe_switch_steady_clock_timers(timeout, _steady_clock_timer_reactor_thread, _steady_clock_timer_timer_thread);
     return nr;
 }
 
@@ -1062,7 +1068,7 @@ static bool detect_aio_poll() {
     auto fd = file_desc::eventfd(0, 0);
     aio_context_t ioc{};
     setup_aio_context(1, &ioc);
-    auto cleanup = defer([&] {
+    auto cleanup = defer([&] () noexcept {
         if (io_destroy(ioc) < 0) {
             seastar_logger.error("detect_aio_poll: failed to destroy aio_context: {}", std::current_exception());
         }
