@@ -50,27 +50,27 @@ struct linux_aio_ring {
 
 using namespace linux_abi;
 
-static linux_aio_ring* to_ring(aio_context_t io_context) {
+static linux_aio_ring* to_ring(aio_context_t io_context) noexcept {
     return reinterpret_cast<linux_aio_ring*>(uintptr_t(io_context));
 }
 
-static bool usable(const linux_aio_ring* ring) {
+static bool usable(const linux_aio_ring* ring) noexcept {
     return ring->magic == 0xa10a10a1 && ring->incompat_features == 0 && !RUNNING_ON_VALGRIND;
 }
 
-int io_setup(int nr_events, aio_context_t* io_context) {
+int io_setup(int nr_events, aio_context_t* io_context) noexcept {
     return ::syscall(SYS_io_setup, nr_events, io_context);
 }
 
-int io_destroy(aio_context_t io_context) {
+int io_destroy(aio_context_t io_context) noexcept {
    return ::syscall(SYS_io_destroy, io_context);
 }
 
-int io_submit(aio_context_t io_context, long nr, iocb** iocbs) {
+int io_submit(aio_context_t io_context, long nr, iocb** iocbs) noexcept {
     return ::syscall(SYS_io_submit, io_context, nr, iocbs);
 }
 
-int io_cancel(aio_context_t io_context, iocb* iocb, io_event* result) {
+int io_cancel(aio_context_t io_context, iocb* iocb, io_event* result) noexcept {
     return ::syscall(SYS_io_cancel, io_context, iocb, result);
 }
 
@@ -118,7 +118,7 @@ static int try_reap_events(aio_context_t io_context, long min_nr, long nr, io_ev
 }
 
 int io_getevents(aio_context_t io_context, long min_nr, long nr, io_event* events, const ::timespec* timeout,
-        bool force_syscall) {
+        bool force_syscall) noexcept {
     auto r = try_reap_events(io_context, min_nr, nr, events, timeout, force_syscall);
     if (r >= 0) {
         return r;
@@ -138,7 +138,7 @@ int io_getevents(aio_context_t io_context, long min_nr, long nr, io_event* event
 #endif
 
 int io_pgetevents(aio_context_t io_context, long min_nr, long nr, io_event* events, const ::timespec* timeout, const sigset_t* sigmask,
-        bool force_syscall) {
+        bool force_syscall) noexcept {
 #ifdef __NR_io_pgetevents
     auto r = try_reap_events(io_context, min_nr, nr, events, timeout, force_syscall);
     if (r >= 0) {
