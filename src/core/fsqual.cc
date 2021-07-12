@@ -22,6 +22,7 @@
 #include <seastar/core/posix.hh>
 #include <seastar/util/defer.hh>
 #include <seastar/core/linux-aio.hh>
+#include <seastar/util/log.hh>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <fcntl.h>
@@ -32,6 +33,8 @@
 #include <seastar/core/fsqual.hh>
 
 namespace seastar {
+
+extern logger seastar_logger;
 
 using namespace seastar::internal;
 using namespace seastar::internal::linux_abi;
@@ -63,7 +66,11 @@ bool filesystem_has_good_aio_support(sstring directory, bool verbose) {
     aio_context_t ioctx = {};
     auto r = io_setup(1, &ioctx);
     throw_system_error_on(r == -1, "io_setup");
-    auto cleanup = defer([&] { io_destroy(ioctx); });
+    auto cleanup = defer([&] {
+        if (io_destroy(ioctx) < 0) {
+            seastar_logger.error("filesystem_has_good_aio_support: failed to destroy aio_context: {}", std::current_exception());
+        }
+    });
     auto fname = directory + "/fsqual.tmp";
     auto fd = file_desc::open(fname, O_CREAT|O_EXCL|O_RDWR|O_DIRECT, 0600);
     unlink(fname.c_str());

@@ -95,7 +95,9 @@ aio_storage_context::aio_storage_context(reactor& r)
 }
 
 aio_storage_context::~aio_storage_context() {
-    internal::io_destroy(_io_context);
+    if (internal::io_destroy(_io_context) < 0) {
+        seastar_logger.error("~aio_storage_context: failed to destroy aio_context: {}", std::current_exception());
+    }
 }
 
 inline
@@ -258,7 +260,9 @@ aio_general_context::aio_general_context(size_t nr) : iocbs(new iocb*[nr]) {
 }
 
 aio_general_context::~aio_general_context() {
-    io_destroy(io_context);
+    if (io_destroy(io_context) < 0) {
+        seastar_logger.error("~aio_general_context: failed to destroy aio_context: {}", std::current_exception());
+    }
 }
 
 void aio_general_context::queue(linux_abi::iocb* iocb) {
@@ -1058,7 +1062,11 @@ static bool detect_aio_poll() {
     auto fd = file_desc::eventfd(0, 0);
     aio_context_t ioc{};
     setup_aio_context(1, &ioc);
-    auto cleanup = defer([&] { io_destroy(ioc); });
+    auto cleanup = defer([&] {
+        if (io_destroy(ioc) < 0) {
+            seastar_logger.error("detect_aio_poll: failed to destroy aio_context: {}", std::current_exception());
+        }
+    });
     linux_abi::iocb iocb = internal::make_poll_iocb(fd.get(), POLLIN|POLLOUT);
     linux_abi::iocb* a[1] = { &iocb };
     auto r = io_submit(ioc, 1, a);
