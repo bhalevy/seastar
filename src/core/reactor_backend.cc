@@ -271,12 +271,16 @@ void aio_general_context::queue(linux_abi::iocb* iocb) {
 }
 
 size_t aio_general_context::flush() {
-    if (last != iocbs.get()) {
-        auto nr = last - iocbs.get();
-        last = iocbs.get();
+    auto nr = last - iocbs.get();
+    if (nr) {
         auto r = io_submit(io_context, nr, iocbs.get());
         assert(r >= 0);
-        return nr;
+        if (__builtin_expect(r != nr, false)) {
+            // According to io_submit(2) r is never expected to be 0 if nr > 0.
+            std::copy(iocbs.get() + r, iocbs.get() + nr, iocbs.get());
+        }
+        last -= r;
+        return r;
     }
     return 0;
 }
