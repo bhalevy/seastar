@@ -280,7 +280,10 @@ size_t aio_general_context::flush() {
             last = iocbs.get();
             return r;
         }
-        assert(r >= 0);
+        if (__builtin_expect(r < 0, false)) {
+            assert(errno == EAGAIN);    // we can't proceed otherwise
+            r = 0;
+        }
         std::copy(iocbs.get() + r, iocbs.get() + nr, iocbs.get());
         last -= r;
         return r;
