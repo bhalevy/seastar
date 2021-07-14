@@ -27,6 +27,7 @@
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
 #include <seastar/testing/test_runner.hh>
+#include <seastar/testing/on_internal_error.hh>
 #include <seastar/core/execution_stage.hh>
 #include <seastar/core/sleep.hh>
 #include <seastar/core/print.hh>
@@ -282,3 +283,23 @@ SEASTAR_THREAD_TEST_CASE(sg_count) {
     }
     BOOST_REQUIRE_EQUAL(internal::scheduling_group_count(), max_scheduling_groups());
 }
+
+#ifdef SEASTAR_DEBUG
+
+SEASTAR_THREAD_TEST_CASE(destroy_sg_twice) {
+    scheduling_group sg = create_scheduling_group("sg", 100).get0();
+    destroy_scheduling_group(sg).get();
+    auto snaoie = testing::scoped_no_abort_on_internal_error();
+    BOOST_REQUIRE_THROW(destroy_scheduling_group(sg).get(), std::invalid_argument);
+}
+
+SEASTAR_THREAD_TEST_CASE(destroy_invalid_sg) {
+    std::array<char, sizeof(scheduling_group)> data;
+    // make a corrupt scheduling_group
+    std::memset(&data[0], ~0, sizeof(data));
+    scheduling_group* sgp = (scheduling_group*)(&data[0]);
+    auto snaoie = testing::scoped_no_abort_on_internal_error();
+    BOOST_REQUIRE_THROW(destroy_scheduling_group(*sgp).get(), std::invalid_argument);
+}
+
+#endif
