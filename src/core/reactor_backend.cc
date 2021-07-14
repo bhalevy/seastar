@@ -276,7 +276,10 @@ size_t aio_general_context::flush() {
     auto nr = last - iocbs.get();
     if (nr) {
         auto r = io_submit(io_context, nr, iocbs.get());
-        assert(r >= 0);
+        if (__builtin_expect(r < 0, false)) {
+            assert(errno == EAGAIN);    // we can't proceed otherwise
+            return 0;
+        }
         if (__builtin_expect(r != nr, false)) {
             // According to io_submit(2) r is never expected to be 0 if nr > 0.
             std::copy(iocbs.get() + r, iocbs.get() + nr, iocbs.get());
