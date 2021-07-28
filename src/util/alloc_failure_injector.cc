@@ -41,7 +41,8 @@ void alloc_failure_injector::fail() {
 }
 
 void alloc_failure_injector::run_with_callback(noncopyable_function<void()> callback, noncopyable_function<void()> to_run) {
-    auto restore = defer([this, prev = std::exchange(_on_alloc_failure, std::move(callback))] () mutable {
+    auto restore = defer([this, prev = std::exchange(_on_alloc_failure, std::move(callback))] () mutable noexcept {
+        static_assert(std::is_nothrow_move_constructible_v<typeof(prev)>);
         _on_alloc_failure = std::move(prev);
     });
     to_run();
