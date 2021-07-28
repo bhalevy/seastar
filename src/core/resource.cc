@@ -495,7 +495,14 @@ resources allocate(configuration& c) {
     auto topology = c.topology.get();
     if (c.cpu_set) {
         auto bm = hwloc_bitmap_alloc();
-        auto free_bm = defer([&] { hwloc_bitmap_free(bm); });
+        auto free_bm = defer([&] () noexcept {
+            try {
+                hwloc_bitmap_free(bm);
+            } catch (...) {
+                seastar_logger.error("resource allocate: hwloc_bitmap_free failed: {}", std::current_exception);
+                abort();
+            }
+        });
         for (auto idx : *c.cpu_set) {
             hwloc_bitmap_set(bm, idx);
         }
