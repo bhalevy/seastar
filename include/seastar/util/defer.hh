@@ -24,15 +24,19 @@
 #include <type_traits>
 #include <utility>
 
+#include <seastar/util/noncopyable_function.hh>
+
 namespace seastar {
 
-template <typename Func>
 class deferred_action {
-    Func _func;
+public:
+    using function_type = noncopyable_function<void()>;
+private:
+    function_type _func;
     bool _cancelled = false;
 public:
-    static_assert(std::is_nothrow_move_constructible<Func>::value, "Func(Func&&) must be noexcept");
-    deferred_action(Func&& func) noexcept : _func(std::move(func)) {}
+    static_assert(std::is_nothrow_move_constructible_v<function_type>, "Func(Func&&) must be noexcept");
+    deferred_action(function_type&& func) noexcept : _func(std::move(func)) {}
     deferred_action(deferred_action&& o) noexcept : _func(std::move(o._func)), _cancelled(o._cancelled) {
         o._cancelled = true;
     }
@@ -48,11 +52,10 @@ public:
     void cancel() { _cancelled = true; }
 };
 
-template <typename Func>
 inline
-deferred_action<Func>
-defer(Func&& func) {
-    return deferred_action<Func>(std::forward<Func>(func));
+deferred_action
+defer(deferred_action::function_type&& func) {
+    return deferred_action(std::move(func));
 }
 
 }
