@@ -34,6 +34,7 @@
 #include <seastar/core/iostream.hh>
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/core/internal/api-level.hh>
+#include <seastar/core/abort_source.hh>
 
 namespace seastar {
 
@@ -65,10 +66,11 @@ struct file_input_stream_options {
 /// \param len Maximum number of bytes to read; the stream will stop at end-of-file
 ///            even if `offset + len` is beyond end-of-file.
 /// \param options A set of options controlling the stream.
+/// \param asp An optional \ref abort_source.
 ///
 /// \note Multiple input streams may exist concurrently for the same file.
 input_stream<char> make_file_input_stream(
-        file file, uint64_t offset, uint64_t len, file_input_stream_options options = {});
+        file file, uint64_t offset, uint64_t len, file_input_stream_options options = {}, abort_source* asp = nullptr);
 
 // Create an input_stream for a given file, with the specified options.
 // Multiple fibers of execution (continuations) may safely open
@@ -81,6 +83,13 @@ input_stream<char> make_file_input_stream(
 // multiple input streams concurrently for the same file.
 input_stream<char> make_file_input_stream(
         file file, file_input_stream_options = {});
+
+// Create an abortable input_stream for reading starting at a given position of the
+// given file. Multiple fibers of execution (continuations) may safely open
+// multiple input streams concurrently for the same file.
+input_stream<char> make_abortable_file_input_stream(
+        file file, abort_source& as, file_input_stream_options = {},
+        uint64_t offset = 0, uint64_t len = std::numeric_limits<uint64_t>::max());
 
 struct file_output_stream_options {
     // For small files, setting preallocation_size can make it impossible for XFS to find

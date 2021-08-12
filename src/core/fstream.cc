@@ -82,6 +82,7 @@ class file_data_source_impl : public data_source_impl {
     size_t _current_buffer_size;
     bool _in_slow_start = false;
     io_intent _intent;
+    optimized_optional<abort_source::subscription> _sub;
     using unused_ratio_target = std::ratio<25, 100>;
 private:
     size_t minimal_buffer_size() const {
@@ -190,7 +191,7 @@ private:
         _dropped_reads = _dropped_reads.then([f = std::move(f)] () mutable { return std::move(f); });
     }
 public:
-    file_data_source_impl(file f, uint64_t offset, uint64_t len, file_input_stream_options options)
+    file_data_source_impl(file f, uint64_t offset, uint64_t len, file_input_stream_options options, abort_source* asp)
             : _file(std::move(f)), _options(options), _pos(offset), _remain(len), _current_read_ahead(get_initial_read_ahead())
     {
         _options.buffer_size = select_buffer_size(_options.buffer_size, _file.disk_read_max_length());
@@ -198,6 +199,14 @@ public:
         // prevent wraparounds
         set_new_buffer_size(after_skip::no);
         _remain = std::min(std::numeric_limits<uint64_t>::max() - _pos, _remain);
+        if (asp) {
+            _sub = asp->subscribe([this] () noexcept {
+                abort(std::make_exception_ptr(abort_requested_exception()));
+            });
+            if (!_sub) {
+                throw abort_requested_exception();
+            }
+        }
     }
     virtual ~file_data_source_impl() override {
         // If the data source hasn't been closed, we risk having reads in progress
@@ -329,15 +338,15 @@ private:
 
 class file_data_source : public data_source {
 public:
-    file_data_source(file f, uint64_t offset, uint64_t len, file_input_stream_options options)
+    file_data_source(file f, uint64_t offset, uint64_t len, file_input_stream_options options, abort_source* asp = nullptr)
         : data_source(std::make_unique<file_data_source_impl>(
-                std::move(f), offset, len, options)) {}
+                std::move(f), offset, len, options, asp)) {}
 };
 
 
 input_stream<char> make_file_input_stream(
-        file f, uint64_t offset, uint64_t len, file_input_stream_options options) {
-    return input_stream<char>(file_data_source(std::move(f), offset, len, std::move(options)));
+        file f, uint64_t offset, uint64_t len, file_input_stream_options options, abort_source* asp) {
+    return input_stream<char>(file_data_source(std::move(f), offset, len, std::move(options), asp));
 }
 
 input_stream<char> make_file_input_stream(
@@ -350,6 +359,12 @@ input_stream<char> make_file_input_stream(
     return make_file_input_stream(std::move(f), 0, std::move(options));
 }
 
+input_stream<char> make_abortable_file_input_stream(
+        file f, abort_source& as, file_input_stream_options options,
+        uint64_t offset, uint64_t len)
+{
+    return input_stream<char>(file_data_source(std::move(f), offset, len, std::move(options), &as));
+}
 
 class file_data_sink_impl : public data_sink_impl {
     file _file;

@@ -537,3 +537,53 @@ SEASTAR_TEST_CASE(test_fstream_slow_start) {
         read_while_file_at_full_speed(make_fstream());
     });
 }
+
+SEASTAR_TEST_CASE(test_abortable_file_input_stream) {
+    return tmp_dir::do_with_thread([] (tmp_dir& t) {
+        constexpr size_t file_size = 128 << 20;
+        constexpr size_t buf_size = 128 << 10;
+        auto filename = (t.get_path() / "testfile.tmp").native();
+
+        auto out_file = open_file_dma(filename, open_flags::rw | open_flags::create | open_flags::truncate).get0();
+        auto out = make_file_output_stream(std::move(out_file)).get0();
+        auto close_out = deferred_close(out);
+        std::vector<size_t> buf(buf_size / sizeof(size_t));
+        size_t to_write;
+        for (size_t i = 0; i < file_size; i += to_write) {
+            std::fill(buf.begin(), buf.end(), i);
+            to_write = std::min(file_size - i, buf_size);
+            out.write((char*)buf.data(), to_write).get();
+        }
+        out.flush().get();
+
+        auto in_file = open_file_dma(filename, open_flags::ro).get0();
+        file_input_stream_options opts;
+        opts.read_ahead = 2;
+        abort_source as;
+        auto in = make_abortable_file_input_stream(std::move(in_file), as, opts);
+        auto close_in = deferred_close(in);
+
+        bool aborted = false;
+        int successful_reads = 0;
+        int abort_at = 1;
+        temporary_buffer<char> tmp;
+        for (size_t i = 0; i < file_size; ) {
+            try {
+                auto fut = in.read();
+                if (successful_reads >= abort_at && !as.abort_requested()) {
+                    BOOST_TEST_MESSAGE(format("Test requesting abort {}", fmt::ptr(&as)));
+                    as.request_abort();
+                }
+                tmp = fut.get0();
+                successful_reads++;
+            } catch (const abort_requested_exception&) {
+                aborted = true;
+                break;
+            }
+            i += tmp.size();
+        }
+        BOOST_REQUIRE(aborted);
+        BOOST_REQUIRE_GE(successful_reads, abort_at);
+        BOOST_REQUIRE_LE(successful_reads, abort_at + opts.read_ahead);
+    });
+}
