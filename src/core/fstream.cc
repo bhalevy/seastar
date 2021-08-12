@@ -268,6 +268,9 @@ public:
             return std::move(_dropped_reads);
         });
     }
+    virtual void abort(std::exception_ptr ex) noexcept override {
+        _intent.cancel(std::move(ex));
+    }
 private:
     void issue_read_aheads(unsigned additional = 0) {
         if (_done) {
