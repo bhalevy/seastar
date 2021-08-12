@@ -50,6 +50,7 @@ public:
     virtual future<temporary_buffer<char>> get() = 0;
     virtual future<temporary_buffer<char>> skip(uint64_t n);
     virtual future<> close() { return make_ready_future<>(); }
+    virtual void abort(std::exception_ptr) noexcept {}
 };
 
 class data_source {
@@ -84,6 +85,9 @@ public:
         } catch (...) {
             return current_exception_as_future<>();
         }
+    }
+    void abort(std::exception_ptr ex) noexcept {
+        _dsi->abort(std::move(ex));
     }
 };
 
