@@ -200,11 +200,11 @@ public:
         set_new_buffer_size(after_skip::no);
         _remain = std::min(std::numeric_limits<uint64_t>::max() - _pos, _remain);
         if (asp) {
-            _sub = asp->subscribe([this] () noexcept {
-                abort(std::make_exception_ptr(abort_requested_exception()));
+            _sub = asp->subscribe([this, asp] () noexcept {
+                abort(asp->get_exception());
             });
             if (!_sub) {
-                throw abort_requested_exception();
+                std::rethrow_exception(asp->get_exception());
             }
         }
     }

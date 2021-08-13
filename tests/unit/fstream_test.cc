@@ -538,6 +538,11 @@ SEASTAR_TEST_CASE(test_fstream_slow_start) {
     });
 }
 
+class expected_exception : std::runtime_error {
+public:
+    expected_exception() : runtime_error("expected") {}
+};
+
 SEASTAR_TEST_CASE(test_abortable_file_input_stream) {
     return tmp_dir::do_with_thread([] (tmp_dir& t) {
         constexpr size_t file_size = 128 << 20;
@@ -572,11 +577,11 @@ SEASTAR_TEST_CASE(test_abortable_file_input_stream) {
                 auto fut = in.read();
                 if (successful_reads >= abort_at && !as.abort_requested()) {
                     BOOST_TEST_MESSAGE(format("Test requesting abort {}", fmt::ptr(&as)));
-                    as.request_abort();
+                    as.request_abort_ex(std::make_exception_ptr(expected_exception()));
                 }
                 tmp = fut.get0();
                 successful_reads++;
-            } catch (const abort_requested_exception&) {
+            } catch (const expected_exception&) {
                 aborted = true;
                 break;
             }
