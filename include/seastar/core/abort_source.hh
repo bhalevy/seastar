@@ -62,7 +62,7 @@ public:
 
         explicit subscription(abort_source& as, subscription_callback_type target)
                 : _target(std::move(target)) {
-            as._subscriptions->push_back(*this);
+            as._subscriptions.push_back(*this);
         }
 
         void on_abort() {
@@ -95,7 +95,7 @@ public:
 
 private:
     using subscription_list_type = bi::list<subscription, bi::constant_time_size<false>>;
-    std::optional<subscription_list_type> _subscriptions = subscription_list_type();
+    subscription_list_type _subscriptions;
     std::exception_ptr _ex;
 
 public:
@@ -114,9 +114,9 @@ public:
     /// Requests that the target operation be aborted with error \c ex. Current subscriptions
     /// are invoked inline with this call, and no new ones can be registered.
     void request_abort_ex(std::exception_ptr ex) {
+        assert(ex);
         _ex = ex;
-        _subscriptions->clear_and_dispose([] (subscription* s) { s->on_abort(); });
-        _subscriptions = { };
+        _subscriptions.clear_and_dispose([] (subscription* s) { s->on_abort(); });
     }
 
     /// Requests that the target operation be aborted with \ref abort_requested_exception. Current subscriptions
@@ -127,7 +127,7 @@ public:
 
     /// Returns whether an abort has been requested.
     bool abort_requested() const noexcept {
-        return !_subscriptions;
+        return bool(_ex);
     }
 
 
