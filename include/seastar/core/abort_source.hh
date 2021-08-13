@@ -96,6 +96,7 @@ public:
 private:
     using subscription_list_type = bi::list<subscription, bi::constant_time_size<false>>;
     std::optional<subscription_list_type> _subscriptions = subscription_list_type();
+    std::exception_ptr _ex;
 
 public:
     /// Delays the invocation of the callback \c f until \ref request_abort() is called.
@@ -110,11 +111,18 @@ public:
         return { subscription(*this, std::move(f)) };
     }
 
-    /// Requests that the target operation be aborted. Current subscriptions
+    /// Requests that the target operation be aborted with error \c ex. Current subscriptions
     /// are invoked inline with this call, and no new ones can be registered.
-    void request_abort() {
+    void request_abort_ex(std::exception_ptr ex) {
+        _ex = ex;
         _subscriptions->clear_and_dispose([] (subscription* s) { s->on_abort(); });
         _subscriptions = { };
+    }
+
+    /// Requests that the target operation be aborted with \ref abort_requested_exception. Current subscriptions
+    /// are invoked inline with this call, and no new ones can be registered.
+    void request_abort() {
+        request_abort_ex(std::make_exception_ptr(abort_requested_exception()));
     }
 
     /// Returns whether an abort has been requested.
@@ -123,11 +131,17 @@ public:
     }
 
 
-    /// Throws a \ref abort_requested_exception if cancellation has been requested.
+    /// Throws the \ref request_abort exception (\ref abort_requested_exception by default)
+    /// if cancellation has been requested.
     void check() const {
         if (abort_requested()) {
-            throw abort_requested_exception();
+            std::rethrow_exception(get_exception());
         }
+    }
+
+    /// Gets the \ref request_abort exception if cancellation has been requested.
+    const std::exception_ptr& get_exception() const {
+        return _ex;
     }
 };
 
