@@ -20,10 +20,12 @@
  */
 
 #include <seastar/testing/test_case.hh>
+#include <seastar/testing/thread_test_case.hh>
 
 #include <seastar/core/gate.hh>
 #include <seastar/core/sleep.hh>
 #include <seastar/core/do_with.hh>
+#include <seastar/util/timeout_abort_source.hh>
 
 using namespace seastar;
 using namespace std::chrono_literals;
@@ -84,4 +86,20 @@ SEASTAR_TEST_CASE(test_negative_sleep_abortable) {
     return do_with(abort_source(), [] (abort_source& as) {
         return sleep_abortable(-10s, as);
     });
+}
+
+SEASTAR_THREAD_TEST_CASE(test_timeout_abort_source) {
+    util::timeout_abort_source tas(1ms);
+    std::exception_ptr got_exception;
+    auto sub = tas.subscribe([&] () noexcept {
+        got_exception = tas.get_exception();
+    });
+
+    sleep(2ms).get();
+    BOOST_REQUIRE(got_exception);
+    try {
+        std::rethrow_exception(got_exception);
+    } catch (const timed_out_error&) {
+        BOOST_CHECK(true);
+    }
 }
