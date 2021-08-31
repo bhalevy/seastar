@@ -600,6 +600,7 @@ add_library (seastar STATIC
   include/seastar/util/variant_utils.hh
   include/seastar/util/closeable.hh
   include/seastar/util/source_location-compat.hh
+  include/seastar/util/short_streams.hh
   src/core/alien.cc
   src/core/file.cc
   src/core/fair_queue.cc
@@ -644,7 +645,6 @@ add_library (seastar STATIC
   src/http/mime_types.cc
   src/http/reply.cc
   src/http/routes.cc
-  src/http/short_streams.cc
   src/http/transformers.cc
   src/json/formatter.cc
   src/json/json_elements.cc
@@ -681,7 +681,9 @@ add_library (seastar STATIC
   src/util/log.cc
   src/util/program-options.cc
   src/util/read_first_line.cc
-  src/util/tmp_file.cc)
+  src/util/tmp_file.cc
+  src/util/short_streams.cc
+  )
 
 add_library (Seastar::seastar ALIAS seastar)
 
