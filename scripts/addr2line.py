@@ -38,9 +38,9 @@ class Addr2Line:
             print('{}'.format(s))
 
         options = f"-{'C' if not concise else ''}fpia"
-        self._input = subprocess.Popen(["addr2line", options, "-e", self._binary], stdin=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
+        self._input = subprocess.Popen(["addr2line", options, "-e", self._binary], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         if concise:
-            self._output = subprocess.Popen(["c++filt", "-p"], stdin=self._input.stdout, stdout=subprocess.PIPE, universal_newlines=True)
+            self._output = subprocess.Popen(["c++filt", "-p"], stdin=self._input.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         else:
             self._output = self._input
 
@@ -55,6 +55,10 @@ class Addr2Line:
 
     def _read_resolved_address(self):
         res = self._output.stdout.readline()
+        if not res:
+            self._output.kill()
+            err = self._output.stderr.read()
+            raise RuntimeError(f"Unexpected end-of-file on addr2line output. stderr:\n{err}")
         # remove the address
         res = res.split(': ', 1)[1]
         dummy = '0x0000000000000000: ?? ??:0\n'
@@ -71,7 +75,12 @@ class Addr2Line:
         # line which we can look for in _read_address
         self._input.stdin.write(address + '\n\n')
         self._input.stdin.flush()
-        return self._read_resolved_address()
+        try:
+            return self._read_resolved_address()
+        except RuntimeError as e:
+            sys.stderr.write(f"{e}\n")
+            self._missing = True
+            return " ".join([self._binary, address, '\n'])
 
 class BacktraceResolver(object):
 
