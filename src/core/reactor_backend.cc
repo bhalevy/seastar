@@ -92,10 +92,18 @@ aio_storage_context::aio_storage_context(reactor& r)
     static_assert(max_aio >= reactor::max_queues * reactor::max_queues,
                   "Mismatch between maximum allowed io and what the IO queues can produce");
     internal::setup_aio_context(max_aio, &_io_context);
+    _r.at_exit([this] { return stop(); });
 }
 
 aio_storage_context::~aio_storage_context() {
     internal::io_destroy(_io_context);
+}
+
+future<> aio_storage_context::stop() noexcept {
+    return std::exchange(_pending_aio_retry_fut, make_ready_future<>()).finally([this] {
+        // FIXME: reap_completions
+        assert(!_iocb_pool.outstanding());
+    });
 }
 
 inline
@@ -204,8 +212,11 @@ aio_storage_context::submit_work() {
 }
 
 void aio_storage_context::schedule_retry() {
-    // FIXME: future is discarded
-    (void)do_with(std::exchange(_pending_aio_retry, {}), [this](pending_aio_retry_t& retries){
+    _pending_aio_retry_fut = _pending_aio_retry_fut.then([this] {
+        if (_pending_aio_retry.empty()) {
+            return make_ready_future<>();
+        }
+        pending_aio_retry_t& retries = _pending_aio_retry;
         return _r._thread_pool->submit<syscall_result<int>>([this, &retries] () mutable {
             auto r = io_submit(_io_context, retries.size(), retries.data());
             return wrap_syscall<int>(r);
@@ -217,8 +228,11 @@ void aio_storage_context::schedule_retry() {
             } else {
                 nr_consumed = result.result;
             }
-            std::copy(retries.begin() + nr_consumed, retries.end(), std::back_inserter(_pending_aio_retry));
+            std::copy(retries.begin() + nr_consumed, retries.end(), _pending_aio_retry.begin());
+            _pending_aio_retry.resize(_pending_aio_retry.size() - nr_consumed);
         });
+    }).handle_exception([] (std::exception_ptr ex) {
+        seastar_logger.warn("aio_storage_context::schedule_retry failed: {}", std::move(ex));
     });
 }
 
