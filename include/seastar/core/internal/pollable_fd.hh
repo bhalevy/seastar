@@ -84,8 +84,8 @@ public:
     future<> readable();
     future<> writeable();
     future<> readable_or_writeable();
-    void abort_reader();
-    void abort_writer();
+    void abort_reader() noexcept;
+    void abort_writer() noexcept;
     future<std::tuple<pollable_fd, socket_address>> accept();
     future<> connect(socket_address& sa);
     future<size_t> sendmsg(struct msghdr *msg);

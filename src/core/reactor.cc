@@ -404,13 +404,21 @@ future<> pollable_fd_state::readable_or_writeable() {
 }
 
 void
-pollable_fd_state::abort_reader() {
+pollable_fd_state::abort_reader() noexcept {
+  try {
     engine().abort_reader(*this);
+  } catch (...) {
+    seastar_logger.warn("pollable_fd_state::abort_reader failed: {}. Ignored.", std::current_exception());
+  }
 }
 
 void
-pollable_fd_state::abort_writer() {
+pollable_fd_state::abort_writer() noexcept {
+  try {
     engine().abort_writer(*this);
+  } catch (...) {
+    seastar_logger.warn("pollable_fd_state::abort_reader failed: {}. Ignored.", std::current_exception());
+  }
 }
 
 future<std::tuple<pollable_fd, socket_address>> pollable_fd_state::accept() {
