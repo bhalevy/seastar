@@ -197,7 +197,7 @@ public:
             return make_ready_future<accept_result>(accept_result{std::move(cs), socket_address()});
         });
     }
-    void abort_accept() override {
+    void abort_accept() noexcept override {
         _pending->abort(std::make_exception_ptr(std::system_error(ECONNABORTED, std::system_category())));
     }
     socket_address local_address() const override {
