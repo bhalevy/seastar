@@ -87,7 +87,7 @@ public:
     /// If the queue is, or already was, abort()ed, the future resolves with
     /// the exception provided to abort().
     /// A consumer-side operation. Cannot be called concurrently with other consumer-side operations.
-    future<T> pop_eventually();
+    future<T> pop_eventually() noexcept;
 
     /// Pushes the element now or when there is room. Returns a future<> which
     /// resolves when data was pushed.
@@ -200,11 +200,7 @@ T queue<T>::pop() {
 
 template <typename T>
 inline
-future<T> queue<T>::pop_eventually() {
-    if (_ex) {
-        return make_exception_future<T>(_ex);
-    }
-    if (empty()) {
+future<T> queue<T>::pop_eventually() noexcept {
         return not_empty().then([this] {
             if (_ex) {
                 return make_exception_future<T>(_ex);
@@ -212,9 +208,6 @@ future<T> queue<T>::pop_eventually() {
                 return make_ready_future<T>(pop());
             }
         });
-    } else {
-        return make_ready_future<T>(pop());
-    }
 }
 
 template <typename T>
