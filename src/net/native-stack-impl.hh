@@ -46,7 +46,7 @@ class native_server_socket_impl : public server_socket_impl {
 public:
     native_server_socket_impl(Protocol& proto, uint16_t port, listen_options opt);
     virtual future<accept_result> accept() override;
-    virtual void abort_accept() override;
+    virtual void abort_accept() noexcept override;
     virtual socket_address local_address() const override;
 };
 
@@ -72,7 +72,7 @@ native_server_socket_impl<Protocol>::accept() {
 
 template <typename Protocol>
 void
-native_server_socket_impl<Protocol>::abort_accept() {
+native_server_socket_impl<Protocol>::abort_accept() noexcept {
     _listener.abort_accept();
 }
 
