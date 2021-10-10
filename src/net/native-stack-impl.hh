@@ -172,8 +172,12 @@ public:
             return get();
         });
     }
-    future<> close() override {
-        _conn->close_write();
+    future<> close() noexcept override {
+        try {
+            _conn->close_write();
+        } catch (...) {
+            seastar_logger.warn("Could not close native_connected_socket_impl: {}. Ignored.", std::current_exception());
+        }
         return make_ready_future<>();
     }
 };

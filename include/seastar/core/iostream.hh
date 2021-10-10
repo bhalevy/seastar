@@ -49,6 +49,8 @@ public:
     virtual ~data_source_impl() {}
     virtual future<temporary_buffer<char>> get() = 0;
     virtual future<temporary_buffer<char>> skip(uint64_t n);
+    // Similar to destructors, close should never fail.
+    // I.e. not throw nor return an exceptional future.
     virtual future<> close() { return make_ready_future<>(); }
 };
 

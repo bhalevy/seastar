@@ -250,7 +250,7 @@ public:
         update_history_unused(dropped);
         return make_ready_future<temporary_buffer<char>>();
     }
-    virtual future<> close() override {
+    virtual future<> close() noexcept override {
         _done.emplace();
         if (!_reads_in_progress) {
             _done->set_value();

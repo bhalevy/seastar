@@ -19,6 +19,7 @@
  * Copyright (C) 2014 Cloudius Systems, Ltd.
  */
 
+#include <exception>
 #include <random>
 
 #include <sys/socket.h>
@@ -589,8 +590,12 @@ posix_data_source_impl::allocate_buffer() {
     return make_temporary_buffer<char>(_buffer_allocator, _config.buffer_size);
 }
 
-future<> posix_data_source_impl::close() {
-    _fd.shutdown(SHUT_RD);
+future<> posix_data_source_impl::close() noexcept {
+    try {
+        _fd.shutdown(SHUT_RD);
+    } catch (...) {
+        seastar_logger.warn("Could not shutdown posix data source on close: {}. Ignored.", std::current_exception());
+    }        
     return make_ready_future<>();
 }
 

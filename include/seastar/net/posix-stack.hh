@@ -116,7 +116,7 @@ public:
             : _buffer_allocator(allocator), _fd(std::move(fd)), _config(config) {
     }
     future<temporary_buffer<char>> get() override;
-    future<> close() override;
+    future<> close() noexcept override;
 };
 
 class posix_data_sink_impl : public data_sink_impl {
