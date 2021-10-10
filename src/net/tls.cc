@@ -1407,6 +1407,7 @@ public:
         });
     }
     future<> do_shutdown() {
+      try {
         if (_error || !_connected) {
             return make_ready_future();
         }
@@ -1425,6 +1426,9 @@ public:
             }
         }
         return wait_for_output();
+      } catch (...) {
+        return current_exception_as_future();
+      }
     }
     future<> wait_for_eof() {
         // read records until we get an eof alert
@@ -1443,7 +1447,7 @@ public:
             });
         });
     }
-    future<> shutdown() {
+    future<> shutdown() noexcept {
         // first, make sure any pending write is done.
         // bye handshake is a flush operation, but this
         // allows us to not pay extra attention to output state
