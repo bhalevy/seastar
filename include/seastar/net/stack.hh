@@ -62,7 +62,7 @@ class server_socket_impl {
 public:
     virtual ~server_socket_impl() {}
     virtual future<accept_result> accept() = 0;
-    virtual void abort_accept() = 0;
+    virtual void abort_accept() noexcept = 0;
     virtual socket_address local_address() const = 0;
 };
 

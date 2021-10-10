@@ -189,7 +189,7 @@ future<accept_result> server_socket::accept() {
     return _ssi->accept();
 }
 
-void server_socket::abort_accept() {
+void server_socket::abort_accept() noexcept {
     _ssi->abort_accept();
     _aborted = true;
 }

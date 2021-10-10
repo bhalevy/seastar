@@ -318,7 +318,7 @@ public:
     ///
     /// Current and future \ref accept() calls will terminate immediately
     /// with an error.
-    void abort_accept();
+    void abort_accept() noexcept;
 
     /// Local bound address
     socket_address local_address() const noexcept;

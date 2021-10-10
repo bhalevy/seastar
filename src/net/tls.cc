@@ -1642,7 +1642,7 @@ public:
             });
         });
     }
-    void abort_accept() override  {
+    void abort_accept() noexcept override {
         _sock.abort_accept();
     }
     socket_address local_address() const override {
