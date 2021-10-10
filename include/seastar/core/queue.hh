@@ -183,6 +183,7 @@ template <typename T>
 inline
 T& queue<T>::front() noexcept {
     // std::queue::front() has no reason to throw
+    assert(!_q.empty());
     return _q.front();
 }
 
