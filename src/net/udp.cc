@@ -114,11 +114,11 @@ public:
         return _closed;
     }
 
-    virtual void shutdown_input() override {
+    virtual void shutdown_input() noexcept override {
         _state->_queue.abort(std::make_exception_ptr(std::system_error(EBADF, std::system_category())));
     }
 
-    virtual void shutdown_output() override {
+    virtual void shutdown_output() noexcept override {
         _state->_queue.abort(std::make_exception_ptr(std::system_error(EPIPE, std::system_category())));
     }
 
