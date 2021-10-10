@@ -1584,8 +1584,12 @@ pollable_fd::pollable_fd(file_desc fd, pollable_fd::speculation speculate)
     : _s(engine()._backend->make_pollable_fd_state(std::move(fd), speculate))
 {}
 
-void pollable_fd::shutdown(int how) {
+void pollable_fd::shutdown(int how) noexcept {
+  try {
     engine()._backend->shutdown(*_s, how);
+  } catch (...) {
+    seastar_logger.warn("pollable_fd::shutdown failed: {}. Ignored.", std::current_exception());
+  }
 }
 
 pollable_fd

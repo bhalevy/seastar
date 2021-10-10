@@ -167,7 +167,8 @@ public:
         return _s->sendto(addr, buf, len);
     }
     file_desc& get_file_desc() const { return _s->fd; }
-    void shutdown(int how);
+    // Similar to destructors, shutdown/close methods should never fail.
+    void shutdown(int how) noexcept;
     void close() { _s.reset(); }
     explicit operator bool() const noexcept {
         return bool(_s);
