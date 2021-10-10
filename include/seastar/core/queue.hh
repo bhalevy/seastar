@@ -39,8 +39,8 @@ class queue {
     std::optional<promise<>> _not_full;
     std::exception_ptr _ex = nullptr;
 private:
-    void notify_not_empty();
-    void notify_not_full();
+    void notify_not_empty() noexcept;
+    void notify_not_full() noexcept;
 public:
     explicit queue(size_t size);
 
@@ -102,7 +102,7 @@ public:
     /// Returns the size limit imposed on the queue during its construction
     /// or by a call to set_max_size(). If the queue contains max_size()
     /// items (or more), further items cannot be pushed until some are popped.
-    size_t max_size() const { return _max; }
+    size_t max_size() const noexcept { return _max; }
 
     /// Set the maximum size to a new value. If the queue's max size is reduced,
     /// items already in the queue will not be expunged and the queue will be temporarily
@@ -134,7 +134,7 @@ public:
     /// \brief Check if there is an active consumer
     ///
     /// Returns true if another fiber waits for an item to be pushed into the queue
-    bool has_blocked_consumer() const {
+    bool has_blocked_consumer() const noexcept {
         return bool(_not_empty);
     }
 };
@@ -147,7 +147,7 @@ queue<T>::queue(size_t size)
 
 template <typename T>
 inline
-void queue<T>::notify_not_empty() {
+void queue<T>::notify_not_empty() noexcept {
     if (_not_empty) {
         _not_empty->set_value();
         _not_empty = std::optional<promise<>>();
@@ -156,7 +156,7 @@ void queue<T>::notify_not_empty() {
 
 template <typename T>
 inline
-void queue<T>::notify_not_full() {
+void queue<T>::notify_not_full() noexcept {
     if (_not_full) {
         _not_full->set_value();
         _not_full = std::optional<promise<>>();
