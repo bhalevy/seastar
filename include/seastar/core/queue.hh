@@ -201,13 +201,13 @@ T queue<T>::pop() {
 template <typename T>
 inline
 future<T> queue<T>::pop_eventually() noexcept {
-        return not_empty().then([this] {
-            if (_ex) {
-                return make_exception_future<T>(_ex);
-            } else {
-                return make_ready_future<T>(pop());
-            }
-        });
+    return not_empty().then([this] {
+        if (_ex) {
+            return make_exception_future<T>(_ex);
+        } else {
+            return make_ready_future<T>(pop());
+        }
+    });
 }
 
 template <typename T>
