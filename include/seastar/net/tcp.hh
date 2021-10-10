@@ -731,7 +731,7 @@ public:
                 return make_ready_future<connection>(_q.pop());
             });
         }
-        void abort_accept() {
+        void abort_accept() noexcept {
             _q.abort(std::make_exception_ptr(std::system_error(ECONNABORTED, std::system_category())));
         }
         bool full() { return _pending + _q.size() >= _q.max_size(); }
