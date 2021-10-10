@@ -154,7 +154,7 @@ inline
 void queue<T>::notify_not_empty() noexcept {
     if (_not_empty) {
         _not_empty->set_value();
-        _not_empty = std::optional<promise<>>();
+        _not_empty.reset();
     }
 }
 
@@ -163,7 +163,7 @@ inline
 void queue<T>::notify_not_full() noexcept {
     if (_not_full) {
         _not_full->set_value();
-        _not_full = std::optional<promise<>>();
+        _not_full.reset();
     }
 }
 
@@ -276,6 +276,7 @@ future<> queue<T>::not_empty() noexcept {
     if (!empty()) {
         return make_ready_future<>();
     } else {
+        assert(!_not_empty);
         _not_empty = promise<>();
         return _not_empty->get_future();
     }
@@ -290,6 +291,7 @@ future<> queue<T>::not_full() noexcept {
     if (!full()) {
         return make_ready_future<>();
     } else {
+        assert(!_not_full);
         _not_full = promise<>();
         return _not_full->get_future();
     }
