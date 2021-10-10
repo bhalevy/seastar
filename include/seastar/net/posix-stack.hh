@@ -171,7 +171,7 @@ public:
         server_socket::load_balancing_algorithm lba, shard_id fixed_cpu,
         std::pmr::polymorphic_allocator<char>* allocator=memory::malloc_allocator) : _sa(sa), _protocol(protocol), _lfd(std::move(lfd)), _lba(lba), _fixed_cpu(fixed_cpu), _allocator(allocator) {}
     virtual future<accept_result> accept() override;
-    virtual void abort_accept() override;
+    virtual void abort_accept() noexcept override;
     virtual socket_address local_address() const override;
 };
 
@@ -184,7 +184,7 @@ public:
     explicit posix_reuseport_server_socket_impl(int protocol, socket_address sa, pollable_fd lfd,
         std::pmr::polymorphic_allocator<char>* allocator=memory::malloc_allocator) : _sa(sa), _protocol(protocol), _lfd(std::move(lfd)), _allocator(allocator) {}
     virtual future<accept_result> accept() override;
-    virtual void abort_accept() override;
+    virtual void abort_accept() noexcept override;
     virtual socket_address local_address() const override;
 };
 

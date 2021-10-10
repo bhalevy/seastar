@@ -489,7 +489,7 @@ posix_server_socket_impl::accept() {
 }
 
 void
-posix_server_socket_impl::abort_accept() {
+posix_server_socket_impl::abort_accept() noexcept {
     _lfd.abort_reader();
 }
 
@@ -545,7 +545,7 @@ posix_reuseport_server_socket_impl::accept() {
 }
 
 void
-posix_reuseport_server_socket_impl::abort_accept() {
+posix_reuseport_server_socket_impl::abort_accept() noexcept {
     _lfd.abort_reader();
 }
 
