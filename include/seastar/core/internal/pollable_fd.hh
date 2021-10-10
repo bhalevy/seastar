@@ -145,10 +145,10 @@ public:
     future<> readable_or_writeable() {
         return _s->readable_or_writeable();
     }
-    void abort_reader() {
+    void abort_reader() noexcept {
         return _s->abort_reader();
     }
-    void abort_writer() {
+    void abort_writer() noexcept {
         return _s->abort_writer();
     }
     future<std::tuple<pollable_fd, socket_address>> accept() {
