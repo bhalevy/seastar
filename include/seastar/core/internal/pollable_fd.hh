@@ -169,7 +169,7 @@ public:
     file_desc& get_file_desc() const { return _s->fd; }
     // Similar to destructors, shutdown/close methods should never fail.
     void shutdown(int how) noexcept;
-    void close() { _s.reset(); }
+    void close() noexcept { _s.reset(); }
     explicit operator bool() const noexcept {
         return bool(_s);
     }
