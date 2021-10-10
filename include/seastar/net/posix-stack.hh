@@ -148,7 +148,7 @@ class posix_ap_server_socket_impl : public server_socket_impl {
 public:
     explicit posix_ap_server_socket_impl(int protocol, socket_address sa, std::pmr::polymorphic_allocator<char>* allocator = memory::malloc_allocator) : _protocol(protocol), _sa(sa), _allocator(allocator) {}
     virtual future<accept_result> accept() override;
-    virtual void abort_accept() override;
+    virtual void abort_accept() noexcept override;
     socket_address local_address() const override {
         return _sa;
     }

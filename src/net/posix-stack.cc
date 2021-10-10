@@ -522,7 +522,7 @@ future<accept_result> posix_ap_server_socket_impl::accept() {
 }
 
 void
-posix_ap_server_socket_impl::abort_accept() {
+posix_ap_server_socket_impl::abort_accept() noexcept {
     auto t_sa = std::make_tuple(_protocol, _sa);
     conn_q.erase(t_sa);
     auto i = sockets.find(t_sa);
