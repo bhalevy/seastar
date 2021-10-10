@@ -213,19 +213,11 @@ future<T> queue<T>::pop_eventually() noexcept {
 template <typename T>
 inline
 future<> queue<T>::push_eventually(T&& data) {
-    if (_ex) {
-        return make_exception_future<>(_ex);
-    }
-    if (full()) {
+    // FIXME: mis-indented on purpose
         return not_full().then([this, data = std::move(data)] () mutable {
             _q.push(std::move(data));
             notify_not_empty();
         });
-    } else {
-        _q.push(std::move(data));
-        notify_not_empty();
-        return make_ready_future<>();
-    }
 }
 
 template <typename T>
