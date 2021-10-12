@@ -908,10 +908,26 @@ append_challenged_posix_file_impl::close() noexcept {
     // Caller should have drained all pending I/O
     _closing_state = state::draining;
     process_queue();
-    return _completed.get_future().then([this] {
-        if (_logical_size != _committed_size) {
-            truncate_sync(_logical_size);
+    return _completed.get_future().then_wrapped([this] (future<> f) {
+        std::exception_ptr ex;
+        if (f.failed()) {
+            ex = f.get_exception();
         }
+        if (_logical_size != _committed_size) {
+            auto r = truncate_sync(_logical_size);
+            if (r == -1) {
+                try {
+                    ex = std::make_exception_ptr(std::system_error(errno, std::system_category(), "flush"));
+                } catch (...) {
+                    ex = std::current_exception();
+                }
+            }
+        }
+        if (ex) {
+            return make_exception_future<>(std::move(ex));
+        }
+        return make_ready_future<>();
+    }).finally([this] {
         return posix_file_impl::close().finally([this] { _closing_state = state::closed; });
     });
 }

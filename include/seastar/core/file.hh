@@ -516,6 +516,11 @@ public:
     /// \note
     /// to ensure file data reaches stable storage, you must call \ref flush()
     /// before calling \c close().
+    ///
+    /// Close may return an error if failed to flush pending operations,
+    /// and this error is not recoverable, as close must not be called
+    /// more than once.  However, it always succeeds in the sense that the file
+    /// can be safely destroyed even when an error is returned.
     future<> close() noexcept;
 
     /// Returns a directory listing, given that this file object is a directory.

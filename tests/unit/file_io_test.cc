@@ -823,6 +823,50 @@ SEASTAR_TEST_CASE(test_destruct_append_challenged_file_after_write) {
     });
 }
 
+#ifdef SEASTAR_ENABLE_ALLOC_FAILURE_INJECTION
+static future<> _test_destruct_append_challenged_file_close_after_write_with_bad_alloc(file_open_options opts) {
+    return tmp_dir::do_with_thread([opts = std::move(opts)] (tmp_dir& t) {
+        auto& injector = memory::local_failure_injector();
+        uint64_t i = 0;
+        uint64_t errors = 0;
+        sstring filename = (t.get_path() / "testfile.tmp").native();
+        auto buf = allocate_aligned_buffer<unsigned char>(4096, 4096);
+        std::fill(buf.get(), buf.get() + 4096, 0);
+
+        do {
+            injector.cancel();
+            auto f = open_file_dma(filename, open_flags::rw | open_flags::create, opts).get0();
+            auto close_f = defer([&] () noexcept {
+                try {
+                    f.close().get();
+                } catch (const std::bad_alloc&) {
+                    // expected
+                    errors++;
+                }
+            });
+            for (uint64_t offs = 0; offs < 1200 * 1024; offs += 4096) {
+                f.dma_write(offs, buf.get(), 4096).get();
+            }
+            injector.fail_after(i++);
+        } while (injector.failed());
+        injector.cancel();
+
+        BOOST_REQUIRE(errors);
+    });
+}
+
+SEASTAR_TEST_CASE(test_destruct_append_challenged_file_close_after_write_with_bad_alloc) {
+    file_open_options opts;
+    return _test_destruct_append_challenged_file_close_after_write_with_bad_alloc(opts);
+}
+
+SEASTAR_TEST_CASE(test_destruct_append_challenged_file_close_after_write_with_bad_alloc_and_sloppy_size) {
+    file_open_options opts;
+    opts.sloppy_size = true;
+    return _test_destruct_append_challenged_file_close_after_write_with_bad_alloc(opts);
+}
+#endif
+
 SEASTAR_TEST_CASE(test_destruct_append_challenged_file_after_read) {
     return tmp_dir::do_with_thread([] (tmp_dir& t) {
         sstring filename = (t.get_path() / "testfile.tmp").native();
