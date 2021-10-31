@@ -23,8 +23,11 @@
 
 #include <seastar/core/semaphore.hh>
 #include <seastar/core/gate.hh>
+#include <seastar/core/on_internal_error.hh>
 
 namespace seastar {
+
+extern logger seastar_logger;
 
 /// \cond internal
 // lock / unlock semantics for rwlock, so it can be used with with_lock()
@@ -83,6 +86,10 @@ public:
     basic_rwlock()
             : _sem(max_ops) {
     }
+
+    basic_rwlock(basic_rwlock&&) = default;
+
+    virtual ~basic_rwlock() {}
 
     /// Cast this rwlock into read lock object with lock semantics appropriate to be used
     /// by "with_lock". The resulting object will have lock / unlock calls that, when called,
@@ -187,11 +194,20 @@ using rwlock = basic_rwlock<>;
 template<typename Clock>
 class basic_gated_rwlock : public basic_rwlock<Clock> {
 public:
+    virtual ~basic_gated_rwlock() {
+        if (!this->_sem.is_broken()) {
+            on_internal_error_noexcept(seastar_logger, "basic_gated_rwlock destroyed while open");
+        }
+    }
+
     /// close() waits for all lock holders to unlock the basic_gated_rwlock.
     /// and prevents any further locks to be acquired, similar to \ref gate::close().
     ///
     /// Trying to acquire the lock, or to close it again will
     /// fail with a future holding a \ref gate_closed_exception.
+    ///
+    /// The basic_gated_rwlock must be closed before it's destroyed
+    /// to prevent use-after-free by lock holders.
     future<> close() noexcept {
         return this->write_lock().then([this] {
             this->_sem.broken(gate_closed_exception());
