@@ -32,6 +32,7 @@
 #include <seastar/net/const.hh>
 #include <seastar/net/packet-util.hh>
 #include <seastar/util/std-compat.hh>
+#include <seastar/util/log.hh>
 #include <unordered_map>
 #include <map>
 #include <functional>
@@ -45,6 +46,8 @@
 #include <cryptopp/md5.h>
 
 namespace seastar {
+
+extern logger seastar_logger;
 
 using namespace std::chrono_literals;
 
@@ -436,7 +439,8 @@ private:
         future<> send(packet p);
         void connect();
         packet read();
-        void close();
+        // close always succeeds
+        void close() noexcept;
         void remove_from_tcbs() {
             auto id = connid{_local_ip, _foreign_ip, _local_port, _foreign_port};
             _tcp._tcbs.erase(id);
@@ -1804,7 +1808,7 @@ future<> tcp<InetTraits>::tcb::send(packet p) {
 }
 
 template <typename InetTraits>
-void tcp<InetTraits>::tcb::close() {
+void tcp<InetTraits>::tcb::close() noexcept {
     if (in_state(CLOSED) || _snd.closed) {
         return;
     }
@@ -1825,6 +1829,18 @@ void tcp<InetTraits>::tcb::close() {
         // tcp::tcb::get_packet(), packet with FIN will not be generated.
         output_one();
         output();
+    }).handle_exception([this, zis = this->shared_from_this()] (std::exception_ptr ex) {
+        _state = CLOSED;
+        try {
+            std::rethrow_exception(ex);
+        } catch (const std::system_error e) {
+            if (e.code().value() == ECONNRESET) {
+                return make_ready_future<>();
+            }
+        } catch (...) {
+        }
+        seastar_logger.warn("tcp::tcb::close failed with unexpected error: {}. Ignored", ex);
+        return make_ready_future<>();
     });
 }
 
