@@ -431,7 +431,7 @@ private:
         void output_one(bool data_retransmit = false);
         future<> wait_for_data();
         void abort_reader();
-        future<> wait_for_all_data_acked();
+        future<> wait_for_all_data_acked() noexcept;
         future<> wait_send_available();
         future<> send(packet p);
         void connect();
@@ -1739,7 +1739,7 @@ tcp<InetTraits>::tcb::abort_reader() {
 }
 
 template <typename InetTraits>
-future<> tcp<InetTraits>::tcb::wait_for_all_data_acked() {
+future<> tcp<InetTraits>::tcb::wait_for_all_data_acked() noexcept {
     if (_snd.data.empty() && _snd.unsent_len == 0) {
         return make_ready_future<>();
     }
