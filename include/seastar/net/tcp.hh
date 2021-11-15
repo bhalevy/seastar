@@ -433,7 +433,7 @@ private:
         void input_handle_other_state(tcp_hdr* th, packet p);
         void output_one(bool data_retransmit = false);
         future<> wait_for_data();
-        void abort_reader();
+        void abort_reader() noexcept;
         future<> wait_for_all_data_acked() noexcept;
         future<> wait_send_available();
         future<> send(packet p);
@@ -1734,7 +1734,7 @@ future<> tcp<InetTraits>::tcb::wait_for_data() {
 
 template <typename InetTraits>
 void
-tcp<InetTraits>::tcb::abort_reader() {
+tcp<InetTraits>::tcb::abort_reader() noexcept {
     if (_rcv._data_received_promise) {
         _rcv._data_received_promise->set_exception(
                 std::make_exception_ptr(std::system_error(ECONNABORTED, std::system_category())));
