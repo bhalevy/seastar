@@ -756,7 +756,7 @@ public:
     bool forward(forward_hash& out_hash_data, packet& p, size_t off);
     listener listen(uint16_t port, size_t queue_length = 100);
     connection connect(socket_address sa);
-    const net::hw_features& hw_features() const { return _inet._inet.hw_features(); }
+    const net::hw_features& hw_features() const noexcept { return _inet._inet.hw_features(); }
     future<> poll_tcb(ipaddr to, lw_shared_ptr<tcb> tcb);
     void add_connected_tcb(lw_shared_ptr<tcb> tcbp, uint16_t local_port) {
         auto it = _listening.find(local_port);
