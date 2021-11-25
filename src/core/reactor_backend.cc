@@ -26,6 +26,8 @@
 #include <seastar/core/internal/buffer_allocator.hh>
 #include <seastar/util/defer.hh>
 #include <seastar/util/read_first_line.hh>
+#include <seastar/core/lowres_clock.hh>
+
 #include <chrono>
 #include <sys/poll.h>
 #include <sys/syscall.h>
@@ -272,7 +274,8 @@ void aio_general_context::queue(linux_abi::iocb* iocb) {
 
 size_t aio_general_context::flush() {
     auto begin = iocbs.get();
-    auto retried = last;
+    constexpr lowres_clock::time_point no_time_point = lowres_clock::time_point(lowres_clock::duration(0));
+    auto retry_until = no_time_point;
     while (begin != last) {
         auto r = io_submit(io_context, last - begin, begin);
         if (__builtin_expect(r > 0, true)) {
@@ -280,11 +283,12 @@ size_t aio_general_context::flush() {
             continue;
         }
         // errno == EAGAIN is expected here. We don't explicitly assert that
-        // since the assert below requires that some progress will be
-        // made, preventing an endless loop for any reason.
-        if (need_preempt()) {
-            assert(retried != begin);
-            retried = begin;
+        // since the assert below prevents an endless loop for any reason.
+        if (retry_until == no_time_point) {
+            // allow retrying for 1 second
+            retry_until = lowres_clock::now() + 1s;
+        } else {
+            assert(lowres_clock::now() < retry_until);
         }
     }
     auto nr = last - iocbs.get();
