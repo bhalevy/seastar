@@ -23,10 +23,13 @@
 #include <seastar/core/loop.hh>
 #include <seastar/core/semaphore.hh>
 #include <seastar/core/print.hh>
+#include <seastar/core/on_internal_error.hh>
 #include <boost/range/algorithm/find_if.hpp>
 #include <vector>
 
 namespace seastar {
+
+extern logger seastar_logger;
 
 void smp_message_queue::work_item::process() {
     schedule(this);
@@ -34,6 +37,9 @@ void smp_message_queue::work_item::process() {
 
 struct smp_service_group_impl {
     std::vector<smp_service_group_semaphore> clients;   // one client per server shard
+#ifdef SEASTAR_DEBUG
+    unsigned version = 0;
+#endif
 };
 
 static smp_service_group_semaphore smp_service_group_management_sem{1, named_semaphore_exception_factory{"smp_service_group_management_sem"}};
@@ -61,6 +67,9 @@ future<smp_service_group> create_smp_service_group(smp_service_group_config ssgc
         return with_semaphore(smp_service_group_management_sem, 1, [ssgc] {
             auto it = boost::range::find_if(smp_service_groups, [&] (smp_service_group_impl& ssgi) { return ssgi.clients.empty(); });
             size_t id = it - smp_service_groups.begin();
+            if (id >= std::numeric_limits<uint16_t>::max()) {
+                return make_exception_future<smp_service_group>(std::runtime_error("Too many smp service groups"));
+            }
             return parallel_for_each(smp::all_cpus(), [ssgc, id] (unsigned cpu) {
               return smp::submit_to(cpu, [ssgc, id, cpu] {
                 if (id >= smp_service_groups.size()) {
@@ -82,7 +91,11 @@ future<smp_service_group> create_smp_service_group(smp_service_group_config ssgc
                     std::rethrow_exception(std::move(e));
                 });
             }).then([id] {
-                return smp_service_group(id);
+                auto ret = smp_service_group(id);
+#ifdef SEASTAR_DEBUG
+                ret._version = smp_service_groups[id].version;
+#endif
+                return ret;
             });
         });
     });
@@ -92,8 +105,19 @@ future<> destroy_smp_service_group(smp_service_group ssg) noexcept {
     return smp::submit_to(0, [ssg] {
         return with_semaphore(smp_service_group_management_sem, 1, [ssg] {
             auto id = internal::smp_service_group_id(ssg);
+            if (id >= smp_service_groups.size()) {
+                on_fatal_internal_error(seastar_logger, format("destroy_smp_service_group id={}: out of range", id));
+            }
+#ifdef SEASTAR_DEBUG
+            if (ssg._version != smp_service_groups[id].version) {
+                on_fatal_internal_error(seastar_logger, format("destroy_smp_service_group id={}: stale version={}: current_version={}", id, ssg._version, smp_service_groups[id].version));
+            }
+#endif
             return smp::invoke_on_all([id] {
                 smp_service_groups[id].clients.clear();
+#ifdef SEASTAR_DEBUG
+                ++smp_service_groups[id].version;
+#endif
             });
         });
     });

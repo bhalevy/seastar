@@ -101,13 +101,19 @@ struct smp_service_group_config {
 /// may form a cycle (and risking an ABBA deadlock). Create a
 /// new smp_service_group_instead.
 class smp_service_group {
+#ifndef SEASTAR_DEBUG
     unsigned _id;
+#else
+    uint16_t _id;
+    uint16_t _version = 0;
+#endif
 private:
     explicit smp_service_group(unsigned id) noexcept : _id(id) {}
 
     friend unsigned internal::smp_service_group_id(smp_service_group ssg) noexcept;
     friend smp_service_group default_smp_service_group() noexcept;
     friend future<smp_service_group> create_smp_service_group(smp_service_group_config ssgc) noexcept;
+    friend future<> destroy_smp_service_group(smp_service_group) noexcept;
 };
 
 inline
