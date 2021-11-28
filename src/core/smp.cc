@@ -19,6 +19,7 @@
  * Copyright 2019 ScyllaDB
  */
 
+#include "seastar/core/reactor.hh"
 #include <seastar/core/smp.hh>
 #include <seastar/core/loop.hh>
 #include <seastar/core/semaphore.hh>
@@ -89,9 +90,13 @@ future<smp_service_group> create_smp_service_group(smp_service_group_config ssgc
 }
 
 future<> destroy_smp_service_group(smp_service_group ssg) noexcept {
-    return smp::submit_to(0, [ssg] {
-        return with_semaphore(smp_service_group_management_sem, 1, [ssg] {
-            auto id = internal::smp_service_group_id(ssg);
+    auto id = internal::smp_service_group_id(ssg);
+    return smp::submit_to(0, [id] {
+        return with_semaphore(smp_service_group_management_sem, 1, [id] {
+            if (id >= smp_service_groups.size()) {
+                on_internal_error_noexcept(seastar_logger, format("Invalid smp_service_group {}", id));
+                return make_ready_future<>();
+            }
             return smp::invoke_on_all([id] {
                 smp_service_groups[id].clients.clear();
             });

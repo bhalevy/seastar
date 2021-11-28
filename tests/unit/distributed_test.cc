@@ -22,12 +22,14 @@
 
 #include <seastar/testing/test_case.hh>
 #include <seastar/testing/thread_test_case.hh>
+#include <seastar/testing/on_internal_error.hh>
 #include <seastar/core/distributed.hh>
 #include <seastar/core/loop.hh>
 #include <seastar/core/semaphore.hh>
 #include <seastar/core/sleep.hh>
 #include <seastar/core/thread.hh>
 #include <seastar/core/print.hh>
+#include <seastar/core/smp.hh>
 #include <seastar/util/defer.hh>
 #include <seastar/util/closeable.hh>
 #include <mutex>
@@ -340,4 +342,13 @@ SEASTAR_THREAD_TEST_CASE(test_sharded_parameter) {
 
     auto all_ok = s_service.map_reduce0(std::mem_fn(&some_service::ok), true, std::multiplies<>()).get0();
     BOOST_REQUIRE(all_ok);
+}
+
+SEASTAR_THREAD_TEST_CASE(destroy_invalid_smp_service_group) {
+    std::array<char, sizeof(smp_service_group)> data;
+    // make a corrupt smp_service_group
+    std::memset(&data[0], ~0, sizeof(data));
+    smp_service_group* ssgp = (smp_service_group*)(&data[0]);
+    auto snaoie = testing::scoped_no_abort_on_internal_error();
+    destroy_smp_service_group(*ssgp).get();
 }
