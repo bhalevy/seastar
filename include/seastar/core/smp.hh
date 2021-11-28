@@ -133,6 +133,8 @@ future<smp_service_group> create_smp_service_group(smp_service_group_config ssgc
 ///
 /// Frees all resources used by an smp_service_group. It must not
 /// be used again once this function is called.
+///
+/// Note: the function aborts on internal error if smp_service_group is invalid.
 future<> destroy_smp_service_group(smp_service_group ssg) noexcept;
 
 inline
