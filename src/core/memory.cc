@@ -109,9 +109,11 @@ namespace internal {
 #ifdef SEASTAR_ENABLE_ALLOC_FAILURE_INJECTION
 
 #ifdef __cpp_constinit
-thread_local constinit int critical_alloc_section = 0;
+#define SEASTAR_CONSTINIT constinit
+thread_local constinit volatile int critical_alloc_section = 0;
 #else
-__thread int critical_alloc_section = 0;
+#define SEASTAR_CONSTINIT
+__thread volatile int critical_alloc_section = 0;
 #endif
 
 #endif  // SEASTAR_ENABLE_ALLOC_FAILURE_INJECTION
