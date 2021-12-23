@@ -42,18 +42,11 @@ namespace httpd {
 class match_rule {
 public:
     /**
-     * The destructor deletes matchers.
-     */
-    ~match_rule() {
-        delete _handler;
-    }
-
-    /**
      * Constructor with a handler
      * @param handler the handler to return when this match rule is met
      */
-    explicit match_rule(handler_base* handler)
-            : _handler(handler) {
+    explicit match_rule(handler_base handler)
+            : _handler(std::move(handler)) {
     }
 
     /**
@@ -66,7 +59,7 @@ public:
     handler_base* get(const sstring& url, parameters& params) {
         size_t ind = 0;
         if (_match_list.empty()) {
-            return _handler;
+            return &_handler;
         }
         for (unsigned int i = 0; i < _match_list.size(); i++) {
             ind = _match_list.at(i).match(url, ind, params);
@@ -74,7 +67,7 @@ public:
                 return nullptr;
             }
         }
-        return (ind + 1 >= url.length()) ? _handler : nullptr;
+        return (ind + 1 >= url.length()) ? &_handler : nullptr;
     }
 
     /**
@@ -111,7 +104,7 @@ public:
 
 private:
     std::vector<matcher> _match_list;
-    handler_base* _handler;
+    handler_base _handler;
 };
 
 }

@@ -27,15 +27,15 @@ namespace httpd {
 
 using namespace std;
 
-void path_description::set(routes& _routes, handler_base* handler) const {
+void path_description::set(routes& _routes, handler_base handler) const {
     for (auto& i : mandatory_queryparams) {
-        handler->mandatory(i);
+        handler.mandatory(i);
     }
 
     if (params.size() == 0)
-        _routes.put(operations.method, path, handler);
+        _routes.put(operations.method, path, std::move(handler));
     else {
-        auto rule = std::make_unique<match_rule>(handler);
+        auto rule = std::make_unique<match_rule>(std::move(handler));
         rule->add_str(path);
         for (auto&& i : params) {
             if (i.type == url_component_type::FIXED_STRING) {
@@ -50,11 +50,11 @@ void path_description::set(routes& _routes, handler_base* handler) const {
 
 void path_description::set(routes& _routes,
         const json_request_function& f) const {
-    set(_routes, new function_handler(f));
+    set(_routes, handler_base(std::make_unique<function_handler>(f)));
 }
 
 void path_description::set(routes& _routes, const future_json_function& f) const {
-    set(_routes, new function_handler(f));
+    set(_routes, handler_base(std::make_unique<function_handler>(f)));
 }
 
 void path_description::unset(routes& _routes) const {

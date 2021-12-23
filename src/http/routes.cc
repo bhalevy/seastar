@@ -27,6 +27,8 @@
 
 namespace seastar {
 
+extern logger hlogger;
+
 namespace httpd {
 
 using namespace std;
@@ -39,14 +41,6 @@ void verify_param(const request& req, const sstring& param) {
 routes::routes() : _general_handler([this](std::exception_ptr eptr) mutable {
     return exception_reply(eptr);
 }) {}
-
-routes::~routes() {
-    for (int i = 0; i < NUM_OPERATION; i++) {
-        for (auto kv : _map[i]) {
-            delete kv.second;
-        }
-    }
-}
 
 std::unique_ptr<reply> routes::exception_reply(std::exception_ptr eptr) {
     auto rep = std::make_unique<reply>();
@@ -80,7 +74,7 @@ future<std::unique_ptr<reply> > routes::handle(const sstring& path, std::unique_
             normalize_url(path), req->param);
     if (handler != nullptr) {
         try {
-            for (auto& i : handler->_mandatory_param) {
+            for (const auto& i : handler->mandatory_params()) {
                 verify_param(*req.get(), i);
             }
             auto r =  handler->handle(path, std::move(req), std::move(rep));
@@ -122,12 +116,15 @@ handler_base* routes::get_handler(operation_type type, const sstring& url,
         }
         params.clear();
     }
-    return _default_handler;
+    if (_default_handler) {
+        return &*_default_handler;
+    }
+    return nullptr;
 }
 
 routes& routes::add(operation_type type, const url& url,
-        handler_base* handler) {
-    auto rule = std::make_unique<match_rule>(handler);
+        handler_base handler) {
+    auto rule = std::make_unique<match_rule>(std::move(handler));
     rule->add_str(url._path);
     if (url._param != "") {
         rule->add_param(url._param, true);
@@ -135,8 +132,8 @@ routes& routes::add(operation_type type, const url& url,
     return add(std::move(rule), type);
 }
 
-routes& routes::add_default_handler(handler_base* handler) {
-    _default_handler = handler;
+routes& routes::add_default_handler(handler_base handler) {
+    _default_handler.emplace(std::move(handler));
     return *this;
 }
 
@@ -153,12 +150,12 @@ static auto delete_rule_from(operation_type type, Key& key, Map& map) {
     return static_cast<ret_type>(nullptr);
 }
 
-handler_base* routes::drop(operation_type type, const sstring& url) {
-    return delete_rule_from(type, url, _map);
+void routes::drop(operation_type type, const sstring& url) {
+    delete_rule_from(type, url, _map);
 }
 
-routes& routes::put(operation_type type, const sstring& url, handler_base* handler) {
-    auto it = _map[type].emplace(url, handler);
+routes& routes::put(operation_type type, const sstring& url, handler_base handler) {
+    auto it = _map[type].emplace(url, std::move(handler));
     if (it.second == false) {
         throw std::runtime_error(format("Handler for {} already exists.", url));
     }
@@ -189,7 +186,8 @@ void routes::add_alias(const path_description& old_path, const path_description&
         throw std::runtime_error("routes::add_alias path_description not found: " + old_path.path);
     }
     // if a handler is found then it must be a function_handler
-    new_path.set(*this, new function_handler(*static_cast<function_handler*>(a)));
+    auto fh = static_cast<function_handler*>(a->get_impl());
+    new_path.set(*this, handler_base(std::make_unique<function_handler>(*fh)));
 }
 
 rule_registration::rule_registration(routes& rs, std::unique_ptr<match_rule> rule, operation_type op)
@@ -200,9 +198,9 @@ rule_registration::~rule_registration() {
     _routes.del_cookie(_cookie, _op);
 }
 
-handler_registration::handler_registration(routes& rs, handler_base& h, const sstring& url, operation_type op)
+handler_registration::handler_registration(routes& rs, handler_base h, const sstring& url, operation_type op)
         : _routes(rs), _url(url), _op(op) {
-    _routes.put(_op, _url, &h);
+    _routes.put(_op, _url, std::move(h));
 }
 
 handler_registration::~handler_registration() {

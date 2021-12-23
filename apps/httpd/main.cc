@@ -49,16 +49,16 @@ public:
 };
 
 void set_routes(routes& r) {
-    function_handler* h1 = new function_handler([](const_req req) {
+    auto fh1 = handler_base(std::make_unique<function_handler>([](const_req req) {
         return "hello";
-    });
-    function_handler* h2 = new function_handler([](std::unique_ptr<request> req) {
+    }));
+    auto fh2 = handler_base(std::make_unique<function_handler>([](std::unique_ptr<request> req) {
         return make_ready_future<json::json_return_type>("json-future");
-    });
-    r.add(operation_type::GET, url("/"), h1);
-    r.add(operation_type::GET, url("/jf"), h2);
-    r.add(operation_type::GET, url("/file").remainder("path"),
-            new directory_handler("/"));
+    }));
+    auto dh = handler_base(std::make_unique<directory_handler>("/"));
+    r.add(operation_type::GET, url("/"), std::move(fh1));
+    r.add(operation_type::GET, url("/jf"), std::move(fh2));
+    r.add(operation_type::GET, url("/file").remainder("path"), std::move(dh));
     demo_json::hello_world.set(r, [] (const_req req) {
         demo_json::my_object obj;
         obj.var1 = req.param.at("var1");
