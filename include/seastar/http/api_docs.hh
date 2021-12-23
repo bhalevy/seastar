@@ -97,7 +97,7 @@ struct api_docs : public json::json_base {
     }
 };
 
-class api_registry_base : public handler_base {
+class api_registry_base : public handler_base::impl {
 protected:
     sstring _base_path;
     sstring _file_directory;
@@ -110,9 +110,6 @@ public:
                     routes) {
     }
 
-    void set_route(handler_base* h) {
-        _routes.put(GET, _base_path, h);
-    }
     virtual ~api_registry_base() = default;
 };
 
@@ -122,7 +119,6 @@ public:
     api_registry(routes& routes, const sstring& file_directory,
             const sstring& base_path)
             : api_registry_base(routes, file_directory, base_path) {
-        set_route(this);
     }
 
     future<std::unique_ptr<reply>> handle(const sstring& path,
@@ -141,9 +137,9 @@ public:
         sstring path =
                 (alternative_path == "") ?
                         _file_directory + api + ".json" : alternative_path;
-        file_handler* index = new file_handler(path,
+        auto index = std::make_unique<file_handler>(path,
                 std::make_unique<content_replace>("json"));
-        _routes.put(GET, _base_path + "/" + api, index);
+        _routes.put(GET, _base_path + "/" + api, handler_base(std::move(index)));
     }
 };
 
@@ -153,6 +149,12 @@ protected:
     sstring _base_path;
     static const sstring DEFAULT_DIR;
     static const sstring DEFAULT_PATH;
+
+    template <typename Impl>
+    void set_route(routes& r) {
+        auto impl = std::make_unique<Impl>(r, _file_directory, _base_path);
+        r.put(GET, _base_path, handler_base(std::move(impl)));
+    }
 public:
     api_registry_builder_base(const sstring& file_directory = DEFAULT_DIR,
             const sstring& base_path = DEFAULT_PATH)
@@ -168,7 +170,7 @@ public:
     }
 
     void set_api_doc(routes& r) {
-        new api_registry(r, _file_directory, _base_path);
+        set_route<api_registry>(r);
     }
 
     void register_function(routes& r, const sstring& api,
@@ -177,7 +179,7 @@ public:
         if (h) {
             // if a handler is found, it was added there by the api_registry_builder
             // with the set_api_doc method, so we know it's the type
-            static_cast<api_registry*>(h)->reg(api, description, alternative_path);
+            static_cast<api_registry*>(h->get_impl())->reg(api, description, alternative_path);
         };
     }
 };
@@ -255,7 +257,6 @@ public:
     api_registry_20(routes& routes, const sstring& file_directory,
             const sstring& base_path)
             : api_registry_base(routes, file_directory, base_path) {
-        set_route(this);
     }
 
     future<std::unique_ptr<reply>> handle(const sstring& path,
@@ -281,7 +282,7 @@ class api_registry_builder20 : public api_registry_builder_base {
         if (h) {
             // if a handler is found, it was added there by the api_registry_builder
             // with the set_api_doc method, so we know it's the type
-            return static_cast<api_registry_20*>(h);
+            return static_cast<api_registry_20*>(h->get_impl());
         }
         return nullptr;
     }
@@ -293,7 +294,7 @@ public:
     }
 
     void set_api_doc(routes& r) {
-        new api_registry_20(r, _file_directory, _base_path);
+        set_route<api_registry_20>(r);
     }
 
     /*!

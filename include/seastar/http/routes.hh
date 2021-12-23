@@ -77,24 +77,19 @@ struct path_description;
 class routes {
 public:
     /**
-     * The destructor deletes the match rules and handlers
-     */
-    ~routes();
-
-    /**
      * adding a handler as an exact match
      * @param url the url to match (note that url should start with /)
      * @param handler the desire handler
      * @return it self
      */
-    routes& put(operation_type type, const sstring& url, handler_base* handler);
+    routes& put(operation_type type, const sstring& url, handler_base handler);
 
     /**
      * removing a handler from exact match
      * @param url the url to match (note that url should start with /)
      * @return the current handler (to be removed by caller)
      */
-    handler_base* drop(operation_type type, const sstring& url);
+    void drop(operation_type type, const sstring& url);
 
     /**
      * add a rule to be used.
@@ -118,7 +113,7 @@ public:
      * @param handler
      * @return
      */
-    routes& add(operation_type type, const url& url, handler_base* handler);
+    routes& add(operation_type type, const url& url, handler_base handler);
 
     /**
      * Add a default handler - handles any HTTP Method and Path (/\*) combination:
@@ -126,7 +121,7 @@ public:
      * @param handler
      * @return
      */
-    routes& add_default_handler(handler_base* handler);
+    routes& add_default_handler(handler_base handler);
 
     /**
      * the main entry point.
@@ -145,9 +140,9 @@ public:
      * @param url the request url
      * @return the handler if exists or nullptr if it does not
      */
-    handler_base* get_exact_match(operation_type type, const sstring& url) const {
+    handler_base* get_exact_match(operation_type type, const sstring& url) {
         auto i = _map[type].find(url);
-        return (i == _map[type].end()) ? nullptr : i->second;
+        return (i == _map[type].end()) ? nullptr : &i->second;
     }
 
     /**
@@ -170,14 +165,14 @@ private:
      */
     sstring normalize_url(const sstring& url);
 
-    std::unordered_map<sstring, handler_base*> _map[NUM_OPERATION];
+    std::unordered_map<sstring, handler_base> _map[NUM_OPERATION];
 public:
     using rule_cookie = uint64_t;
 private:
     rule_cookie _rover = 0;
     std::map<rule_cookie, std::unique_ptr<match_rule>> _rules[NUM_OPERATION];
     //default Handler -- for any HTTP Method and Path (/*)
-    handler_base* _default_handler = nullptr;
+    std::optional<handler_base> _default_handler;
 public:
     using exception_handler_fun = std::function<std::unique_ptr<reply>(std::exception_ptr eptr)>;
     using exception_handler_id = size_t;
@@ -261,7 +256,7 @@ public:
      * @param url the url to match
      * @param op the operation type (`GET` by default)
      */
-    handler_registration(routes& rs, handler_base& h, const sstring& url, operation_type op = GET);
+    handler_registration(routes& rs, handler_base h, const sstring& url, operation_type op = GET);
 
     /**
      * Unregisters the handler from routes with routes::drop

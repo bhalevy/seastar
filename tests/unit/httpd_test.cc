@@ -28,7 +28,7 @@
 using namespace seastar;
 using namespace httpd;
 
-class handl : public httpd::handler_base {
+class handl : public httpd::handler_base::impl {
 public:
     virtual future<std::unique_ptr<reply> > handle(const sstring& path,
             std::unique_ptr<request> req, std::unique_ptr<reply> rep) {
@@ -69,11 +69,12 @@ SEASTAR_TEST_CASE(test_match_rule)
 {
 
     parameters param;
-    handl* h = new handl();
-    match_rule mr(h);
+    auto h = std::make_unique<handl>();
+    auto hp = h.get();
+    match_rule mr(handler_base(std::move(h)));
     mr.add_str("/hello").add_param("param");
     httpd::handler_base* res = mr.get("/hello/val1", param);
-    BOOST_REQUIRE_EQUAL(res, h);
+    BOOST_REQUIRE_EQUAL(res->get_impl(), hp);
     BOOST_REQUIRE_EQUAL(param["param"], "val1");
     res = mr.get("/hell/val1", param);
     httpd::handler_base* nl = nullptr;
@@ -86,14 +87,15 @@ SEASTAR_TEST_CASE(test_match_rule_order)
     parameters param;
     routes route;
 
-    handl* h1 = new handl();
-    route.add(operation_type::GET, url("/hello"), h1);
+    auto h = std::make_unique<handl>();
+    handl* h1 = h.get();
+    route.add(operation_type::GET, url("/hello"), handler_base(std::move(h)));
 
-    handl* h2 = new handl();
-    route.add(operation_type::GET, url("/hello"), h2);
+    h = std::make_unique<handl>();
+    route.add(operation_type::GET, url("/hello"), handler_base(std::move(h)));
 
     auto rh = route.get_handler(GET, "/hello", param);
-    BOOST_REQUIRE_EQUAL(rh, h1);
+    BOOST_REQUIRE_EQUAL(rh->get_impl(), h1);
 
     return make_ready_future<>();
 }
@@ -102,12 +104,13 @@ SEASTAR_TEST_CASE(test_put_drop_rule)
 {
     routes rts;
     auto h = std::make_unique<handl>();
+    auto hp = h.get();
     parameters params;
 
     {
-        auto reg = handler_registration(rts, *h, "/hello", operation_type::GET);
+        auto reg = handler_registration(rts, handler_base(std::move(h)), "/hello", operation_type::GET);
         auto res = rts.get_handler(operation_type::GET, "/hello", params);
-        BOOST_REQUIRE_EQUAL(res, h.get());
+        BOOST_REQUIRE_EQUAL(res->get_impl(), hp);
     }
 
     auto res = rts.get_handler(operation_type::GET, "/hello", params);
@@ -129,14 +132,15 @@ SEASTAR_TEST_CASE(test_duplicated_exact_rule)
     parameters param;
     routes route;
 
-    handl* h1 = new handl;
-    route.put(operation_type::GET, "/hello", h1);
+    auto h = handler_base(std::make_unique<handl>());
+    route.put(operation_type::GET, "/hello", std::move(h));
 
-    handl* h2 = new handl;
-    BOOST_REQUIRE_THROW(route.put(operation_type::GET, "/hello", h2), std::runtime_error);
+    h = handler_base(std::make_unique<handl>());
+    BOOST_REQUIRE_THROW(route.put(operation_type::GET, "/hello", std::move(h)), std::runtime_error);
 
-    delete route.drop(operation_type::GET, "/hello");
-    route.put(operation_type::GET, "/hello", h2);
+    route.drop(operation_type::GET, "/hello");
+    h = handler_base(std::make_unique<handl>());
+    route.put(operation_type::GET, "/hello", std::move(h));
 
     return make_ready_future<>();
 }
@@ -144,15 +148,17 @@ SEASTAR_TEST_CASE(test_duplicated_exact_rule)
 SEASTAR_TEST_CASE(test_add_del_cookie)
 {
     routes rts;
-    handl* h = new handl();
-    auto mr = std::make_unique<match_rule>(h);
+    auto impl = std::make_unique<handl>();
+    auto hp = impl.get();
+    auto h = handler_base(std::move(impl));
+    auto mr = std::make_unique<match_rule>(std::move(h));
     mr->add_str("/hello");
     parameters params;
 
     {
         auto reg = rule_registration(rts, std::move(mr), operation_type::GET);
         auto res = rts.get_handler(operation_type::GET, "/hello", params);
-        BOOST_REQUIRE_EQUAL(res, h);
+        BOOST_REQUIRE_EQUAL(res->get_impl(), hp);
     }
 
     auto res = rts.get_handler(operation_type::GET, "/hello", params);
@@ -203,11 +209,9 @@ SEASTAR_TEST_CASE(test_decode_url) {
 }
 
 SEASTAR_TEST_CASE(test_routes) {
-    handl* h1 = new handl();
-    handl* h2 = new handl();
     routes route;
-    route.add(operation_type::GET, url("/api").remainder("path"), h1);
-    route.add(operation_type::GET, url("/"), h2);
+    route.add(operation_type::GET, url("/api").remainder("path"), handler_base(std::make_unique<handl>()));
+    route.add(operation_type::GET, url("/"), handler_base(std::make_unique<handl>()));
     std::unique_ptr<request> req = std::make_unique<request>();
     std::unique_ptr<reply> rep = std::make_unique<reply>();
 
@@ -509,7 +513,7 @@ public:
                 });
 
                 auto server_setup = seastar::async([&server, &write_func] {
-                    class test_handler : public handler_base {
+                    class test_handler : public handler_base::impl {
                         size_t count = 0;
                         http_server& _server;
                         std::function<future<>(output_stream<char> &&)> _write_func;
@@ -528,8 +532,9 @@ public:
                             return _all_message_sent.get_future();
                         }
                     };
-                    auto handler = new test_handler(*server, std::move(write_func));
-                    server->_routes.put(GET, "/test", handler);
+                    auto impl = std::make_unique<test_handler>(*server, std::move(write_func));
+                    auto handler = impl.get();
+                    server->_routes.put(GET, "/test", handler_base(std::move(impl)));
                     when_all(server->do_accepts(0), handler->wait_for_message()).get();
                 });
                 return when_all(std::move(client), std::move(server_setup));
@@ -577,7 +582,7 @@ public:
                 });
 
                 auto server_setup = seastar::async([&server, tests] {
-                    class test_handler : public handler_base {
+                    class test_handler : public handler_base::impl {
                         size_t count = 0;
                         http_server& _server;
                         std::vector<std::tuple<bool, size_t>> _tests;
@@ -598,8 +603,9 @@ public:
                             return _all_message_sent.get_future();
                         }
                     };
-                    auto handler = new test_handler(*server, tests);
-                    server->_routes.put(GET, "/test", handler);
+                    auto impl = std::make_unique<test_handler>(*server, tests);
+                    auto handler = impl.get();
+                    server->_routes.put(GET, "/test", handler_base(std::move(impl)));
                     when_all(server->do_accepts(0), handler->wait_for_message()).get();
                 });
                 return when_all(std::move(client), std::move(server_setup));
@@ -728,7 +734,7 @@ SEASTAR_TEST_CASE(json_stream) {
     });
 }
 
-class json_test_handler : public handler_base {
+class json_test_handler : public handler_base::impl {
     std::function<future<>(output_stream<char> &&)> _write_func;
 public:
     json_test_handler(std::function<future<>(output_stream<char> &&)>&& write_func) : _write_func(write_func) {
@@ -739,6 +745,10 @@ public:
         return make_ready_future<std::unique_ptr<reply>>(std::move(rep));
     }
 };
+
+handler_base make_json_test_handler(std::function<future<>(output_stream<char> &&)> write_func) {
+    return handler_base(std::make_unique<json_test_handler>(std::move(write_func)));
+}
 
 SEASTAR_TEST_CASE(content_length_limit) {
     return seastar::async([] {
@@ -773,8 +783,7 @@ SEASTAR_TEST_CASE(content_length_limit) {
             output.close().get();
         });
 
-        auto handler = new json_test_handler(json::stream_object("hello"));
-        server._routes.put(GET, "/test", handler);
+        server._routes.put(GET, "/test", make_json_test_handler(json::stream_object("hello")));
         server.do_accepts(0).get();
 
         client.get();
@@ -828,8 +837,7 @@ SEASTAR_TEST_CASE(test_100_continue) {
             output.close().get();
         });
 
-        auto handler = new json_test_handler(json::stream_object("hello"));
-        server._routes.put(GET, "/test", handler);
+        server._routes.put(GET, "/test", make_json_test_handler(json::stream_object("hello")));
         server.do_accepts(0).get();
 
         client.get();
@@ -860,8 +868,7 @@ SEASTAR_TEST_CASE(test_unparsable_request) {
             output.close().get();
         });
 
-        auto handler = new json_test_handler(json::stream_object("hello"));
-        server._routes.put(GET, "/test", handler);
+        server._routes.put(GET, "/test", make_json_test_handler(json::stream_object("hello")));
         server.do_accepts(0).get();
 
         client.get();
@@ -872,7 +879,7 @@ SEASTAR_TEST_CASE(test_unparsable_request) {
 /*
  * A request handler that responds with the same body that was used in the request using the requests content_stream
  *  */
-struct echo_stream_handler : public handler_base {
+struct echo_stream_handler : public handler_base::impl {
     echo_stream_handler() = default;
     future<std::unique_ptr<reply>> handle(const sstring& path,
             std::unique_ptr<request> req, std::unique_ptr<reply> rep) override {
@@ -901,10 +908,14 @@ struct echo_stream_handler : public handler_base {
     }
 };
 
+handler_base make_echo_stream_handler() {
+    return handler_base(std::make_unique<echo_stream_handler>());
+}
+
 /*
  * Same handler as above, but without using streams
  *  */
-struct echo_string_handler : public handler_base {
+struct echo_string_handler : public handler_base::impl {
     echo_string_handler() = default;
     future<std::unique_ptr<reply>> handle(const sstring& path,
             std::unique_ptr<request> req, std::unique_ptr<reply> rep) override {
@@ -925,12 +936,16 @@ struct echo_string_handler : public handler_base {
     }
 };
 
+handler_base make_echo_string_handler() {
+    return handler_base(std::make_unique<echo_string_handler>());
+}
+
 /*
  * Checks if the server responds to the request equivalent to the concatenation of all req_parts with a reply containing
  * the resp_parts strings, assuming that the content streaming is set to stream and the /test route is handled by handl
  * */
-future<> check_http_reply (std::vector<sstring>&& req_parts, std::vector<std::string>&& resp_parts, bool stream, handler_base* handl) {
-    return seastar::async([req_parts = std::move(req_parts), resp_parts = std::move(resp_parts), stream, handl] {
+future<> check_http_reply (std::vector<sstring>&& req_parts, std::vector<std::string>&& resp_parts, bool stream, handler_base handl) {
+    return seastar::async([req_parts = std::move(req_parts), resp_parts = std::move(resp_parts), stream, handl = std::move(handl)] () mutable {
         loopback_connection_factory lcf;
         http_server server("test");
         server.set_content_streaming(stream);
@@ -954,7 +969,7 @@ future<> check_http_reply (std::vector<sstring>&& req_parts, std::vector<std::st
             output.close().get();
         });
 
-        server._routes.put(GET, "/test", handl);
+        server._routes.put(GET, "/test", std::move(handl));
         server.do_accepts(0).get();
 
         client.get();
@@ -1028,8 +1043,7 @@ SEASTAR_TEST_CASE(test_streamed_content) {
             output.close().get();
         });
 
-        auto handler = new echo_stream_handler();
-        server._routes.put(GET, "/test", handler);
+        server._routes.put(GET, "/test", make_echo_stream_handler());
         server.do_accepts(0).get();
 
         client.get();
@@ -1043,7 +1057,7 @@ SEASTAR_TEST_CASE(test_not_implemented_encoding) {
         "a\r\n1234567890\r\n",
         "a\r\n1234521345\r\n",
         "0\r\n\r\n"
-    }, {"501 Not Implemented", "Encodings other than \"chunked\" are not implemented (received encoding: \"gzip, chunked\")"}, false, new echo_string_handler());
+    }, {"501 Not Implemented", "Encodings other than \"chunked\" are not implemented (received encoding: \"gzip, chunked\")"}, false, make_echo_string_handler());
 }
 
 SEASTAR_TEST_CASE(test_string_content) {
@@ -1111,8 +1125,7 @@ SEASTAR_TEST_CASE(test_string_content) {
             output.close().get();
         });
 
-        auto handler = new echo_string_handler();
-        server._routes.put(GET, "/test", handler);
+        server._routes.put(GET, "/test", make_echo_string_handler());
         server.do_accepts(0).get();
 
         client.get();
@@ -1128,7 +1141,7 @@ SEASTAR_TEST_CASE(test_full_chunk_format) {
         "0\r\na:b\r\n~|`_^.+*'&%$#!-0a:  ~!@#$%^&*()_+\x80\x81\xff\r\n  obs fold  \r\n\r\n"
     }, {"12345678901234521345", "abc-def", "hello=world", "aaaa", "a0-!#$%&'*+.^_`|~=quoted string obstext\x80\x81\xff quoted_pair: a",
         "a: b", "~|`_^.+*'&%$#!-0a: ~!@#$%^&*()_+\x80\x81\xff obs fold"
-    }, false, new echo_string_handler());
+    }, false, make_echo_string_handler());
 }
 
 SEASTAR_TEST_CASE(test_chunk_extension_parser_fail) {
@@ -1136,7 +1149,7 @@ SEASTAR_TEST_CASE(test_chunk_extension_parser_fail) {
         "GET /test HTTP/1.1\r\nHost: test\r\nTransfer-Encoding: chunked\r\n\r\n",
         "7; \r\nnoparse\r\n",
         "0\r\n\r\n"
-    }, {"400 Bad Request", "Can't parse chunk size and extensions"}, false, new echo_string_handler());
+    }, {"400 Bad Request", "Can't parse chunk size and extensions"}, false, make_echo_string_handler());
 }
 
 SEASTAR_TEST_CASE(test_trailer_part_parser_fail) {
@@ -1144,7 +1157,7 @@ SEASTAR_TEST_CASE(test_trailer_part_parser_fail) {
         "GET /test HTTP/1.1\r\nHost: test\r\nTransfer-Encoding: chunked\r\n\r\n",
         "8\r\nparsable\r\n",
         "0\r\ngood:header\r\nbad=header\r\n\r\n"
-    }, {"400 Bad Request", "Can't parse chunked request trailer"}, false, new echo_string_handler());
+    }, {"400 Bad Request", "Can't parse chunked request trailer"}, false, make_echo_string_handler());
 }
 
 SEASTAR_TEST_CASE(test_too_long_chunk) {
@@ -1153,7 +1166,7 @@ SEASTAR_TEST_CASE(test_too_long_chunk) {
         "a\r\n1234567890\r\n",
         "a\r\n1234521345X\r\n",
         "0\r\n\r\n"
-    }, {"400 Bad Request", "The actual chunk length exceeds the specified length"}, true, new echo_stream_handler());
+    }, {"400 Bad Request", "The actual chunk length exceeds the specified length"}, true, make_echo_stream_handler());
 }
 
 SEASTAR_TEST_CASE(test_bad_chunk_length) {
@@ -1162,7 +1175,7 @@ SEASTAR_TEST_CASE(test_bad_chunk_length) {
         "a\r\n1234567890\r\n",
         "aX\r\n1234521345\r\n",
         "0\r\n\r\n"
-    }, {"400 Bad Request", "Can't parse chunk size and extensions"}, true, new echo_stream_handler());
+    }, {"400 Bad Request", "Can't parse chunk size and extensions"}, true, make_echo_stream_handler());
 }
 
 SEASTAR_TEST_CASE(case_insensitive_header) {

@@ -64,7 +64,7 @@ typedef std::function<
  * This is suited for very simple handlers
  *
  */
-class function_handler : public handler_base {
+class function_handler : public handler_base::impl {
 public:
 
     function_handler(const handle_function & f_handle, const sstring& type)

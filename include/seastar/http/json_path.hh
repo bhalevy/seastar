@@ -176,7 +176,7 @@ struct path_description {
 
     std::vector<sstring> mandatory_queryparams;
 
-    void set(routes& _routes, handler_base* handler) const;
+    void set(routes& _routes, handler_base handler) const;
 
     void set(routes& _routes, const json_request_function& f) const;
 

@@ -545,7 +545,7 @@ future<> write_text_representation(output_stream<char>& out, const config& ctx, 
     });
 }
 
-class metrics_handler : public handler_base  {
+class metrics_handler : public handler_base::impl  {
     sstring _prefix;
     config _ctx;
 
@@ -597,7 +597,7 @@ public:
 
 
 future<> add_prometheus_routes(http_server& server, config ctx) {
-    server._routes.put(GET, "/metrics", new metrics_handler(ctx));
+    server._routes.put(GET, "/metrics", handler_base(std::make_unique<metrics_handler>(ctx)));
     return make_ready_future<>();
 }
 

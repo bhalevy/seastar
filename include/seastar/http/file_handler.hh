@@ -60,7 +60,7 @@ public:
  * they both needs to read a file from the disk, optionally transform it,
  * and return the result or page not found on error
  */
-class file_interaction_handler : public handler_base {
+class file_interaction_handler : public handler_base::impl {
 public:
     file_interaction_handler(std::unique_ptr<file_transformer> p = nullptr)
             : transformer(std::move(p)) {
@@ -76,6 +76,8 @@ public:
         transformer = std::move(t);
         return this;
     }
+
+    ~file_interaction_handler() = default;
 
     /**
      * if the url ends without a slash redirect

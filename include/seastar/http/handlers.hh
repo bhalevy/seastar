@@ -41,6 +41,8 @@ typedef const httpd::request& const_req;
  */
 class handler_base {
 public:
+  class impl {
+  public:
     /**
      * All handlers should implement this method.
      *  It fill the reply according to the request.
@@ -51,20 +53,48 @@ public:
     virtual future<std::unique_ptr<reply> > handle(const sstring& path,
             std::unique_ptr<request> req, std::unique_ptr<reply> rep) = 0;
 
-    virtual ~handler_base() = default;
+    virtual ~impl() = default;
 
     /**
      * Add a mandatory parameter
      * @param param a parameter name
      * @return a reference to the handler
      */
-    handler_base& mandatory(const sstring& param) {
+    void mandatory(const sstring& param) {
         _mandatory_param.push_back(param);
+    }
+
+  protected:
+    std::vector<sstring> _mandatory_param;
+
+    friend class handler_base;
+  };
+
+    handler_base(std::unique_ptr<impl> impl) noexcept : _impl(std::move(impl)) {}
+    handler_base(handler_base&&) = default;
+
+    handler_base& operator=(handler_base&&) = default;
+
+    future<std::unique_ptr<reply> > handle(const sstring& path,
+            std::unique_ptr<request> req, std::unique_ptr<reply> rep) {
+        return _impl->handle(path, std::move(req), std::move(rep));
+    }
+
+    handler_base& mandatory(const sstring& param) {
+        _impl->mandatory(param);
         return *this;
     }
 
-    std::vector<sstring> _mandatory_param;
+    const std::vector<sstring>& mandatory_params() const {
+        return _impl->_mandatory_param;
+    };
 
+    impl* get_impl() {
+        return _impl.get();
+    }
+
+private:
+    std::unique_ptr<impl> _impl;
 };
 
 }
