@@ -41,34 +41,34 @@ typedef const httpd::request& const_req;
  */
 class handler_base {
 public:
-  class impl {
-  public:
-    /**
-     * All handlers should implement this method.
-     *  It fill the reply according to the request.
-     * @param path the url path used in this call
-     * @param req the original request
-     * @param rep the reply
-     */
-    virtual future<std::unique_ptr<reply> > handle(const sstring& path,
-            std::unique_ptr<request> req, std::unique_ptr<reply> rep) = 0;
+    class impl {
+    public:
+        /**
+         * All handlers should implement this method.
+         *  It fill the reply according to the request.
+         * @param path the url path used in this call
+         * @param req the original request
+         * @param rep the reply
+         */
+        virtual future<std::unique_ptr<reply> > handle(const sstring& path,
+                std::unique_ptr<request> req, std::unique_ptr<reply> rep) = 0;
 
-    virtual ~impl() = default;
+        virtual ~impl() = default;
 
-    /**
-     * Add a mandatory parameter
-     * @param param a parameter name
-     * @return a reference to the handler
-     */
-    void mandatory(const sstring& param) {
-        _mandatory_param.push_back(param);
-    }
+        /**
+         * Add a mandatory parameter
+         * @param param a parameter name
+         * @return a reference to the handler
+         */
+        void mandatory(const sstring& param) {
+            _mandatory_param.push_back(param);
+        }
 
-  protected:
-    std::vector<sstring> _mandatory_param;
+    protected:
+        std::vector<sstring> _mandatory_param;
 
-    friend class handler_base;
-  };
+        friend class handler_base;
+    };
 
     handler_base(std::unique_ptr<impl> impl) noexcept : _impl(std::move(impl)) {}
     handler_base(handler_base&&) = default;
