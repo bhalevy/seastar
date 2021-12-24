@@ -45,9 +45,6 @@ public:
      * The destructor deletes matchers.
      */
     ~match_rule() {
-        for (auto m : _match_list) {
-            delete m;
-        }
         delete _handler;
     }
 
@@ -72,7 +69,7 @@ public:
             return _handler;
         }
         for (unsigned int i = 0; i < _match_list.size(); i++) {
-            ind = _match_list.at(i)->match(url, ind, params);
+            ind = _match_list.at(i).match(url, ind, params);
             if (ind == sstring::npos) {
                 return nullptr;
             }
@@ -85,8 +82,8 @@ public:
      * @param match the matcher to add
      * @return this
      */
-    match_rule& add_matcher(matcher* match) {
-        _match_list.push_back(match);
+    match_rule& add_matcher(matcher match) {
+        _match_list.emplace_back(std::move(match));
         return *this;
     }
 
@@ -96,7 +93,7 @@ public:
      * @return this
      */
     match_rule& add_str(const sstring& str) {
-        add_matcher(new str_matcher(str));
+        add_matcher(matcher(std::make_unique<str_matcher>(str)));
         return *this;
     }
 
@@ -108,12 +105,12 @@ public:
      * @return this
      */
     match_rule& add_param(const sstring& str, bool fullpath = false) {
-        add_matcher(new param_matcher(str, fullpath));
+        add_matcher(matcher(std::make_unique<param_matcher>(str, fullpath)));
         return *this;
     }
 
 private:
-    std::vector<matcher*> _match_list;
+    std::vector<matcher> _match_list;
     handler_base* _handler;
 };
 

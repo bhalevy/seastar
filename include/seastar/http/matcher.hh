@@ -35,8 +35,9 @@ namespace httpd {
  */
 class matcher {
 public:
-
-    virtual ~matcher() = default;
+  class impl {
+  public:
+    virtual ~impl() = default;
 
     /**
      * check if the given url matches the rule
@@ -46,6 +47,19 @@ public:
      * @return the end of of the matched part, or sstring::npos if not matched
      */
     virtual size_t match(const sstring& url, size_t ind, parameters& param) = 0;
+  };
+
+    matcher(std::unique_ptr<impl> impl) noexcept : _impl(std::move(impl)) {}
+    matcher(matcher&&) = default;
+
+    matcher& operator=(matcher&&) = default;
+
+    size_t match(const sstring& url, size_t ind, parameters& param) {
+        return _impl->match(url, ind, param);
+    }
+
+private:
+    std::unique_ptr<impl> _impl;
 };
 
 /**
@@ -62,7 +76,7 @@ public:
  * param_matcher is /etc/hosts, if entire_path is true, the match will be
  * '/etc/hosts' If entire_path is false, the match will be '/etc'
  */
-class param_matcher : public matcher {
+class param_matcher : public matcher::impl {
 public:
     /**
      * Constructor
@@ -89,7 +103,7 @@ private:
  * When parsing a match rule such as '/file/{path}' the str_match would parse
  * the '/file' part
  */
-class str_matcher : public matcher {
+class str_matcher : public matcher::impl {
 public:
     /**
      * Constructor
