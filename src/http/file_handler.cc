@@ -34,8 +34,8 @@ namespace seastar {
 namespace httpd {
 
 directory_handler::directory_handler(const sstring& doc_root,
-        file_transformer* transformer)
-        : file_interaction_handler(transformer), doc_root(doc_root) {
+        std::unique_ptr<file_transformer> transformer)
+        : file_interaction_handler(std::move(transformer)), doc_root(doc_root) {
 }
 
 future<std::unique_ptr<reply>> directory_handler::handle(const sstring& path,
@@ -57,10 +57,6 @@ future<std::unique_ptr<reply>> directory_handler::handle(const sstring& path,
                 return make_ready_future<std::unique_ptr<reply>>(std::move(rep));
 
             });
-}
-
-file_interaction_handler::~file_interaction_handler() {
-    delete transformer;
 }
 
 sstring file_interaction_handler::get_extension(const sstring& file) {
