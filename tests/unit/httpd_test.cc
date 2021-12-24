@@ -145,12 +145,12 @@ SEASTAR_TEST_CASE(test_add_del_cookie)
 {
     routes rts;
     handl* h = new handl();
-    match_rule mr(h);
-    mr.add_str("/hello");
+    auto mr = std::make_unique<match_rule>(h);
+    mr->add_str("/hello");
     parameters params;
 
     {
-        auto reg = rule_registration(rts, mr, operation_type::GET);
+        auto reg = rule_registration(rts, std::move(mr), operation_type::GET);
         auto res = rts.get_handler(operation_type::GET, "/hello", params);
         BOOST_REQUIRE_EQUAL(res, h);
     }

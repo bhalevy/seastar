@@ -46,12 +46,6 @@ routes::~routes() {
             delete kv.second;
         }
     }
-    for (int i = 0; i < NUM_OPERATION; i++) {
-        for (auto r : _rules[i]) {
-            delete r.second;
-        }
-    }
-
 }
 
 std::unique_ptr<reply> routes::exception_reply(std::exception_ptr eptr) {
@@ -133,12 +127,12 @@ handler_base* routes::get_handler(operation_type type, const sstring& url,
 
 routes& routes::add(operation_type type, const url& url,
         handler_base* handler) {
-    match_rule* rule = new match_rule(handler);
+    auto rule = std::make_unique<match_rule>(handler);
     rule->add_str(url._path);
     if (url._param != "") {
         rule->add_param(url._param, true);
     }
-    return add(rule, type);
+    return add(std::move(rule), type);
 }
 
 routes& routes::add_default_handler(handler_base* handler) {
@@ -152,7 +146,7 @@ static auto delete_rule_from(operation_type type, Key& key, Map& map) {
     auto ret = bucket.find(key);
     using ret_type = decltype(ret->second);
     if (ret != bucket.end()) {
-        ret_type v = ret->second;
+        ret_type v = std::move(ret->second);
         bucket.erase(ret);
         return v;
     }
@@ -171,8 +165,8 @@ routes& routes::put(operation_type type, const sstring& url, handler_base* handl
     return *this;
 }
 
-match_rule* routes::del_cookie(rule_cookie cookie, operation_type type) {
-    return delete_rule_from(type, cookie, _rules);
+void routes::del_cookie(rule_cookie cookie, operation_type type) {
+    delete_rule_from(type, cookie, _rules);
 }
 
 void routes::add_alias(const path_description& old_path, const path_description& new_path) {
@@ -198,9 +192,9 @@ void routes::add_alias(const path_description& old_path, const path_description&
     new_path.set(*this, new function_handler(*static_cast<function_handler*>(a)));
 }
 
-rule_registration::rule_registration(routes& rs, match_rule& rule, operation_type op)
+rule_registration::rule_registration(routes& rs, std::unique_ptr<match_rule> rule, operation_type op)
         : _routes(rs) , _op(op)
-        , _cookie(_routes.add_cookie(&rule, _op)) {}
+        , _cookie(_routes.add_cookie(std::move(rule), _op)) {}
 
 rule_registration::~rule_registration() {
     _routes.del_cookie(_cookie, _op);
