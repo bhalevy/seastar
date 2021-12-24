@@ -35,19 +35,19 @@ namespace httpd {
  */
 class matcher {
 public:
-  class impl {
-  public:
-    virtual ~impl() = default;
+    class impl {
+    public:
+        virtual ~impl() = default;
 
-    /**
-     * check if the given url matches the rule
-     * @param url the url to check
-     * @param ind the position to start from
-     * @param param fill the parameters hash
-     * @return the end of of the matched part, or sstring::npos if not matched
-     */
-    virtual size_t match(const sstring& url, size_t ind, parameters& param) = 0;
-  };
+        /**
+         * check if the given url matches the rule
+         * @param url the url to check
+         * @param ind the position to start from
+         * @param param fill the parameters hash
+         * @return the end of of the matched part, or sstring::npos if not matched
+         */
+        virtual size_t match(const sstring& url, size_t ind, parameters& param) = 0;
+    };
 
     matcher(std::unique_ptr<impl> impl) noexcept : _impl(std::move(impl)) {}
     matcher(matcher&&) = default;
