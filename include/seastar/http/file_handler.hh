@@ -62,20 +62,18 @@ public:
  */
 class file_interaction_handler : public handler_base {
 public:
-    file_interaction_handler(file_transformer* p = nullptr)
-            : transformer(p) {
+    file_interaction_handler(std::unique_ptr<file_transformer> p = nullptr)
+            : transformer(std::move(p)) {
 
     }
-
-    ~file_interaction_handler();
 
     /**
      * Allows setting a transformer to be used with the files returned.
      * @param t the file transformer to use
      * @return this
      */
-    file_interaction_handler* set_transformer(file_transformer* t) {
-        transformer = t;
+    file_interaction_handler* set_transformer(std::unique_ptr<file_transformer> t) {
+        transformer = std::move(t);
         return this;
     }
 
@@ -104,7 +102,7 @@ protected:
      */
     future<std::unique_ptr<reply> > read(sstring file,
             std::unique_ptr<request> req, std::unique_ptr<reply> rep);
-    file_transformer* transformer;
+    std::unique_ptr<file_transformer> transformer;
 
     output_stream<char> get_stream(std::unique_ptr<request> req,
             const sstring& extension, output_stream<char>&& s);
@@ -130,7 +128,7 @@ public:
      * will be '/css/style.css' the file wil be /usr/mgmt/public/css/style.css'
      */
     explicit directory_handler(const sstring& doc_root,
-            file_transformer* transformer = nullptr);
+            std::unique_ptr<file_transformer> transformer = nullptr);
 
     future<std::unique_ptr<reply>> handle(const sstring& path,
             std::unique_ptr<request> req, std::unique_ptr<reply> rep) override;
@@ -153,9 +151,9 @@ public:
      * @param transformer an optional file transformer
      * @param force_path check if redirect is needed upon `handle`
      */
-    explicit file_handler(const sstring& file, file_transformer* transformer =
+    explicit file_handler(const sstring& file, std::unique_ptr<file_transformer> transformer =
             nullptr, bool force_path = true)
-            : file_interaction_handler(transformer), file(file), force_path(
+            : file_interaction_handler(std::move(transformer)), file(file), force_path(
                     force_path) {
     }
 

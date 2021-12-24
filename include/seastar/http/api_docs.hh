@@ -142,7 +142,7 @@ public:
                 (alternative_path == "") ?
                         _file_directory + api + ".json" : alternative_path;
         file_handler* index = new file_handler(path,
-                new content_replace("json"));
+                std::make_unique<content_replace>("json"));
         _routes.put(GET, _base_path + "/" + api, index);
     }
 };
