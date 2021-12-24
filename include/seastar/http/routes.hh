@@ -105,8 +105,8 @@ public:
      * @param type the operation type
      * @return it self
      */
-    routes& add(match_rule* rule, operation_type type = GET) {
-        _rules[type][_rover++] = rule;
+    routes& add(std::unique_ptr<match_rule> rule, operation_type type = GET) {
+        _rules[type][_rover++] = std::move(rule);
         return *this;
     }
 
@@ -175,7 +175,7 @@ public:
     using rule_cookie = uint64_t;
 private:
     rule_cookie _rover = 0;
-    std::map<rule_cookie, match_rule*> _rules[NUM_OPERATION];
+    std::map<rule_cookie, std::unique_ptr<match_rule>> _rules[NUM_OPERATION];
     //default Handler -- for any HTTP Method and Path (/*)
     handler_base* _default_handler = nullptr;
 public:
@@ -222,9 +222,9 @@ public:
      * @param type the operation type
      * @return a cookie using which the rule can be removed
      */
-    rule_cookie add_cookie(match_rule* rule, operation_type type) {
+    rule_cookie add_cookie(std::unique_ptr<match_rule> rule, operation_type type) {
         auto pos = _rover++;
-        _rules[type][pos] = rule;
+        _rules[type][pos] = std::move(rule);
         return pos;
     }
 
@@ -232,9 +232,8 @@ public:
      * Del a rule by cookie
      * @param cookie a cookie returned previously by add_cookie
      * @param type the operation type
-     * @return the pointer to the rule
      */
-    match_rule* del_cookie(rule_cookie cookie, operation_type type);
+    void del_cookie(rule_cookie cookie, operation_type type);
 };
 
 /**
@@ -286,7 +285,7 @@ public:
      * @param rule a rule to add
      * @param op the operation type (`GET` by default)
      */
-    rule_registration(routes& rs, match_rule& rule, operation_type op = GET);
+    rule_registration(routes& rs, std::unique_ptr<match_rule> rule, operation_type op = GET);
 
     /**
      * Unregisters the rule from routes with routes::del_cookie
