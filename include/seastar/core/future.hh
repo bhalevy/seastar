@@ -67,6 +67,10 @@ struct nested_exception : public std::exception {
     nested_exception(std::exception_ptr inner, std::exception_ptr outer) noexcept;
     nested_exception(nested_exception&&) noexcept;
     nested_exception(const nested_exception&) noexcept;
+    /// Get the inner exception as an excception_ptr.
+    std::exception_ptr nested_ptr() const noexcept {
+        return inner;
+    }
     /// Rethrow the inner exception.
     [[noreturn]] void rethrow_nested() const;
     virtual const char* what() const noexcept override;
