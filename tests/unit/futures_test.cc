@@ -241,6 +241,11 @@ static void check_finally_exception(std::exception_ptr ex) {
     } catch (test_exception& inner) {
         BOOST_REQUIRE_EQUAL(inner.what(), "bar");
     }
+    try {
+        std::rethrow_exception(ex.nested_ptr());
+    } catch (test_exception& inner) {
+        BOOST_REQUIRE_EQUAL(inner.what(), "bar");
+    }
   }
 }
 
