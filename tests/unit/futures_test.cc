@@ -232,14 +232,14 @@ static void check_finally_exception(std::exception_ptr ex) {
       std::rethrow_exception(ex);
   } catch (seastar::nested_exception& ex) {
     try {
-        std::rethrow_exception(ex.inner);
-    } catch (test_exception& inner) {
-        BOOST_REQUIRE_EQUAL(inner.what(), "bar");
+        std::rethrow_exception(ex.outer);
+    } catch (test_exception& outer) {
+        BOOST_REQUIRE_EQUAL(outer.what(), "foo");
     }
     try {
         ex.rethrow_nested();
-    } catch (test_exception& outer) {
-        BOOST_REQUIRE_EQUAL(outer.what(), "foo");
+    } catch (test_exception& inner) {
+        BOOST_REQUIRE_EQUAL(inner.what(), "bar");
     }
   }
 }
