@@ -169,7 +169,8 @@ const char* nested_exception::what() const noexcept {
 }
 
 [[noreturn]] void nested_exception::rethrow_nested() const {
-    std::rethrow_exception(outer);
+    assert(inner);
+    std::rethrow_exception(inner);
 }
 
 static std::exception_ptr make_nested(std::exception_ptr&& inner, future_state_base&& old) noexcept {
