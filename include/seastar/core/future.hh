@@ -42,15 +42,37 @@
 
 namespace seastar {
 
+/// \addtogroup fiber-module
+/// @{
+
+/// \brief Nested exception type
+///
+/// nested_exception holds two exception pointers:
+/// \c outer and \c inner, resembling std::nested_exception.
+/// It used is used when the \c inner exception is throw during
+/// handling of the \c outer exception.
+///
+/// For example, the \ref future \ref finally continuation
+/// is called also when the preceeding \ref future is exceptional.
+/// If an exception happens in the \ref finally continuation,
+/// a \ref nested_exception is returned, holding the preceeding
+/// exception as the \c outer exception and the one in the \ref finally
+/// continuation as the \c inner exception.
 struct nested_exception : public std::exception {
     std::exception_ptr inner;
     std::exception_ptr outer;
+    /// Construct a \ref nested_exception.
+    /// \param inner the nested exception. Typically one that happened during the handling of the \c outer exception
+    /// \param outer the original exception.
     nested_exception(std::exception_ptr inner, std::exception_ptr outer) noexcept;
     nested_exception(nested_exception&&) noexcept;
     nested_exception(const nested_exception&) noexcept;
+    /// Rethrow the inner exception.
     [[noreturn]] void rethrow_nested() const;
     virtual const char* what() const noexcept override;
 };
+
+/// @}
 
 /// \defgroup future-module Futures and Promises
 ///
