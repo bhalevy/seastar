@@ -1365,6 +1365,10 @@ public:
             gnutls_transport_set_errno(*this, EAGAIN);
             return -1;
         }
+        if (__builtin_expect(_output_pending.failed(), false)) {
+            gnutls_transport_set_errno(*this, EIO);
+            return -1;
+        }
         try {
             scattered_message<char> msg;
             for (int i = 0; i < iovcnt; ++i) {
