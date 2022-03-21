@@ -593,3 +593,6 @@ seastar_add_test (closeable
 
 seastar_add_test (pipe
   SOURCES pipe_test.cc)
+
+seastar_add_test (immediate
+  SOURCES immediate_test.cc)
