@@ -27,6 +27,8 @@
 #include <seastar/core/immediate.hh>
 #include <seastar/core/coroutine.hh>
 #include <seastar/coroutine/exception.hh>
+#include <seastar/coroutine/immediate.hh>
+#include <seastar/util/later.hh>
 
 using namespace seastar;
 
@@ -264,6 +266,58 @@ SEASTAR_TEST_CASE(test_coroutine_future_immediate) {
         return make_exception_future<int>(expected_exception());
     };
     res = co_await make_future_immediate(bar());
+    BOOST_REQUIRE(!res.has_value());
+    BOOST_REQUIRE(res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_THROW(res.get(), expected_exception);
+}
+
+SEASTAR_TEST_CASE(test_void_coroutine_immediate) {
+    auto res = co_await coroutine::immediate(make_ready_future<>());
+    BOOST_REQUIRE(res.has_value());
+    BOOST_REQUIRE(!res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_NO_THROW(res.get());
+
+    res = co_await coroutine::immediate(yield().then([] { return make_ready_future<>(); }));
+    BOOST_REQUIRE(res.has_value());
+    BOOST_REQUIRE(!res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_NO_THROW(res.get());
+
+    res = co_await coroutine::immediate(make_exception_future<>(expected_exception()));
+    BOOST_REQUIRE(!res.has_value());
+    BOOST_REQUIRE(res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_THROW(res.get(), expected_exception);
+
+    res = co_await coroutine::immediate(yield().then([] { return make_exception_future<>(expected_exception()); }));
+    BOOST_REQUIRE(!res.has_value());
+    BOOST_REQUIRE(res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_THROW(res.get(), expected_exception);
+}
+
+SEASTAR_TEST_CASE(test_non_void_coroutine_immediate) {
+    auto res = co_await coroutine::immediate(make_ready_future<int>(42));
+    BOOST_REQUIRE(res.has_value());
+    BOOST_REQUIRE(!res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_EQUAL(res.get(), 42);
+
+    res = co_await coroutine::immediate(yield().then([] { return make_ready_future<int>(42); }));
+    BOOST_REQUIRE(res.has_value());
+    BOOST_REQUIRE(!res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_EQUAL(res.get(), 42);
+
+    res = co_await coroutine::immediate(make_exception_future<int>(expected_exception()));
+    BOOST_REQUIRE(!res.has_value());
+    BOOST_REQUIRE(res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_THROW(res.get(), expected_exception);
+
+    res = co_await coroutine::immediate(yield().then([] { return make_exception_future<int>(expected_exception()); }));
     BOOST_REQUIRE(!res.has_value());
     BOOST_REQUIRE(res.failed());
     BOOST_REQUIRE(res.available());

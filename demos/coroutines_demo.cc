@@ -20,6 +20,7 @@
  */
 
 #include <iostream>
+#include <fmt/printf.h>
 
 #include <seastar/util/std-compat.hh>
 
@@ -40,6 +41,24 @@ int main(int argc, char** argv) {
 #include <seastar/core/loop.hh>
 #include <seastar/core/sstring.hh>
 #include <seastar/coroutine/parallel_for_each.hh>
+#include <seastar/coroutine/immediate.hh>
+
+seastar::future<> write_str_to_file(seastar::sstring file_name, seastar::sstring str) noexcept {
+    auto file_imm = co_await seastar::coroutine::immediate(seastar::open_file_dma(file_name, seastar::open_flags::create | seastar::open_flags::wo));
+    if (file_imm.failed()) {
+        fmt::printf("Could not open {}: {}", file_name, file_imm.get_exception());
+        co_return;
+    }
+    auto out = co_await seastar::make_file_output_stream(std::move(file_imm.get()));
+    auto write_res = co_await seastar::coroutine::immediate([&] () -> seastar::future<> {
+        co_await out.write(str);
+        co_await out.flush();
+    });
+    co_await out.close();
+    if (write_res.failed()) {
+        fmt::printf("Could not write to {}: {}", file_name, write_res.get_exception());
+    }
+}
 
 int main(int argc, char** argv) {
     seastar::app_template app;
@@ -50,12 +69,7 @@ int main(int argc, char** argv) {
             std::cout << i << "\n";
         });
 
-        auto file = co_await seastar::open_file_dma("useless_file.txt", seastar::open_flags::create | seastar::open_flags::wo);
-        auto out = co_await seastar::make_file_output_stream(file);
-        seastar::sstring str = "nothing to see here, move along now\n";
-        co_await out.write(str);
-        co_await out.flush();
-        co_await out.close();
+        co_await write_str_to_file("useless_file.txt", "nothing to see here, move along now\n");
 
         bool all_exist = true;
         std::vector<seastar::sstring> filenames = { "useless_file.txt", "non_existing" };
