@@ -169,6 +169,58 @@ SEASTAR_THREAD_TEST_CASE(test_non_void_nested_immediate_invoke) {
     BOOST_REQUIRE_THROW(res.get(), expected_exception);
 }
 
+SEASTAR_THREAD_TEST_CASE(test_void_future_immediate) {
+    auto res = immediate(make_ready_future<>());
+    BOOST_REQUIRE(res.has_value());
+    BOOST_REQUIRE(!res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_NO_THROW(res.get());
+
+    res = make_future_immediate(make_ready_future<>()).get0();
+    BOOST_REQUIRE(res.has_value());
+    BOOST_REQUIRE(!res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_NO_THROW(res.get());
+
+    res = immediate(make_exception_future<>(expected_exception()));
+    BOOST_REQUIRE(!res.has_value());
+    BOOST_REQUIRE(res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_THROW(res.get(), expected_exception);
+
+    res = make_future_immediate(make_exception_future<>(expected_exception())).get0();
+    BOOST_REQUIRE(!res.has_value());
+    BOOST_REQUIRE(res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_THROW(res.get(), expected_exception);
+}
+
+SEASTAR_THREAD_TEST_CASE(test_non_void_future_immediate) {
+    auto res = immediate(make_ready_future<int>(42));
+    BOOST_REQUIRE(res.has_value());
+    BOOST_REQUIRE(!res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_EQUAL(res.get(), 42);
+
+    res = make_future_immediate(make_ready_future<int>(42)).get0();
+    BOOST_REQUIRE(res.has_value());
+    BOOST_REQUIRE(!res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_EQUAL(res.get(), 42);
+
+    res = immediate(make_exception_future<int>(expected_exception()));
+    BOOST_REQUIRE(!res.has_value());
+    BOOST_REQUIRE(res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_THROW(res.get(), expected_exception);
+
+    res = make_future_immediate(make_exception_future<int>(expected_exception())).get0();
+    BOOST_REQUIRE(!res.has_value());
+    BOOST_REQUIRE(res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_THROW(res.get(), expected_exception);
+}
+
 #ifdef SEASTAR_COROUTINES_ENABLED
 
 SEASTAR_TEST_CASE(test_coroutine_immediate_invoke) {
@@ -189,6 +241,29 @@ SEASTAR_TEST_CASE(test_coroutine_immediate_invoke) {
     };
     res = co_await bar();
     BOOST_REQUIRE(called);
+    BOOST_REQUIRE(!res.has_value());
+    BOOST_REQUIRE(res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_THROW(res.get(), expected_exception);
+}
+
+SEASTAR_TEST_CASE(test_coroutine_future_immediate) {
+    bool called = false;
+    auto foo = [&] () {
+        called = true;
+        return make_ready_future<int>(42);
+    };
+    auto res = co_await make_future_immediate(foo());
+    BOOST_REQUIRE(called);
+    BOOST_REQUIRE(res.has_value());
+    BOOST_REQUIRE(!res.failed());
+    BOOST_REQUIRE(res.available());
+    BOOST_REQUIRE_EQUAL(res.get(), 42);
+
+    auto bar = [&] () {
+        return make_exception_future<int>(expected_exception());
+    };
+    res = co_await make_future_immediate(bar());
     BOOST_REQUIRE(!res.has_value());
     BOOST_REQUIRE(res.failed());
     BOOST_REQUIRE(res.available());

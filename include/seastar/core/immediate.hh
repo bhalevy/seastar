@@ -133,6 +133,18 @@ public:
     explicit immediate(Exception&& e) noexcept
         : internal::immediate_base(std::make_exception_ptr(std::move(e)))
     {}
+    explicit immediate(future<>&& fut)
+        : internal::immediate_base()
+    {
+        if (!fut.available()) {
+            throw std::runtime_error("future not available");
+        }
+        if (fut.failed()) {
+            set_exception(std::move(fut).get_exception());
+        } else {
+            internal::immediate_base::set_value();
+        }
+    }
     immediate(immediate&&) = default;
 
     immediate& operator=(immediate&& o) {
@@ -191,6 +203,19 @@ public:
     explicit immediate(Exception&& e) noexcept
         : internal::immediate_base(std::make_exception_ptr(std::move(e)))
     {}
+    explicit immediate(future<T>&& fut)
+        : internal::immediate_base()
+    {
+        if (!fut.available()) {
+            throw std::runtime_error("future not available");
+        }
+        if (fut.failed()) {
+            set_exception(std::move(fut).get_exception());
+        } else {
+            _value.emplace(std::move(std::move(fut).get0()));
+            internal::immediate_base::set_value();
+        }
+    }
     immediate(immediate&&) = default;
 
     immediate& operator=(immediate&& o) {
@@ -324,6 +349,25 @@ typename immediatize<T>::type immediatize<T>::invoke(Func&& func, FuncArgs&&... 
 template <typename Func, typename... Args, typename T = typename immediatize<std::invoke_result_t<Func, Args...>>::value_type>
 inline immediate<T> immediate_invoke(Func&& func, Args&&... args) {
     return immediatize<T>::invoke(std::forward<Func>(func), std::forward<Args>(args)...);
+}
+
+/// \brief Wrap a \ref future<T> in an \ref immediate<T>
+///
+/// Useful for avoiding a exception when co_await:ing
+/// the result.
+///
+/// \param fut A future
+/// \return a future holding an \ref immediate value
+template <typename T = void>
+SEASTAR_CONCEPT(requires (!is_immediate_v<T>))
+future<immediate<T>> make_future_immediate(future<T>&& fut) {
+    if (fut.available()) {
+        return make_ready_future<immediate<T>>(immediate<T>(std::move(fut)));
+    } else {
+        return std::move(fut).then_wrapped([] (future<T> fut) {
+            return make_ready_future<immediate<T>>(immediate<T>(std::move(fut)));
+        });
+    }
 }
 
 /// @}
