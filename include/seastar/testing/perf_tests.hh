@@ -44,6 +44,7 @@ class performance_test {
 
     uint64_t _single_run_iterations = 0;
     std::atomic<uint64_t> _max_single_run_iterations;
+    uint64_t _norm_factor = 1;      // Number of internal iterations in the test case
 private:
     void do_run(const config&);
 protected:
@@ -61,9 +62,10 @@ protected:
     virtual void tear_down() noexcept = 0;
     virtual future<clock_type::duration> do_single_run() = 0;
 public:
-    performance_test(const std::string& test_case, const std::string& test_group)
+    performance_test(const std::string& test_case, const std::string& test_group, uint64_t norm_factor = 1)
         : _test_case(test_case)
         , _test_group(test_group)
+        , _norm_factor(norm_factor)
     { }
 
     virtual ~performance_test() = default;
@@ -203,8 +205,8 @@ void register_test(std::unique_ptr<performance_test>);
 
 template<typename Test>
 struct test_registrar {
-    test_registrar(const std::string& test_group, const std::string& test_case) {
-        auto test = std::make_unique<concrete_performance_test<Test>>(test_case, test_group);
+    test_registrar(const std::string& test_group, const std::string& test_case, uint64_t norm_factor = 1) {
+        auto test = std::make_unique<concrete_performance_test<Test>>(test_case, test_group, norm_factor);
         performance_test::register_test(std::move(test));
     }
 };
@@ -242,18 +244,18 @@ void do_not_optimize(const T& v)
 // asynchronous cases respectively. The returned value shall be the number of iterations
 // done in a single test run.
 
-#define PERF_TEST_F(test_group, test_case) \
+#define PERF_TEST_F(test_group, test_case, ... /* norm_factror */) \
     struct test_##test_group##_##test_case : test_group { \
         [[gnu::always_inline]] inline auto run(); \
     }; \
     static ::perf_tests::internal::test_registrar<test_##test_group##_##test_case> \
-    test_##test_group##_##test_case##_registrar(#test_group, #test_case); \
+    test_##test_group##_##test_case##_registrar(#test_group, #test_case, ##__VA_ARGS__); \
     [[gnu::always_inline]] auto test_##test_group##_##test_case::run()
 
-#define PERF_TEST(test_group, test_case) \
+#define PERF_TEST(test_group, test_case, ... /* norm_factror */) \
     struct test_##test_group##_##test_case { \
         [[gnu::always_inline]] inline auto run(); \
     }; \
     static ::perf_tests::internal::test_registrar<test_##test_group##_##test_case> \
-    test_##test_group##_##test_case##_registrar(#test_group, #test_case); \
+    test_##test_group##_##test_case##_registrar(#test_group, #test_case, ##__VA_ARGS__); \
     [[gnu::always_inline]] auto test_##test_group##_##test_case::run()

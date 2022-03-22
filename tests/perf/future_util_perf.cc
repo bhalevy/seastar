@@ -31,9 +31,11 @@ struct parallel_for_each {
     std::vector<int> range;
     int value;
 
+    static constexpr int range_count = 100;
+
     parallel_for_each()
         : empty_range()
-        , range(boost::copy_range<std::vector<int>>(boost::irange(1, 100)))
+        , range(boost::copy_range<std::vector<int>>(boost::irange(1, range_count)))
     { }
 };
 
@@ -51,7 +53,7 @@ future<> immediate(int v, int& vs)
     return make_ready_future<>();
 }
 
-PERF_TEST_F(parallel_for_each, immediate)
+PERF_TEST_F(parallel_for_each, immediate, parallel_for_each::range_count)
 {
     return seastar::parallel_for_each(range, [this] (int v) {
         return immediate(v, value);
@@ -67,7 +69,7 @@ future<> suspend(int v, int& vs)
     return yield();
 }
 
-PERF_TEST_F(parallel_for_each, suspend)
+PERF_TEST_F(parallel_for_each, suspend, parallel_for_each::range_count)
 {
     return seastar::parallel_for_each(range, [this] (int v) {
         return suspend(v, value);

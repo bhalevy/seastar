@@ -131,6 +131,7 @@ struct result {
 
     uint64_t total_iterations;
     unsigned runs;
+    uint64_t norm_factor;
 
     double median;
     double mad;
@@ -163,7 +164,7 @@ static inline std::ostream& operator<<(std::ostream& os, duration d)
 
 }
 
-static constexpr auto format_string = "{:<40} {:>11} {:>11} {:>11} {:>11} {:>11}\n";
+static constexpr auto format_string = "{:<40} {:>11} {:>11} {:>11} {:>11} {:>11} {:>11}\n";
 
 struct stdout_printer final : result_printer {
   virtual void print_configuration(const config& c) override {
@@ -173,11 +174,11 @@ struct stdout_printer final : result_printer {
                "number of runs:", c.number_of_runs,
                "number of cores:", smp::count,
                "random seed:", c.random_seed);
-    fmt::print(format_string, "test", "iterations", "median", "mad", "min", "max");
+    fmt::print(format_string, "test", "iterations", "norm_factor", "median", "mad", "min", "max");
   }
 
   virtual void print_result(const result& r) override {
-    fmt::print(format_string, r.test_name, r.total_iterations / r.runs, duration { r.median },
+    fmt::print(format_string, r.test_name, r.total_iterations / r.runs, r.norm_factor, duration { r.median },
                duration { r.mad }, duration { r.min }, duration { r.max });
   }
 };
@@ -201,6 +202,7 @@ public:
         auto& result = _root["results"][r.test_name];
         result["runs"] = r.runs;
         result["total_iterations"] = r.total_iterations;
+        result["norm_factor"] = r.norm_factor;
         result["median"] = r.median;
         result["mad"] = r.mad;
         result["min"] = r.min;
@@ -239,9 +241,9 @@ void performance_test::do_run(const config& conf)
             _single_run_iterations = 0;
             return do_single_run().then([&] (clock_type::duration dt) {
                 double ns = std::chrono::duration_cast<std::chrono::nanoseconds>(dt).count();
-                results[i] = ns / _single_run_iterations;
+                results[i] = (ns / _single_run_iterations) / _norm_factor;
 
-                total_iterations += _single_run_iterations;
+                total_iterations += _single_run_iterations * _norm_factor;
             });
         }).get();
     }
@@ -250,6 +252,7 @@ void performance_test::do_run(const config& conf)
     r.test_name = name();
     r.total_iterations = total_iterations;
     r.runs = conf.number_of_runs;
+    r.norm_factor = _norm_factor;
 
     auto mid = conf.number_of_runs / 2;
 
