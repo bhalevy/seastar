@@ -28,6 +28,7 @@
 
 #include <seastar/core/future.hh>
 #include <seastar/core/loop.hh>
+#include <seastar/core/coroutine.hh>
 #include <seastar/testing/linux_perf_event.hh>
 
 using namespace seastar;
@@ -329,6 +330,7 @@ void do_not_optimize(const T& v)
 
 // PERF_TEST and PERF_TEST_F support both synchronous and asynchronous functions.
 // The former should return `void`, the latter `future<>`.
+// PERF_TEST_C executes a coroutine function, if enabled.
 //
 // Test cases may perform multiple operations in a single run, this may be desirable
 // if the cost of an individual operation is very small. This allows measuring either
@@ -352,3 +354,15 @@ void do_not_optimize(const T& v)
     static ::perf_tests::internal::test_registrar<test_##test_group##_##test_case> \
     test_##test_group##_##test_case##_registrar(#test_group, #test_case, ##__VA_ARGS__); \
     [[gnu::always_inline]] auto test_##test_group##_##test_case::run()
+
+#ifdef SEASTAR_COROUTINES_ENABLED
+
+#define PERF_TEST_C(test_group, test_case, ... /* norm_factror */) \
+    struct test_##test_group##_##test_case : test_group { \
+        [[gnu::always_inline]] inline future<> run(); \
+    }; \
+    static ::perf_tests::internal::test_registrar<test_##test_group##_##test_case> \
+    test_##test_group##_##test_case##_registrar(#test_group, #test_case, ##__VA_ARGS__); \
+    [[gnu::always_inline]] future<> test_##test_group##_##test_case::run()
+
+#endif // SEASTAR_COROUTINES_ENABLED
