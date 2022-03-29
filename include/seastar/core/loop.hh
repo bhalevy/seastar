@@ -488,6 +488,139 @@ future<> do_for_each(Container& c, AsyncAction action) noexcept {
 
 namespace internal {
 
+template <typename Iterator, typename AsyncAction>
+class do_for_each_until_state final : public continuation_base<stop_iteration> {
+    Iterator _begin;
+    Iterator _end;
+    AsyncAction _action;
+    promise<stop_iteration> _pr;
+
+public:
+    do_for_each_until_state(Iterator begin, Iterator end, AsyncAction action, future<stop_iteration>&& first_unavailable)
+        : _begin(std::move(begin)), _end(std::move(end)), _action(std::move(action)) {
+        internal::set_callback(std::move(first_unavailable), this);
+    }
+    virtual void run_and_dispose() noexcept override {
+        std::unique_ptr<do_for_each_until_state> zis(this);
+        if (_state.failed()) {
+            _pr.set_urgent_state(std::move(_state));
+            return;
+        }
+        while (_begin != _end) {
+            auto f = futurize_invoke(_action, *_begin++);
+            if (f.failed()) {
+                f.forward_to(std::move(_pr));
+                return;
+            }
+            if (f.available()) {
+                if (f.get0() == stop_iteration::yes) {
+                    _pr.set_value(stop_iteration::yes);
+                    return;
+                }
+                if (!need_preempt()) {
+                    continue;
+                }
+            }
+            _state = {};
+            internal::set_callback(std::move(f), this);
+            zis.release();
+            return;
+        }
+        _pr.set_value(stop_iteration::no);
+    }
+    task* waiting_task() noexcept override {
+        return _pr.waiting_task();
+    }
+    future<stop_iteration> get_future() {
+        return _pr.get_future();
+    }
+};
+
+template<typename Iterator, typename Sentinel, typename AsyncAction>
+inline
+future<stop_iteration> do_for_each_until_impl(Iterator begin, Sentinel end, AsyncAction action) {
+    while (begin != end) {
+        auto f = futurize_invoke(action, *begin++);
+        if (f.failed()) {
+            return f;
+        }
+        if (f.available()) {
+            if (f.get0() == stop_iteration::yes) {
+                return make_ready_future<stop_iteration>(stop_iteration::yes);
+            }
+            if (!need_preempt()) {
+                continue;
+            }
+        }
+        {
+            memory::scoped_critical_alloc_section _;
+            auto* s = new internal::do_for_each_until_state<Iterator, AsyncAction>{
+                std::move(begin), std::move(end), std::move(action), std::move(f)};
+            return s->get_future();
+        }
+    }
+    return make_ready_future<stop_iteration>(stop_iteration::no);
+}
+
+} // namespace internal
+
+/// \brief Call a function for each item in a range, sequentially (iterator version), until
+/// the range is exhausted, the function returns `stop_iteration::yes`, or the function fails.
+///
+/// For each item in a range, call a function, waiting for the previous
+/// invocation to complete before calling the next one.
+///
+/// \param begin an \c InputIterator designating the beginning of the range
+/// \param end a \c Sentinel designating the endof the range
+/// \param func a callable, taking a reference to objects from the range
+///               as a parameter, and returning a \c future<stop_iteration> that resolves
+///               when it is acceptable to process the next item.
+/// \return a ready future<stop_iteration> on success holding `stop_iteration::yes`
+///         if the function returned `stop_iteration::yes` for any item,
+///         or `stop_iteration::no` otherwise, or the first failed future if \c func failed.
+template<typename Iterator, typename Sentinel, typename Func>
+SEASTAR_CONCEPT(
+    requires std::same_as<future<stop_iteration>, futurize_t<std::invoke_result_t<Func, typename std::iterator_traits<Iterator>::value_type>>>
+        && (std::same_as<Sentinel, Iterator> || std::sentinel_for<Sentinel, Iterator>)
+)
+inline
+future<stop_iteration> do_for_each_until(Iterator begin, Sentinel end, Func&& func) noexcept {
+    try {
+        return internal::do_for_each_until_impl(std::forward<Iterator>(begin), std::forward<Sentinel>(end), std::forward<Func>(func));
+    } catch (...) {
+        return current_exception_as_future<stop_iteration>();
+    }
+}
+
+/// \brief Call a function for each item in a range, sequentially (iterator version), until
+/// the range is exhausted, the function returns `stop_iteration::yes`, or the function fails.
+///
+/// For each item in a range, call a function, waiting for the previous
+/// invocation to complete before calling the next one.
+///
+/// \param range a \c range designating the input range
+/// \param func a callable, taking a reference to objects from the range
+///               as a parameter, and returning a \c future<stop_iteration> that resolves
+///               when it is acceptable to process the next item.
+/// \return a ready future<stop_iteration> on success holding `stop_iteration::yes`
+///         if the function returned `stop_iteration::yes` for any item,
+///         or `stop_iteration::no` otherwise, or the first failed future if \c func failed.
+template <typename Container, typename Func>
+SEASTAR_CONCEPT( requires requires (Func func, Container range) {
+    { futurize_invoke(func, *std::begin(range)) } -> std::same_as<future<stop_iteration>>;
+    std::end(range);
+} )
+inline
+future<stop_iteration> do_for_each_until(Container range, Func&& func) noexcept {
+    try {
+        return internal::do_for_each_until_impl(std::begin(range), std::end(range), std::forward<Func>(func));
+    } catch (...) {
+        return current_exception_as_future<stop_iteration>();
+    }
+}
+
+namespace internal {
+
 template <typename T, typename = void>
 struct has_iterator_category : std::false_type {};
 

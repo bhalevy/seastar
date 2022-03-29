@@ -1829,6 +1829,31 @@ SEASTAR_THREAD_TEST_CASE(test_for_each_set) {
     BOOST_REQUIRE_EQUAL(res, 17);
 }
 
+SEASTAR_THREAD_TEST_CASE(test_for_each_until_set) {
+    std::bitset<32> s;
+    s.set(4);
+    s.set(0);
+
+    auto range = bitsets::for_each_set(s);
+    unsigned res = 0;
+    auto stop_res = do_for_each_until(range, [&res] (auto i) {
+        res |= 1 << i;
+        return stop_iteration::no;
+    }).get0();
+    BOOST_REQUIRE_EQUAL(res, 17);
+    BOOST_REQUIRE_EQUAL(stop_res, stop_iteration::no);
+
+    s.set(1);
+    range = bitsets::for_each_set(s);
+    res = 0;
+    stop_res = do_for_each_until(range, [&res] (auto i) {
+        res |= 1 << i;
+        return stop_iteration(res > 1);
+    }).get0();
+    BOOST_REQUIRE_EQUAL(res, 3);
+    BOOST_REQUIRE_EQUAL(stop_res, stop_iteration::yes);
+}
+
 SEASTAR_THREAD_TEST_CASE(test_yield) {
     bool flag = false;
     auto one = yield().then([&] {
