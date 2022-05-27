@@ -115,7 +115,11 @@ public:
     /// Must be called only once, otherwise terminate will be called.
     void request_abort() noexcept {
         auto subs = std::exchange(_subscriptions, std::nullopt).value();
-        subs.clear_and_dispose([] (subscription* s) { s->on_abort(); });
+        while (!subs.empty()) {
+            subscription& s = subs.front();
+            s.unlink();
+            s.on_abort();
+        }
     }
 
     /// Returns whether an abort has been requested.
