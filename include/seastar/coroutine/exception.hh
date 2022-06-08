@@ -22,6 +22,7 @@
 #pragma once
 
 #include <seastar/core/coroutine.hh>
+#include <seastar/core/future.hh>
 
 namespace seastar {
 
@@ -75,6 +76,7 @@ struct exception {
     template <typename E>
     requires std::derived_from<std::remove_reference_t<E>, std::exception>
     explicit exception(const E& e) noexcept : eptr(std::make_exception_ptr(e)) {
+        log_exception_trace();
     }
 };
 
