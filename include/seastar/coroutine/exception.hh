@@ -22,6 +22,7 @@
 #pragma once
 
 #include <seastar/core/coroutine.hh>
+#include <seastar/core/future.hh>
 
 namespace seastar {
 
@@ -97,6 +98,7 @@ exception make_exception(T&& t) noexcept {
 template<typename T>
 [[nodiscard]]
 exception make_exception(T&& t) noexcept {
+    log_exception_trace();
     return exception(std::make_exception_ptr(std::forward<T>(t)));
 }
 
@@ -122,6 +124,7 @@ exception return_exception(T&& t) noexcept {
 template<typename T>
 [[nodiscard]]
 exception return_exception(T&& t) noexcept {
+    log_exception_trace();
     return exception(std::make_exception_ptr(std::forward<T>(t)));
 }
 
