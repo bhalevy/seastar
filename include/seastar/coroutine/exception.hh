@@ -30,7 +30,7 @@ namespace internal {
 struct exception_awaiter {
     std::exception_ptr eptr;
 
-    explicit exception_awaiter(std::exception_ptr&& eptr) : eptr(std::move(eptr)) {}
+    explicit exception_awaiter(std::exception_ptr&& eptr) noexcept : eptr(std::move(eptr)) {}
 
     exception_awaiter(const exception_awaiter&) = delete;
     exception_awaiter(exception_awaiter&&) = delete;
@@ -68,7 +68,14 @@ namespace coroutine {
 /// ```
 struct exception {
     std::exception_ptr eptr;
-    explicit exception(std::exception_ptr eptr) : eptr(std::move(eptr)) {}
+
+    explicit exception(std::exception_ptr&& eptr) noexcept : eptr(std::move(eptr)) {}
+    explicit exception(const std::exception_ptr& eptr) noexcept : eptr(eptr) {}
+
+    template <typename E>
+    requires std::derived_from<std::remove_reference_t<E>, std::exception>
+    explicit exception(const E& e) noexcept : eptr(std::make_exception_ptr(e)) {
+    }
 };
 
 /// Allows propagating an exception from a coroutine directly rather than
@@ -86,10 +93,21 @@ struct exception {
 /// ```
 /// co_return coroutine::make_exception(std::runtime_error("something failed miserably"));
 /// ```
-template<typename T>
 [[nodiscard]]
-exception make_exception(T&& t) {
-    return exception(std::make_exception_ptr(std::forward<T>(t)));
+inline exception make_exception(std::exception_ptr&& ex) noexcept {
+    return exception(std::move(ex));
+}
+
+[[nodiscard]]
+inline exception make_exception(const std::exception_ptr& ex) noexcept {
+    return exception(ex);
+}
+
+template<typename E>
+requires std::derived_from<std::remove_reference_t<E>, std::exception>
+[[nodiscard]]
+exception make_exception(const E& e) noexcept {
+    return exception(e);
 }
 
 /// Allows propagating an exception from a coroutine directly rather than
@@ -104,10 +122,21 @@ exception make_exception(T&& t) {
 /// ```
 /// co_await coroutine::return_exception(std::runtime_error("something failed miserably"));
 /// ```
-template<typename T>
 [[nodiscard]]
-exception return_exception(T&& t) {
-    return exception(std::make_exception_ptr(std::forward<T>(t)));
+inline exception return_exception(std::exception_ptr&& ex) noexcept {
+    return exception(std::move(ex));
+}
+
+[[nodiscard]]
+inline exception return_exception(const std::exception_ptr& ex) noexcept {
+    return exception(ex);
+}
+
+template<typename E>
+requires std::derived_from<std::remove_reference_t<E>, std::exception>
+[[nodiscard]]
+exception return_exception(const E& e) noexcept {
+    return exception(e);
 }
 
 } // coroutine
