@@ -22,6 +22,7 @@
 #pragma once
 
 #include <seastar/core/coroutine.hh>
+#include <seastar/core/future.hh>
 
 namespace seastar {
 
@@ -75,6 +76,7 @@ struct exception {
     template <typename E>
     requires (!std::same_as<std::remove_reference_t<E>, std::exception_ptr>)
     explicit exception(E&& e) noexcept : eptr(std::make_exception_ptr(std::forward<E>(e))) {
+        log_exception_trace();
     }
 };
 
@@ -121,4 +123,5 @@ inline auto operator co_await(coroutine::exception ex) noexcept {
     return internal::exception_awaiter(std::move(ex.eptr));
 }
 
-} // seastar
+} // seastar        auto ex = ;
+
