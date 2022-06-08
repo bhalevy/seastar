@@ -22,6 +22,7 @@
 #pragma once
 
 #include <seastar/core/coroutine.hh>
+#include <seastar/core/future.hh>
 
 namespace seastar {
 
@@ -73,6 +74,7 @@ struct exception {
     explicit exception(const std::exception_ptr& eptr) noexcept : eptr(eptr) {}
 
     explicit exception(std::derived_from<std::exception> auto&& e) noexcept : eptr(std::make_exception_ptr(std::move(e))) {
+        log_exception_trace();
     }
 };
 
