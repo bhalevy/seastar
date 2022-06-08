@@ -30,7 +30,7 @@ namespace internal {
 struct exception_awaiter {
     std::exception_ptr eptr;
 
-    explicit exception_awaiter(std::exception_ptr&& eptr) : eptr(std::move(eptr)) {}
+    explicit exception_awaiter(std::exception_ptr&& eptr) noexcept : eptr(std::move(eptr)) {}
 
     exception_awaiter(const exception_awaiter&) = delete;
     exception_awaiter(exception_awaiter&&) = delete;
@@ -68,7 +68,13 @@ namespace coroutine {
 /// ```
 struct exception {
     std::exception_ptr eptr;
-    explicit exception(std::exception_ptr eptr) : eptr(std::move(eptr)) {}
+
+    explicit exception(std::exception_ptr&& eptr) noexcept : eptr(std::move(eptr)) {}
+
+    template <typename E>
+    requires std::derived_from<std::remove_reference_t<E>, std::exception>
+    explicit exception(E&& e) noexcept : eptr(std::make_exception_ptr(std::forward<E>(e))) {
+    }
 };
 
 /// Allows propagating an exception from a coroutine directly rather than
@@ -87,9 +93,10 @@ struct exception {
 /// co_return coroutine::make_exception(std::runtime_error("something failed miserably"));
 /// ```
 template<typename T>
+requires std::same_as<T, std::exception_ptr> || std::derived_from<std::remove_reference_t<T>, std::exception>
 [[nodiscard]]
-exception make_exception(T&& t) {
-    return exception(std::make_exception_ptr(std::forward<T>(t)));
+exception make_exception(T&& t) noexcept {
+    return exception(std::forward<T>(t));
 }
 
 /// Allows propagating an exception from a coroutine directly rather than
@@ -105,9 +112,10 @@ exception make_exception(T&& t) {
 /// co_await coroutine::return_exception(std::runtime_error("something failed miserably"));
 /// ```
 template<typename T>
+requires std::same_as<T, std::exception_ptr> || std::derived_from<std::remove_reference_t<T>, std::exception>
 [[nodiscard]]
-exception return_exception(T&& t) {
-    return exception(std::make_exception_ptr(std::forward<T>(t)));
+exception return_exception(T&& t) noexcept {
+    return exception(std::forward<T>(t));
 }
 
 } // coroutine

@@ -466,6 +466,16 @@ SEASTAR_TEST_CASE(test_coroutine_exception) {
     });
 }
 
+SEASTAR_TEST_CASE(test_coroutine_return_exception_ptr) {
+    co_await check_coroutine_throws<std::runtime_error>([] (int& counter) -> future<> {
+        co_await coroutine::return_exception(std::runtime_error("threw"));
+    });
+    co_await check_coroutine_throws<std::runtime_error>([] (int& counter) -> future<> {
+        auto ex = std::make_exception_ptr(std::runtime_error("threw"));
+        co_await coroutine::return_exception(std::move(ex));
+    });
+}
+
 SEASTAR_TEST_CASE(test_maybe_yield) {
     int var = 0;
     bool done = false;
