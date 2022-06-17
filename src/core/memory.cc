@@ -1890,7 +1890,9 @@ void* realloc(void* ptr, size_t size) {
     if (try_trigger_error_injector()) {
         return nullptr;
     }
-    if (ptr != nullptr && !is_seastar_memory(ptr)) {
+    if (ptr == nullptr) {
+        return malloc(size);
+    } else if (!is_seastar_memory(ptr)) {
         // we can't realloc foreign memory on a shard
         if (is_reactor_thread) {
             abort();
