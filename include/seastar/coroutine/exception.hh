@@ -69,6 +69,7 @@ namespace coroutine {
 struct exception {
     std::exception_ptr eptr;
     explicit exception(std::exception_ptr&& eptr) noexcept : eptr(std::move(eptr)) {}
+    explicit exception(const std::exception_ptr& eptr) noexcept : eptr(eptr) {}
 };
 
 /// Allows propagating an exception from a coroutine directly rather than

@@ -479,6 +479,10 @@ SEASTAR_TEST_CASE(test_coroutine_return_exception_ptr) {
         auto ex = std::make_exception_ptr(std::runtime_error("threw"));
         co_await coroutine::return_exception(std::move(ex));
     });
+    co_await check_coroutine_throws<std::runtime_error>([] (int& counter) -> future<> {
+        auto ex = std::make_exception_ptr(std::runtime_error("threw"));
+        co_await coroutine::return_exception(ex);
+    });
     co_await check_coroutine_throws<int>([] (int& counter) -> future<> {
         co_await coroutine::return_exception(std::make_exception_ptr(3));
     });
