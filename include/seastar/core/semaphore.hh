@@ -30,6 +30,7 @@
 #include <seastar/core/abortable_fifo.hh>
 #include <seastar/core/timed_out_error.hh>
 #include <seastar/core/abort_on_expiry.hh>
+#include <seastar/util/concepts.hh>
 
 namespace seastar {
 
@@ -43,6 +44,10 @@ class has_broken {
 public:
     constexpr static bool value = check<T>(nullptr);
 };
+
+template <typename T>
+inline constexpr bool has_broken_v = has_broken<T>::value;
+
 // Test if a class T has member function aborted()
 template <typename T>
 class has_aborted {
@@ -52,7 +57,11 @@ class has_aborted {
 public:
     constexpr static bool value = check<T>(nullptr);
 };
-}
+
+template <typename T>
+inline constexpr bool has_aborted_v = has_aborted<T>::value;
+
+} // namespace internal
 
 /// \addtogroup fiber-module
 /// @{
@@ -94,6 +103,19 @@ struct semaphore_default_exception_factory {
     static broken_semaphore broken() noexcept;
     static semaphore_aborted aborted() noexcept;
 };
+
+SEASTAR_CONCEPT(
+
+template <typename ExceptionFactory>
+concept SemaphoreExceptionFactory =
+    (
+           requires (ExceptionFactory ef) { { ef.timeout() } -> std::derived_from<semaphore_timed_out>; }
+        || requires (ExceptionFactory ef) { { ef.timeout() } -> std::derived_from<timed_out_error>; }
+    )
+    && (!internal::has_broken_v<ExceptionFactory> || requires (ExceptionFactory ef) { { ef.broken() } -> std::derived_from<broken_semaphore>; })
+    && (!internal::has_aborted_v<ExceptionFactory> || requires (ExceptionFactory ef) { { ef.aborted() } -> std::derived_from<semaphore_aborted>; });
+
+)
 
 class named_semaphore_timed_out : public semaphore_timed_out {
     sstring _msg;
@@ -145,6 +167,7 @@ struct named_semaphore_exception_factory {
 /// ExceptionFactory::broken() - that returns a \ref broken_semaphore exception by default, and
 /// ExceptionFactory::aborted() - that returns a \ref semaphore_aborted exception by default.
 template<typename ExceptionFactory, typename Clock = typename timer<>::clock>
+SEASTAR_CONCEPT(requires SemaphoreExceptionFactory<ExceptionFactory>)
 class basic_semaphore : private ExceptionFactory {
 public:
     using duration = typename timer<Clock>::duration;
@@ -415,6 +438,7 @@ public:
 };
 
 template<typename ExceptionFactory, typename Clock>
+SEASTAR_CONCEPT(requires SemaphoreExceptionFactory<ExceptionFactory>)
 inline
 void
 basic_semaphore<ExceptionFactory, Clock>::broken(std::exception_ptr xp) noexcept {
@@ -429,6 +453,7 @@ basic_semaphore<ExceptionFactory, Clock>::broken(std::exception_ptr xp) noexcept
 }
 
 template<typename ExceptionFactory = semaphore_default_exception_factory, typename Clock = typename timer<>::clock>
+SEASTAR_CONCEPT(requires SemaphoreExceptionFactory<ExceptionFactory>)
 class semaphore_units {
     basic_semaphore<ExceptionFactory, Clock>* _sem;
     size_t _n;
@@ -530,6 +555,7 @@ public:
 ///
 /// \related semaphore
 template<typename ExceptionFactory, typename Clock = typename timer<>::clock>
+SEASTAR_CONCEPT(requires SemaphoreExceptionFactory<ExceptionFactory>)
 future<semaphore_units<ExceptionFactory, Clock>>
 get_units(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units) noexcept {
     return sem.wait(units).then([&sem, units] {
@@ -553,6 +579,7 @@ get_units(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units) noexcept 
 ///
 /// \related semaphore
 template<typename ExceptionFactory, typename Clock = typename timer<>::clock>
+SEASTAR_CONCEPT(requires SemaphoreExceptionFactory<ExceptionFactory>)
 future<semaphore_units<ExceptionFactory, Clock>>
 get_units(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units, typename basic_semaphore<ExceptionFactory, Clock>::time_point timeout) noexcept {
     return sem.wait(timeout, units).then([&sem, units] {
@@ -577,6 +604,7 @@ get_units(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units, typename 
 ///
 /// \related semaphore
 template<typename ExceptionFactory, typename Clock>
+SEASTAR_CONCEPT(requires SemaphoreExceptionFactory<ExceptionFactory>)
 future<semaphore_units<ExceptionFactory, Clock>>
 get_units(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units, typename basic_semaphore<ExceptionFactory, Clock>::duration timeout) noexcept {
     return sem.wait(timeout, units).then([&sem, units] {
@@ -601,6 +629,7 @@ get_units(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units, typename 
 ///
 /// \related semaphore
 template<typename ExceptionFactory, typename Clock>
+SEASTAR_CONCEPT(requires SemaphoreExceptionFactory<ExceptionFactory>)
 future<semaphore_units<ExceptionFactory, Clock>>
 get_units(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units, abort_source& as) noexcept {
     return sem.wait(as, units).then([&sem, units] {
@@ -626,6 +655,7 @@ get_units(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units, abort_sou
 ///
 /// \related semaphore
 template<typename ExceptionFactory, typename Clock = typename timer<>::clock>
+SEASTAR_CONCEPT(requires SemaphoreExceptionFactory<ExceptionFactory>)
 std::optional<semaphore_units<ExceptionFactory, Clock>>
 try_get_units(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units) noexcept {
     if (!sem.try_wait(units)) {
@@ -647,6 +677,7 @@ try_get_units(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units) noexc
 /// \param sem The semaphore to take units from
 /// \param units  Number of units to consume
 template<typename ExceptionFactory, typename Clock = typename timer<>::clock>
+SEASTAR_CONCEPT(requires SemaphoreExceptionFactory<ExceptionFactory>)
 semaphore_units<ExceptionFactory, Clock>
 consume_units(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units) noexcept {
     sem.consume(units);
@@ -675,6 +706,7 @@ consume_units(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units) noexc
 ///
 /// \related semaphore
 template <typename ExceptionFactory, typename Func, typename Clock = typename timer<>::clock>
+SEASTAR_CONCEPT(requires SemaphoreExceptionFactory<ExceptionFactory>)
 inline
 futurize_t<std::invoke_result_t<Func>>
 with_semaphore(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units, Func&& func) noexcept {
@@ -709,6 +741,7 @@ with_semaphore(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units, Func
 ///
 /// \related semaphore
 template <typename ExceptionFactory, typename Clock, typename Func>
+SEASTAR_CONCEPT(requires SemaphoreExceptionFactory<ExceptionFactory>)
 inline
 futurize_t<std::invoke_result_t<Func>>
 with_semaphore(basic_semaphore<ExceptionFactory, Clock>& sem, size_t units, typename basic_semaphore<ExceptionFactory, Clock>::duration timeout, Func&& func) noexcept {
