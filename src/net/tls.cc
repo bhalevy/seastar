@@ -45,6 +45,10 @@
 
 #include "../core/fsnotify.hh"
 
+#ifdef SEASTAR_DEBUG
+bool tls_inject_handshake_error = false;
+#endif
+
 namespace seastar {
 
 logger tlslog("tls");
@@ -1081,6 +1085,11 @@ public:
         }
         try {
             tlslog.debug("do_handshake");
+#ifdef SEASTAR_DEBUG
+            if (tls_inject_handshake_error) {
+                _inject_vec_push_async_error = true;
+            }
+#endif
             auto res = gnutls_handshake(*this);
             if (res < 0) {
                 tlslog.debug("do_handshake failed: res={}", res);
@@ -1401,6 +1410,14 @@ public:
                 tlslog.log(level, "tls: vec_push: {}output failed: {}", pending_error ? "pending " : "", ex);
                 std::rethrow_exception(ex);
             }
+#ifdef SEASTAR_DEBUG
+            if (_inject_vec_push_async_error && !_output_pending.available()) {
+                tlslog.warn("vec_push: injecting async output error");
+                _output_pending = _output_pending.then([] {
+                    return make_exception_future<>(std::runtime_error("injected vec_push error"));
+                });
+            }
+#endif
             return n;
         } catch (const std::system_error& e) {
             gnutls_transport_set_errno(*this, e.code().value());
@@ -1588,6 +1605,10 @@ private:
 
     // modify this to a unique_ptr to handle exceptions in our constructor.
     std::unique_ptr<std::remove_pointer_t<gnutls_session_t>, void(*)(gnutls_session_t)> _session;
+
+#ifdef SEASTAR_DEBUG
+    bool _inject_vec_push_async_error = false;
+#endif
 };
 
 struct session::session_ref {

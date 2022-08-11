@@ -34,6 +34,7 @@
 #include <seastar/core/iostream.hh>
 #include <seastar/core/with_timeout.hh>
 #include <seastar/util/std-compat.hh>
+#include <seastar/util/closeable.hh>
 #include <seastar/net/tls.hh>
 #include <seastar/net/dns.hh>
 #include <seastar/net/inet_address.hh>
@@ -46,6 +47,10 @@
 #include "tmpdir.hh"
 
 #include <gnutls/gnutls.h>
+
+#ifdef SEASTAR_DEBUG
+extern bool tls_inject_handshake_error;
+#endif
 
 #if 0
 
@@ -308,6 +313,61 @@ SEASTAR_TEST_CASE(test_abort_accept_on_server_before_handshake) {
     });
 }
 
+#ifdef SEASTAR_DEBUG
+
+// Reproducer for https://github.com/scylladb/seastar/issues/1181
+SEASTAR_TEST_CASE(test_handshake_error) {
+    return async([] {
+        auto certs = ::make_shared<tls::server_credentials>(::make_shared<tls::dh_params>());
+        certs->set_x509_key_file(certfile("test.crt"), certfile("test.key"), tls::x509_crt_format::PEM).get();
+
+        ::listen_options opts;
+        opts.reuse_address = true;
+        auto addr = ::make_ipv4_address( {0x7f000001, 4712});
+        auto server = tls::listen(certs, addr, opts);
+        auto sa = server.accept();
+
+        tls::credentials_builder b;
+        b.set_x509_trust_file(certfile("catest.pem"), tls::x509_crt_format::PEM).get();
+
+        auto c = tls::connect(b.build_certificate_credentials(), addr).get0();
+
+        seastar_logger.info("enabling tls handshake error injection");
+        tls_inject_handshake_error = true;
+
+        auto s = sa.get0();
+        auto out = c.output();
+        auto close_out = deferred_action([&out] () noexcept {
+            try {
+                out.close().get();
+            } catch (...) {
+                // ignore exceptions
+            }
+        });
+        auto in = s.connection.input();
+        auto close_in = deferred_action([&in] () noexcept {
+            try {
+                in.close().get();
+            } catch (...) {
+                // ignore exceptions
+            }
+        });
+
+        try {
+            out.write("apa").get();
+            out.flush().get();
+            auto buf = in.read().get0();
+            BOOST_FAIL("std::runtime_error exception was expected");
+        } catch (const std::runtime_error& e) {
+            std::string s = e.what();
+            BOOST_REQUIRE(s.find("injected") != std::string::npos);
+        }
+
+        tls_inject_handshake_error = false;
+    });
+}
+
+#endif // SEASTAR_DEBUG
 
 struct streams {
     ::connected_socket s;
