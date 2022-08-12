@@ -1386,13 +1386,12 @@ public:
             bool pending_error = _output_pending.failed();
 
             if (!pending_error) {
-            // FIXME indentation
-            scattered_message<char> msg;
-            for (int i = 0; i < iovcnt; ++i) {
-                msg.append(std::string_view(reinterpret_cast<const char *>(iov[i].iov_base), iov[i].iov_len));
-            }
-            n = msg.size();
-            _output_pending = _out.put(std::move(msg).release());
+                scattered_message<char> msg;
+                for (int i = 0; i < iovcnt; ++i) {
+                    msg.append(std::string_view(reinterpret_cast<const char *>(iov[i].iov_base), iov[i].iov_len));
+                }
+                n = msg.size();
+                _output_pending = _out.put(std::move(msg).release());
             }
             if (_output_pending.failed()) {
                 auto ex = _output_pending.get_exception();
