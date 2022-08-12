@@ -38,6 +38,7 @@
 #include <seastar/net/stack.hh>
 #include <seastar/util/std-compat.hh>
 #include <seastar/util/variant_utils.hh>
+#include <seastar/util/log.hh>
 
 #include <boost/range/iterator_range.hpp>
 #include <boost/range/adaptor/map.hpp>
@@ -45,6 +46,8 @@
 #include "../core/fsnotify.hh"
 
 namespace seastar {
+
+logger tlslog("tls");
 
 class net::get_impl {
 public:
@@ -1049,6 +1052,7 @@ public:
 
     future<> send_alert(gnutls_alert_level_t level, gnutls_alert_description_t desc) {
         return repeat([this, level, desc]() {
+            tlslog.debug("send_alert: level={} desc={}", level, desc);
             auto res = gnutls_alert_send(*this, level, desc);
             switch(res) {
             case GNUTLS_E_SUCCESS:
@@ -1076,8 +1080,10 @@ public:
             gnutls_server_name_set(*this, GNUTLS_NAME_DNS, _hostname.data(), _hostname.size());
         }
         try {
+            tlslog.debug("do_handshake");
             auto res = gnutls_handshake(*this);
             if (res < 0) {
+                tlslog.debug("do_handshake failed: res={}", res);
                 switch (res) {
                 case GNUTLS_E_AGAIN:
                     // #453 always wait for output first.
@@ -1158,14 +1164,19 @@ public:
         }
         return _in.get().then([this](buf_type buf) {
             _eof |= buf.empty();
+            tlslog.trace("wait_for_input: buf size={} eof={}", buf.size(), _eof);
            _input = std::move(buf);
         }).handle_exception([this](auto ep) {
+            tlslog.debug("wait_for_input failed: {}", ep);
            _error = ep;
            return make_exception_future(ep);
         });
     }
     future<> wait_for_output() {
-        return std::exchange(_output_pending, make_ready_future()).handle_exception([this](auto ep) {
+        return std::exchange(_output_pending, make_ready_future()).then([] {
+            tlslog.trace("wait_for_output: OK");
+        }).handle_exception([this](auto ep) {
+            tlslog.debug("wait_for_output: error: {}", ep);
            _error = ep;
            return make_exception_future(ep);
         });
@@ -1192,6 +1203,7 @@ public:
     }
 
     void verify() {
+        tlslog.debug("tls: session: verify certificate");
         unsigned int status;
         auto res = gnutls_certificate_verify_peers3(*this, _type != type::CLIENT || _hostname.empty()
                         ? nullptr : _hostname.c_str(), &status);
@@ -1355,6 +1367,7 @@ public:
     }
     ssize_t vec_push(const giovec_t * iov, int iovcnt) {
         if (!_output_pending.available()) {
+            tlslog.debug("vec_push: output pending unavailable");
             gnutls_transport_set_errno(*this, EAGAIN);
             return -1;
         }
@@ -1398,6 +1411,7 @@ public:
     }
     future<>
     handle_output_error(int res) {
+        tlslog.debug("handle_output_error: {}", res);
         _error = std::make_exception_ptr(std::system_error(res, glts_errorc));
         // #453
         // defensively wait for output before generating the error.
