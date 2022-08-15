@@ -1364,15 +1364,14 @@ public:
             ssize_t n; // Set on the good path and unused on the bad path
             bool output_pending_failed = _output_pending.failed();
 
-          // FIXME indentation
-          if (!output_pending_failed) {
-            scattered_message<char> msg;
-            for (int i = 0; i < iovcnt; ++i) {
-                msg.append(std::string_view(reinterpret_cast<const char *>(iov[i].iov_base), iov[i].iov_len));
+            if (!output_pending_failed) {
+                scattered_message<char> msg;
+                for (int i = 0; i < iovcnt; ++i) {
+                    msg.append(std::string_view(reinterpret_cast<const char *>(iov[i].iov_base), iov[i].iov_len));
+                }
+                n = msg.size();
+                _output_pending = _out.put(std::move(msg).release());
             }
-            n = msg.size();
-            _output_pending = _out.put(std::move(msg).release());
-          }
             if (_output_pending.failed()) {
                 auto ex = _output_pending.get_exception();
                 // exception is copied back into _output_pending
