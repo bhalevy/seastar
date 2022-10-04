@@ -110,6 +110,15 @@ future<> destroy_smp_service_group(smp_service_group ssg) noexcept {
     });
 }
 
+future<bool> validate_smp_service_group(smp_service_group ssg) noexcept {
+    auto id = internal::smp_service_group_id(ssg);
+    return smp::submit_to(0, [id] {
+        return with_semaphore(smp_service_group_management_sem, 1, [id] {
+            return id < smp_service_groups.size() && !smp_service_groups.empty();
+        });
+    });
+}
+
 void init_default_smp_service_group(shard_id cpu) {
     smp_service_groups.emplace_back();
     auto& ssg0 = smp_service_groups.back();

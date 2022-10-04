@@ -455,3 +455,12 @@ SEASTAR_THREAD_TEST_CASE(destroy_invalid_smp_service_group) {
 }
 
 #endif
+
+SEASTAR_THREAD_TEST_CASE(test_validate_smp_service_group) {
+    BOOST_REQUIRE_EQUAL(validate_smp_service_group(default_smp_service_group()).get0(), true);
+    std::array<char, sizeof(smp_service_group)> data;
+    // make a corrupt smp_service_group
+    std::memset(&data[0], ~0, sizeof(data));
+    smp_service_group* ssgp = (smp_service_group*)(&data[0]);
+    BOOST_REQUIRE_EQUAL(validate_smp_service_group(*ssgp).get0(), false);
+}
