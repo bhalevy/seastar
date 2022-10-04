@@ -137,6 +137,17 @@ future<smp_service_group> create_smp_service_group(smp_service_group_config ssgc
 /// Note: the function aborts on internal error if smp_service_group is invalid.
 future<> destroy_smp_service_group(smp_service_group ssg) noexcept;
 
+/// Validates an smp_service_group.
+///
+/// Returns true iff the group is valid and was not destroyed.
+///
+/// Note that smp_service_group create and destroy are serialized
+/// under a semaphore and even when this function returns true,
+/// the smp_service_group is not locked and might be destroyed
+/// in parallel. However calling validate_smp_service_group before
+/// attempting to destroy an arbitrary smp_service_group is recommended.
+future<bool> validate_smp_service_group(smp_service_group ssg) noexcept;
+
 inline
 smp_service_group default_smp_service_group() noexcept {
     return smp_service_group(0);
