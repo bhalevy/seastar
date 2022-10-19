@@ -180,6 +180,145 @@ template <std::ranges::range Range, typename Func>
 requires std::invocable<Func, std::ranges::range_reference_t<Range>>
 parallel_for_each(Range&& range, Func&& func) -> parallel_for_each<Func>;
 
+namespace internal {
 
+template <typename Iterator, typename Sentinel, typename Func>
+requires (std::same_as<Sentinel, Iterator> || std::sentinel_for<Sentinel, Iterator>)
+    && std::same_as<future<>, futurize_t<std::invoke_result_t<Func, typename std::iterator_traits<Iterator>::reference>>>
+class parallel_for_each_check_preemption_awaiter : continuation_base<> {
+    using coroutine_handle_t = SEASTAR_INTERNAL_COROUTINE_NAMESPACE::coroutine_handle<void>;
 
+    Func _func;
+    boost::container::small_vector<future<>, 5> _futures;
+    std::exception_ptr _ex;
+    coroutine_handle_t _when_ready;
+    task* _waiting_task = nullptr;
+    Iterator _begin;
+    Sentinel _end;
+
+    // Consume futures in reverse order.
+    // Since futures at the front are expected
+    // to become ready before futures at the back,
+    // therefore it is less likely we will have
+    // to wait on them, after the back futures
+    // become available.
+    //
+    // Return true iff all futures were consumed.
+    void consume_next() noexcept {
+        while (!_futures.empty()) {
+            auto& fut = _futures.back();
+            if (!fut.available()) {
+                break;
+            }
+            if (fut.failed()) {
+                _ex = fut.get_exception();
+            }
+            _futures.pop_back();
+        }
+        while (_begin != _end) {
+            auto fut = futurize_invoke(_func, *_begin);
+            ++_begin;
+            auto preempt = need_preempt();
+            if (fut.available() && !preempt) {
+                if (fut.failed()) {
+                    _ex = fut.get_exception();
+                }
+            } else {
+                memory::scoped_critical_alloc_section _;
+                if (!_futures.capacity()) {
+                    using itraits = std::iterator_traits<Iterator>;
+                    if constexpr (seastar::internal::has_iterator_category<Iterator>::value) {
+                        auto n = seastar::internal::iterator_range_estimate_vector_capacity(_begin, _end, typename itraits::iterator_category{});
+                        _futures.reserve(n);
+                    }
+                }
+                _futures.push_back(std::move(fut));
+                if (preempt) {
+                    return;
+                }
+            }
+        }
+    }
+
+    bool done() const noexcept {
+        return _futures.empty() && _begin == _end;
+    }
+
+    void set_callback() noexcept {
+        // To reuse `this` as continuation_base<>
+        // we must reset _state, to allow setting
+        // it again.
+        this->_state = {};
+        seastar::internal::set_callback(std::move(_futures.back()), reinterpret_cast<continuation_base<>*>(this));
+        _futures.pop_back();
+    }
+
+    void resume_or_set_callback() noexcept {
+        consume_next();
+        if (done()) {
+            _when_ready.resume();
+        } else {
+            set_callback();
+        }
+    }
+
+public:
+    // clang 13.0.1 doesn't support subrange
+    // so provide also a Iterator/Sentinel based constructor.
+    // See https://github.com/llvm/llvm-project/issues/46091
+    explicit parallel_for_each_check_preemption_awaiter(Iterator&& begin, Sentinel&& end, Func&& func) noexcept
+        : _func(std::forward<Func>(func))
+        , _begin(std::forward<Iterator>(begin))
+        , _end(std::forward<Iterator>(end))
+    {
+        consume_next();
+    }
+
+    bool await_ready() const noexcept {
+        if (_futures.empty() && _begin == _end) {
+            return !_ex;
+        }
+        return false;
+    }
+
+    template<typename T>
+    void await_suspend(SEASTAR_INTERNAL_COROUTINE_NAMESPACE::coroutine_handle<T> h) {
+        _when_ready = h;
+        _waiting_task = &h.promise();
+        resume_or_set_callback();
+    }
+
+    void await_resume() const {
+        if (_ex) [[unlikely]] {
+            std::rethrow_exception(std::move(_ex));
+        }
+    }
+
+    virtual void run_and_dispose() noexcept override {
+        if (this->_state.failed()) {
+            _ex = std::move(this->_state).get_exception();
+        }
+        resume_or_set_callback();
+    }
+
+    virtual task* waiting_task() noexcept override {
+        return _waiting_task;
+    }
+};
+
+} // namespace internal
+
+template <typename Iterator, typename Sentinel, typename Func>
+requires (std::same_as<Sentinel, Iterator> || std::sentinel_for<Sentinel, Iterator>)
+    && std::same_as<future<>, futurize_t<std::invoke_result_t<Func, typename std::iterator_traits<Iterator>::reference>>>
+future<> parallel_for_each_check_preemption(Iterator begin, Sentinel end, Func&& func) noexcept {
+    co_await internal::parallel_for_each_check_preemption_awaiter(std::forward<Iterator>(begin), std::forward<Sentinel>(end), std::forward<Func>(func));
 }
+
+template <std::ranges::range Range, typename Func>
+requires std::invocable<Func, std::ranges::range_reference_t<Range>>
+future<> parallel_for_each_check_preemption(Range range, Func&& func) noexcept {
+    co_await internal::parallel_for_each_check_preemption_awaiter(std::ranges::begin(range), std::ranges::end(range), std::forward<Func>(func));
+}
+
+} // namespace seastar::coroutine

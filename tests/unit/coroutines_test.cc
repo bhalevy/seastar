@@ -24,7 +24,9 @@
 
 #include <seastar/core/circular_buffer.hh>
 #include <seastar/core/future-util.hh>
+#include <seastar/core/reactor.hh>
 #include <seastar/testing/test_case.hh>
+#include <seastar/testing/thread_test_case.hh>
 #include <seastar/core/sleep.hh>
 #include <seastar/util/later.hh>
 #include <seastar/core/thread.hh>
@@ -642,6 +644,40 @@ SEASTAR_TEST_CASE(test_parallel_for_each) {
     });
     BOOST_REQUIRE_EQUAL(sum_of_squares, 10);
 #endif
+}
+
+SEASTAR_TEST_CASE(test_parallel_for_each_preempt) {
+    std::vector<int> values;
+    int count = 1000000;
+    semaphore sem(0);
+    bool preempted = false;
+
+    values.resize(count);
+
+    auto saved_blocked_reactor_notify_ms = engine().get_blocked_reactor_notify_ms();
+    engine().update_blocked_reactor_notify_ms(1ms);
+
+    auto wait_fut = sem.wait(1).then([&] {
+        preempted = true;
+    });
+
+    size_t idx = 0;
+    co_await coroutine::parallel_for_each_check_preemption(values.begin(), values.end(), [&] (int& x) {
+        if (idx == 0) {
+            sem.signal(1);
+        }
+        for (size_t i = 0; !preempted && i < idx; i++) {
+            ++values[idx];
+        }
+        ++idx;
+    });
+
+    BOOST_REQUIRE(preempted);
+
+    engine().update_blocked_reactor_notify_ms(saved_blocked_reactor_notify_ms);
+
+    co_await std::move(wait_fut);
+
 }
 
 SEASTAR_TEST_CASE(test_void_as_future) {
