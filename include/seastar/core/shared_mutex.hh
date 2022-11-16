@@ -174,13 +174,13 @@ with_shared(shared_mutex& sm, Func&& func) noexcept {
 
 template <typename Func>
 SEASTAR_CONCEPT(
-    requires (std::invocable<Func> && !std::is_nothrow_move_constructible_v<Func>)
+    requires (std::invocable<Func> && !std::is_nothrow_move_constructible_v<Func> && std::same_as<futurize_t<std::invoke_result_t<Func>>, future<>>)
     inline
     futurize_t<std::invoke_result_t<Func>>
 )
 SEASTAR_NO_CONCEPT(
     inline
-    std::enable_if_t<!std::is_nothrow_move_constructible_v<Func>, futurize_t<std::result_of_t<Func ()>>>
+    std::enable_if_t<!std::is_nothrow_move_constructible_v<Func> && std::is_same_v<futurize_t<std::invoke_result_t<Func>>, future<>>, futurize_t<std::result_of_t<Func ()>>>
 )
 with_shared(shared_mutex& sm, Func&& func) noexcept {
     // FIXME: use a coroutine when c++17 support is dropped
@@ -193,7 +193,33 @@ with_shared(shared_mutex& sm, Func&& func) noexcept {
             });
         });
     } catch (...) {
-        return current_exception_as_future();
+        return current_exception_as_future<>();
+    }
+}
+
+template <typename Func>
+SEASTAR_CONCEPT(
+    requires (std::invocable<Func> && !std::is_nothrow_move_constructible_v<Func> && !std::same_as<futurize_t<std::invoke_result_t<Func>>, future<>>)
+    inline
+    futurize_t<std::invoke_result_t<Func>>
+)
+SEASTAR_NO_CONCEPT(
+    inline
+    std::enable_if_t<!std::is_nothrow_move_constructible_v<Func> && !std::is_same_v<futurize_t<std::invoke_result_t<Func>>, future<>>, futurize_t<std::result_of_t<Func ()>>>
+)
+with_shared(shared_mutex& sm, Func&& func) noexcept {
+    // FIXME: use a coroutine when c++17 support is dropped
+    try {
+        return do_with(std::forward<Func>(func), [&sm] (Func& func) {
+            return sm.lock_shared().then([&func] {
+                return func();
+            }).finally([&sm] {
+                sm.unlock_shared();
+            });
+        });
+    } catch (...) {
+        using value_type = typename futurize_t<std::invoke_result_t<Func>>::value_type;
+        return current_exception_as_future<value_type>();
     }
 }
 
@@ -225,16 +251,15 @@ with_lock(shared_mutex& sm, Func&& func) noexcept {
     });
 }
 
-
 template <typename Func>
 SEASTAR_CONCEPT(
-    requires (std::invocable<Func> && !std::is_nothrow_move_constructible_v<Func>)
+    requires (std::invocable<Func> && !std::is_nothrow_move_constructible_v<Func> && std::same_as<futurize_t<std::invoke_result_t<Func>>, future<>>)
     inline
     futurize_t<std::invoke_result_t<Func>>
 )
 SEASTAR_NO_CONCEPT(
     inline
-    std::enable_if_t<!std::is_nothrow_move_constructible_v<Func>, futurize_t<std::result_of_t<Func ()>>>
+    std::enable_if_t<!std::is_nothrow_move_constructible_v<Func> && std::is_same_v<futurize_t<std::invoke_result_t<Func>>, future<>>, futurize_t<std::result_of_t<Func ()>>>
 )
 with_lock(shared_mutex& sm, Func&& func) noexcept {
     // FIXME: use a coroutine when c++17 support is dropped
@@ -248,6 +273,32 @@ with_lock(shared_mutex& sm, Func&& func) noexcept {
         });
     } catch (...) {
         return current_exception_as_future();
+    }
+}
+
+template <typename Func>
+SEASTAR_CONCEPT(
+    requires (std::invocable<Func> && !std::is_nothrow_move_constructible_v<Func> && !std::same_as<futurize_t<std::invoke_result_t<Func>>, future<>>)
+    inline
+    futurize_t<std::invoke_result_t<Func>>
+)
+SEASTAR_NO_CONCEPT(
+    inline
+    std::enable_if_t<!std::is_nothrow_move_constructible_v<Func> && !std::is_same_v<futurize_t<std::invoke_result_t<Func>>, future<>>, futurize_t<std::result_of_t<Func ()>>>
+)
+with_lock(shared_mutex& sm, Func&& func) noexcept {
+    // FIXME: use a coroutine when c++17 support is dropped
+    try {
+        return do_with(std::forward<Func>(func), [&sm] (Func& func) {
+            return sm.lock().then([&func] {
+                return func();
+            }).finally([&sm] {
+                sm.unlock();
+            });
+        });
+    } catch (...) {
+        using value_type = typename futurize_t<std::invoke_result_t<Func>>::value_type;
+        return current_exception_as_future<value_type>();
     }
 }
 
