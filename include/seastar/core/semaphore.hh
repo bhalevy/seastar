@@ -30,8 +30,11 @@
 #include <seastar/core/abortable_fifo.hh>
 #include <seastar/core/timed_out_error.hh>
 #include <seastar/core/abort_on_expiry.hh>
+#include <seastar/util/log.hh>
 
 namespace seastar {
+
+extern logger seastar_logger;
 
 namespace internal {
 // Test if a class T has member function broken()
@@ -214,6 +217,21 @@ public:
     {
         static_assert(std::is_nothrow_move_constructible_v<expiry_handler>);
     }
+
+    [[deprecated("semaphores should not be moved")]]
+    basic_semaphore(basic_semaphore&& o) noexcept
+        : _count(std::exchange(o._count, 0))
+        , _wait_list(std::move(o._wait_list))
+    {
+        seastar_logger.error("semaphores should not be moved, at {}", current_backtrace());
+    }
+
+    basic_semaphore(const basic_semaphore&) = delete;
+
+    [[deprecated("semaphores should not be move-assigned")]]
+    basic_semaphore& operator=(basic_semaphore&&) = default;
+    basic_semaphore& operator=(const basic_semaphore&) = delete;
+
     /// Waits until at least a specific number of units are available in the
     /// counter, and reduces the counter by that amount of units.
     ///
