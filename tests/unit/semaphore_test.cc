@@ -431,14 +431,3 @@ SEASTAR_THREAD_TEST_CASE(test_semaphore_abort_before_wait) {
     BOOST_CHECK_THROW(fut1.get(), semaphore_aborted);
     BOOST_REQUIRE_EQUAL(x, 0);
 }
-
-SEASTAR_THREAD_TEST_CASE(test_semaphore_move_with_outstanding_units) {
-    auto sem0 = semaphore(1);
-    auto sem = std::make_unique<semaphore>(std::move(sem0));
-    auto units = std::make_unique<semaphore_units<>>(get_units(*sem, 1).get());
-    BOOST_REQUIRE_EQUAL(sem->current(), 0);
-    auto sem1 = std::move(sem);
-    BOOST_REQUIRE_EQUAL(sem1->current(), 0);
-    units.reset();
-    BOOST_REQUIRE_EQUAL(sem1->current(), 1);
-}
