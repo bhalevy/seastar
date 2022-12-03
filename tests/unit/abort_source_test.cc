@@ -161,3 +161,14 @@ SEASTAR_THREAD_TEST_CASE(test_sleep_abortable_with_exception) {
     }
     BOOST_REQUIRE(caught_exception);
 }
+
+SEASTAR_TEST_CASE(test_destroy_subscribed_abort_source) {
+    auto as = make_shared<abort_source>();
+    struct X {
+        optimized_optional<abort_source::subscription> sub;
+        X(abort_source* as) : sub(as->subscribe([] () noexcept { })) {}
+    };
+    auto x = std::make_unique<X>(as.get());
+    as = {};
+    return make_ready_future<>();
+}
