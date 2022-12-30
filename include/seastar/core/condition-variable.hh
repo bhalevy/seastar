@@ -28,6 +28,7 @@
 #   include <seastar/core/coroutine.hh>
 #endif
 #include <seastar/core/loop.hh>
+#include <seastar/core/abort_source.hh>
 
 namespace seastar {
 
@@ -76,6 +77,7 @@ private:
     };
 
     struct promise_waiter : public waiter, public promise<> {
+        optimized_optional<abort_source::subscription> sub;
         void signal() noexcept override {
             set_value();
             // note: we self-delete in either case we are woken
@@ -87,6 +89,18 @@ private:
             promise<>::set_exception(std::move(ep));
             // see comment above
             delete this;
+        }
+        // Subscribe to the abort_source.
+        // If abort was already requested, calls set_exception
+        // and the latter destroys the object,
+        // so subscribe should be called after get_future and add_waiter.
+        void subscribe(abort_source& as) noexcept {
+            sub = as.subscribe([this] (const std::optional<std::exception_ptr>& opt_ex) noexcept {
+                set_exception(opt_ex.value_or(std::make_exception_ptr(abort_requested_exception())));
+            });
+            if (!sub) {
+                set_exception(std::make_exception_ptr(abort_requested_exception()));
+            }
         }
     };
 
@@ -209,13 +223,16 @@ public:
     /// \return a future that becomes ready when \ref signal() is called
     ///         If the condition variable was \ref broken() will return \ref broken_condition_variable
     ///         exception.
-    future<> wait() noexcept {
+    future<> wait(abort_source* asp = nullptr) noexcept {
         if (check_and_consume_signal()) {
             return make_ready_future();
         }
         auto* w = new promise_waiter;
         auto f = w->get_future();
         add_waiter(*w);
+        if (asp) {
+            w->subscribe(*asp);
+        }
         return f;
     }
 
@@ -227,7 +244,7 @@ public:
     ///         If the condition variable was \ref broken() will return \ref broken_condition_variable
     ///         exception. If timepoint is reached will return \ref condition_variable_timed_out exception.
     template<typename Clock = typename timer<>::clock, typename Duration = typename Clock::duration>
-    future<> wait(std::chrono::time_point<Clock, Duration> timeout) noexcept {
+    future<> wait(std::chrono::time_point<Clock, Duration> timeout, abort_source* asp = nullptr) noexcept {
         if (check_and_consume_signal()) {
             return make_ready_future();
         }
@@ -239,6 +256,9 @@ public:
         w->set_callback(std::bind(&waiter::timeout, w));
         w->arm(timeout);
         add_waiter(*w);
+        if (asp) {
+            w->subscribe(*asp);
+        }
         return f;
     }
 
@@ -250,8 +270,8 @@ public:
     ///         If the condition variable was \ref broken() will return \ref broken_condition_variable
     ///         exception. If timepoint is passed will return \ref condition_variable_timed_out exception.
     template<typename Rep, typename Period>
-    future<> wait(std::chrono::duration<Rep, Period> timeout) noexcept {
-        return wait(timer<>::clock::now() + timeout);
+    future<> wait(std::chrono::duration<Rep, Period> timeout, abort_source* asp = nullptr) noexcept {
+        return wait(timer<>::clock::now() + timeout, asp);
     }
 
     /// Waits until condition variable is notified and pred() == true, otherwise
@@ -263,9 +283,9 @@ public:
     ///         If the condition variable was \ref broken(), may contain an exception.
     template<typename Pred>
     SEASTAR_CONCEPT( requires seastar::InvokeReturns<Pred, bool> )
-    future<> wait(Pred&& pred) noexcept {
-        return do_until(std::forward<Pred>(pred), [this] {
-            return wait();
+    future<> wait(Pred&& pred, abort_source* asp = nullptr) noexcept {
+        return do_until(std::forward<Pred>(pred), [this, asp] {
+            return wait(asp);
         });
     }
 
@@ -280,9 +300,9 @@ public:
     ///         exception. If timepoint is reached will return \ref condition_variable_timed_out exception.
     template<typename Clock = typename timer<>::clock, typename Duration = typename Clock::duration, typename Pred>
     SEASTAR_CONCEPT( requires seastar::InvokeReturns<Pred, bool> )
-    future<> wait(std::chrono::time_point<Clock, Duration> timeout, Pred&& pred) noexcept {
-        return do_until(std::forward<Pred>(pred), [this, timeout] {
-            return wait(timeout);
+    future<> wait(std::chrono::time_point<Clock, Duration> timeout, Pred&& pred, abort_source* asp = nullptr) noexcept {
+        return do_until(std::forward<Pred>(pred), [this, timeout, asp] {
+            return wait(timeout, asp);
         });
     }
 
@@ -297,8 +317,8 @@ public:
     ///         exception. If timepoint is passed will return \ref condition_variable_timed_out exception.
     template<typename Rep, typename Period, typename Pred>
     SEASTAR_CONCEPT( requires seastar::InvokeReturns<Pred, bool> )
-    future<> wait(std::chrono::duration<Rep, Period> timeout, Pred&& pred) noexcept {
-        return wait(timer<>::clock::now() + timeout, std::forward<Pred>(pred));
+    future<> wait(std::chrono::duration<Rep, Period> timeout, Pred&& pred, abort_source* asp = nullptr) noexcept {
+        return wait(timer<>::clock::now() + timeout, std::forward<Pred>(pred), asp);
     }
 
 #ifdef SEASTAR_COROUTINES_ENABLED
