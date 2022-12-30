@@ -440,4 +440,74 @@ SEASTAR_TEST_CASE(test_condition_variable_when_timeout) {
     co_await std::move(f);
 }
 
+SEASTAR_TEST_CASE(test_condition_variable_abort_when) {
+    condition_variable cv;
+    abort_source as;
+
+    timer<> default_timer;
+    default_timer.set_callback([&] { cv.broken(); });
+    default_timer.arm(100ms);
+
+    timer<> abort_timer;
+    abort_timer.set_callback([&] { as.request_abort(); });
+    abort_timer.arm(10ms);
+
+    co_await sleep(1ms);
+
+    BOOST_REQUIRE_THROW(co_await cv.when(&as), abort_requested_exception);
+
+    condition_variable cv2;
+    BOOST_REQUIRE_THROW(co_await cv2.when(&as), abort_requested_exception);
+}
+
+SEASTAR_TEST_CASE(test_condition_variable_abort_when_timeout) {
+    condition_variable cv;
+    abort_source as;
+
+    timer<> t;
+    t.set_callback([&] { as.request_abort(); });
+    t.arm(10ms);
+
+    BOOST_REQUIRE_THROW(co_await cv.when(100ms, &as), abort_requested_exception);
+
+    condition_variable cv2;
+    BOOST_REQUIRE_THROW(co_await cv2.when(100ms, &as), abort_requested_exception);
+}
+
+SEASTAR_TEST_CASE(test_condition_variable_abort_when_pred) {
+    condition_variable cv;
+    abort_source as;
+
+    timer<> default_timer;
+    default_timer.set_callback([&] { cv.broken(); });
+    default_timer.arm(100ms);
+
+    timer<> abort_timer;
+    abort_timer.set_callback([&] { as.request_abort(); });
+    abort_timer.arm(10ms);
+
+    bool ready = false;
+
+    BOOST_REQUIRE_THROW(co_await cv.when([&] { return ready; }, &as), abort_requested_exception);
+
+    condition_variable cv2;
+    BOOST_REQUIRE_THROW(co_await cv2.when([&] { return ready; }, &as), abort_requested_exception);
+}
+
+SEASTAR_TEST_CASE(test_condition_variable_abort_when_timeout_pred) {
+    condition_variable cv;
+    abort_source as;
+
+    timer<> t;
+    t.set_callback([&] { as.request_abort(); });
+    t.arm(10ms);
+
+    bool ready = false;
+
+    BOOST_REQUIRE_THROW(co_await cv.when(100ms, [&] { return ready; }, &as), abort_requested_exception);
+
+    condition_variable cv2;
+    BOOST_REQUIRE_THROW(co_await cv2.when(100ms, [&] { return ready; }, &as), abort_requested_exception);
+}
+
 #endif
