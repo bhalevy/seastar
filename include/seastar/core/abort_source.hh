@@ -114,6 +114,7 @@ private:
         }
     }
 
+    friend class abort_on_either;
 public:
     abort_source() = default;
     virtual ~abort_source() = default;
@@ -190,6 +191,68 @@ public:
     /// or nullptr if no abort was requested.
     std::exception_ptr get_exception() const noexcept {
         return _ex;
+    }
+};
+
+class abort_on_either {
+    seastar::abort_source* _as0 = nullptr;
+    seastar::abort_source* _as1 = nullptr;
+    seastar::abort_source _as;
+    optimized_optional<seastar::abort_source::subscription> _sub0;
+    optimized_optional<seastar::abort_source::subscription> _sub1;
+
+private:
+    void do_subscribe() noexcept {
+        auto callback = [this] (const std::optional<std::exception_ptr>& opt_ex) noexcept {
+            if (!_as.abort_requested()) {
+                _as.do_request_abort(std::move(opt_ex));
+            }
+        };
+        _sub0 = _as0->subscribe(callback);
+        if (!_sub0) {
+            _as.do_request_abort(_as0->get_exception());
+        } else {
+            _sub1 = _as1->subscribe(callback);
+            if (!_sub1) {
+                _as.do_request_abort(_as1->get_exception());
+                _sub0 = {};
+            }
+        }
+    }
+public:
+    abort_on_either() = default;
+    abort_on_either(seastar::abort_source& as0, seastar::abort_source& as1) noexcept
+        : _as0(&as0)
+        , _as1(&as1)
+    {
+        do_subscribe();
+    }
+    abort_on_either(abort_on_either&& o) noexcept
+        : _as0(std::exchange(o._as0, nullptr))
+        , _as1(std::exchange(o._as1, nullptr))
+        , _as(std::move(o._as))
+    {
+        if (!_as.abort_requested()) {
+            do_subscribe();
+        }
+    }
+    abort_on_either& operator=(abort_on_either&& o) noexcept {
+        if (this != &o) {
+            _as0 = std::exchange(o._as0, nullptr);
+            _as1 = std::exchange(o._as1, nullptr);
+            _as = std::move(o._as);
+            if (!_as.abort_requested()) {
+                do_subscribe();
+            } else {
+                _sub0 = {};
+                _sub1 = {};
+            }
+        }
+        return *this;
+    }
+
+    seastar::abort_source& abort_source() noexcept {
+        return _as;
     }
 };
 
