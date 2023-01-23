@@ -115,6 +115,7 @@ private:
     }
 
     friend class abort_when_either;
+    friend class abort_when_both;
 public:
     abort_source() = default;
     virtual ~abort_source() = default;
@@ -240,6 +241,67 @@ public:
         if (this != &o) {
             _as0 = std::exchange(o._as0, nullptr);
             _as1 = std::exchange(o._as1, nullptr);
+            _as = std::move(o._as);
+            if (!_as.abort_requested()) {
+                do_subscribe();
+            } else {
+                _sub0 = {};
+                _sub1 = {};
+            }
+        }
+        return *this;
+    }
+
+    seastar::abort_source& abort_source() noexcept {
+        return _as;
+    }
+};
+
+class abort_when_both {
+    abort_source* _as0 = nullptr;
+    abort_source* _as1 = nullptr;
+    int _aborted = 0;
+    abort_source _as;
+    optimized_optional<seastar::abort_source::subscription> _sub0;
+    optimized_optional<seastar::abort_source::subscription> _sub1;
+
+private:
+    void do_subscribe() noexcept {
+        auto callback = [this] (const std::optional<std::exception_ptr>& opt_ex) noexcept {
+            if (_aborted++ && !_as.abort_requested()) {
+                _as.do_request_abort(std::move(opt_ex));
+            }
+        };
+        _sub0 = _as0->subscribe(callback);
+        _sub1 = _as1->subscribe(callback);
+        _aborted = !_sub0 + !_sub1;
+        if (_aborted == 2) {
+            _as.do_request_abort(_as1->get_exception());
+        }
+    }
+public:
+    abort_when_both() = default;
+    abort_when_both(abort_source& as0, abort_source& as1) noexcept
+        : _as0(&as0)
+        , _as1(&as1)
+    {
+        do_subscribe();
+    }
+    abort_when_both(abort_when_both&& o) noexcept
+        : _as0(std::exchange(o._as0, nullptr))
+        , _as1(std::exchange(o._as1, nullptr))
+        , _aborted(std::exchange(o._aborted, 0))
+        , _as(std::move(o._as))
+    {
+        if (!_as.abort_requested()) {
+            do_subscribe();
+        }
+    }
+    abort_when_both& operator=(abort_when_both&& o) noexcept {
+        if (this != &o) {
+            _as0 = std::exchange(o._as0, nullptr);
+            _as1 = std::exchange(o._as1, nullptr);
+            _aborted = std::exchange(o._aborted, 0);
             _as = std::move(o._as);
             if (!_as.abort_requested()) {
                 do_subscribe();
