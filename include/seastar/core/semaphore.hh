@@ -490,8 +490,8 @@ public:
     semaphore_units(semaphore_units&& o) noexcept : _sem(o._sem), _n(std::exchange(o._n, 0)) {
     }
     semaphore_units& operator=(semaphore_units&& o) noexcept {
-        _sem = o._sem;
-        _n = std::exchange(o._n, 0);
+        std::swap(_sem, o._sem);
+        std::swap(_n, o._n);
         return *this;
     }
     semaphore_units(const semaphore_units&) = delete;
