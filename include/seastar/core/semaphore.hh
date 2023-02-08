@@ -154,6 +154,7 @@ public:
 private:
     ssize_t _count;
     std::exception_ptr _ex;
+    bool _used;
     struct entry {
         promise<> pr;
         size_t nr;
@@ -197,6 +198,9 @@ public:
         return std::numeric_limits<decltype(_count)>::max();
     }
 
+    basic_semaphore() noexcept(std::is_nothrow_default_constructible_v<exception_factory>)
+        : basic_semaphore(0)
+    {}
     /// Constructs a semaphore object with a specific number of units
     /// in its internal counter. E.g., starting it at 1 is suitable for use as
     /// an unlocked mutex.
@@ -204,15 +208,37 @@ public:
     /// \param count number of initial units present in the counter.
     basic_semaphore(size_t count) noexcept(std::is_nothrow_default_constructible_v<exception_factory>)
         : exception_factory()
-        , _count(count),
-        _wait_list(expiry_handler{*this})
+        , _count(count)
+        , _used(false)
+        , _wait_list(expiry_handler{*this})
     {}
     basic_semaphore(size_t count, exception_factory&& factory) noexcept(std::is_nothrow_move_constructible_v<exception_factory>)
         : exception_factory(std::move(factory))
         , _count(count)
+        , _used(false)
         , _wait_list(expiry_handler{*this})
     {
         static_assert(std::is_nothrow_move_constructible_v<expiry_handler>);
+    }
+    basic_semaphore(basic_semaphore&& o) noexcept(std::is_nothrow_move_constructible_v<exception_factory>)
+        : exception_factory(std::move(o))
+        , _count(std::exchange(o._count, 0))
+        , _ex(std::move(o._ex))
+        , _used(o._used)
+        , _wait_list(std::move(o._wait_list))
+    {
+        assert(!_used && "semaphore cannot be moved after it has been used");
+    }
+    basic_semaphore& operator=(basic_semaphore&& o) noexcept(std::is_nothrow_move_constructible_v<exception_factory>) {
+        assert(!_used && !o._used && "semaphore cannot be moved after it has been used");
+        if (this != &o) {
+            dynamic_cast<exception_factory&>(*this) = std::move(dynamic_cast<exception_factory&&>(o));
+            _count = std::exchange(o._count, 0);
+            // both _ex must be null
+            // both _used must be false
+            // both _wait_list must have never been used
+        }
+        return *this;
     }
     /// Waits until at least a specific number of units are available in the
     /// counter, and reduces the counter by that amount of units.
@@ -241,6 +267,7 @@ public:
     ///         \ref semaphore_timed_out exception.  If the semaphore was
     ///         \ref broken(), may contain a \ref broken_semaphore exception.
     future<> wait(time_point timeout, size_t nr = 1) noexcept {
+        _used = true;
         if (may_proceed(nr)) {
             _count -= nr;
             return make_ready_future<>();
@@ -276,6 +303,7 @@ public:
     ///         \ref semaphore_aborted exception.  If the semaphore was
     ///         \ref broken(), may contain a \ref broken_semaphore exception.
     future<> wait(abort_source& as, size_t nr = 1) noexcept {
+        _used = true;
         if (may_proceed(nr)) {
             _count -= nr;
             return make_ready_future<>();
