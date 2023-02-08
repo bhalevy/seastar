@@ -31,6 +31,10 @@
 #include <seastar/core/timed_out_error.hh>
 #include <seastar/core/abort_on_expiry.hh>
 
+#ifdef SEASTAR_DEBUG
+#define SEASTAR_SEMAPHORE_DEBUG
+#endif
+
 namespace seastar {
 
 namespace internal {
@@ -185,6 +189,20 @@ private:
         }
     };
     internal::abortable_fifo<entry, expiry_handler> _wait_list;
+
+#ifdef SEASTAR_SEMAPHORE_DEBUG
+private:
+    // set to true from the wait path
+    // prevents the semaphore to be moved or move-reassigned when _used
+    bool _used = false;
+
+    void use() noexcept {
+        _used = true;
+    }
+#else
+    void use() noexcept {}
+#endif
+
     bool has_available_units(size_t nr) const noexcept {
         return _count >= 0 && (static_cast<size_t>(_count) >= nr);
     }
@@ -214,6 +232,30 @@ public:
     {
         static_assert(std::is_nothrow_move_constructible_v<expiry_handler>);
     }
+#ifdef SEASTAR_SEMAPHORE_DEBUG
+    basic_semaphore() noexcept(std::is_nothrow_default_constructible_v<exception_factory>)
+        : basic_semaphore(0)
+    {}
+    basic_semaphore(basic_semaphore&& o) noexcept(std::is_nothrow_move_constructible_v<exception_factory>)
+        : exception_factory(std::move(o))
+        , _count(std::exchange(o._count, 0))
+        , _ex(std::move(o._ex))
+        , _wait_list(std::move(o._wait_list))
+        , _used(o._used)
+    {
+        assert(!_used && "semaphore cannot be moved after it has been used");
+    }
+    basic_semaphore& operator=(basic_semaphore&& o) noexcept(std::is_nothrow_move_constructible_v<exception_factory>) {
+        if (this != &o) {
+            dynamic_cast<exception_factory&>(*this) = std::move(dynamic_cast<exception_factory&&>(o));
+            _count = std::exchange(o._count, 0);
+            _ex = std::move(o._ex);
+            _wait_list = std::move(o._wait_list);
+            assert(!_used && !o._used && "semaphore cannot be moved after it has been used");
+        }
+        return *this;
+    }
+#endif
     /// Waits until at least a specific number of units are available in the
     /// counter, and reduces the counter by that amount of units.
     ///
@@ -241,6 +283,7 @@ public:
     ///         \ref semaphore_timed_out exception.  If the semaphore was
     ///         \ref broken(), may contain a \ref broken_semaphore exception.
     future<> wait(time_point timeout, size_t nr = 1) noexcept {
+        use();
         if (may_proceed(nr)) {
             _count -= nr;
             return make_ready_future<>();
@@ -276,6 +319,7 @@ public:
     ///         \ref semaphore_aborted exception.  If the semaphore was
     ///         \ref broken(), may contain a \ref broken_semaphore exception.
     future<> wait(abort_source& as, size_t nr = 1) noexcept {
+        use();
         if (may_proceed(nr)) {
             _count -= nr;
             return make_ready_future<>();
