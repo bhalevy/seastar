@@ -2965,6 +2965,35 @@ void reactor::add_urgent_task(task* t) noexcept {
     }
 }
 
+void reactor::run_in_background(future<> f) {
+    if (f.available()) {
+        if (f.failed()) {
+            std::rethrow_exception(f.get_exception());
+        }
+        return;
+    }
+    try {
+        // _backgroud_gate closed in reactor::close()
+        (void)with_gate(_background_gate, [f = std::move(f)] () mutable {
+            return f.handle_exception([] (std::exception_ptr ex) {
+                seastar_logger.warn("Ignored background task failure: {}", std::move(ex));
+            });
+        });
+    } catch (...) {
+        seastar_logger.error("run_in_background: {}", std::current_exception());
+    }
+}
+
+future<> reactor::close() {
+    seastar_logger.debug("reactor::close");
+    return smp::invoke_on_all([] {
+        if (engine()._background_gate.is_closed()) {
+            return make_ready_future<>();
+        }
+        return engine()._background_gate.close();
+    });
+}
+
 void
 reactor::run_some_tasks() {
     if (!have_more_tasks()) {
