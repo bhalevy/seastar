@@ -29,6 +29,7 @@
 #include <seastar/core/do_with.hh>
 #include <seastar/util/concepts.hh>
 #include <seastar/util/log.hh>
+#include <seastar/core/reactor.hh>
 #include <boost/iterator/counting_iterator.hpp>
 #include <functional>
 #if __has_include(<concepts>)
@@ -851,12 +852,14 @@ private:
     static future<> destroy_on(PtrType p, unsigned cpu) noexcept {
         if (p) {
             if (cpu != this_shard_id()) {
+              engine().run_in_background([cpu, p = std::move(p)] () mutable {
                 return smp::submit_to(cpu, [v = std::move(p)] () mutable {
                     // Destroy the contained pointer. We do this explicitly
                     // in the current shard, because the lambda is destroyed
                     // in the shard that submitted the task.
                     v = {};
                 });
+              });
             } else {
                 p = {};
             }
