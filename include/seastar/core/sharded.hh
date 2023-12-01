@@ -180,14 +180,24 @@ class sharded {
     struct entry {
         shared_ptr<Service> service;
         promise<> freed;
+
+        void service_deleted() noexcept {
+            freed.set_value();
+        }
+
+        void track_deletion(std::false_type) noexcept {
+            // do not wait for instance to be deleted since it is not going to notify us
+            service_deleted();
+        }
+
+        void track_deletion(std::true_type) noexcept {
+            service->_delete_cb = std::bind(std::mem_fn(&entry::service_deleted), this);
+        }
     };
-    std::vector<entry> _instances;
+    std::vector<std::unique_ptr<entry>> _instances;
 private:
     using invoke_on_all_func_type = std::function<future<> (Service&)>;
 private:
-    void service_deleted() noexcept {
-        _instances[this_shard_id()].freed.set_value();
-    }
     template <typename U, bool async>
     friend struct shared_ptr_make_helper;
 
@@ -497,25 +507,20 @@ public:
     bool local_is_initialized() const noexcept;
 
 private:
-    void track_deletion(shared_ptr<Service>&, std::false_type) noexcept {
-        // do not wait for instance to be deleted since it is not going to notify us
-        service_deleted();
-    }
-
-    void track_deletion(shared_ptr<Service>& s, std::true_type) {
-        s->_delete_cb = std::bind(std::mem_fn(&sharded<Service>::service_deleted), this);
-    }
-
     template <typename... Args>
-    shared_ptr<Service> create_local_service(Args&&... args) {
-        auto s = ::seastar::make_shared<Service>(std::forward<Args>(args)...);
+    std::unique_ptr<entry> create_local_instance(Args&&... args) {
+        auto s = seastar::make_shared<Service>(std::forward<Args>(args)...);
         set_container(*s);
-        track_deletion(s, std::is_base_of<async_sharded_service<Service>, Service>());
-        return s;
+        auto inst = std::make_unique<entry>(std::move(s));
+        inst->track_deletion(std::is_base_of<async_sharded_service<Service>, Service>());
+        return inst;
     }
 
     shared_ptr<Service> get_local_service() {
-        auto inst = _instances[this_shard_id()].service;
+        shared_ptr<Service> inst;
+        if (auto ent = _instances[this_shard_id()].get()) {
+            inst = ent->service;
+        }
         if (!inst) {
             throw no_sharded_instance_exception(pretty_type_name(typeid(Service)));
         }
@@ -523,7 +528,10 @@ private:
     }
 
     shared_ptr<const Service> get_local_service() const {
-        auto inst = _instances[this_shard_id()].service;
+        shared_ptr<Service> inst;
+        if (auto ent = _instances[this_shard_id()].get()) {
+            inst = ent->service;
+        }
         if (!inst) {
             throw no_sharded_instance_exception(pretty_type_name(typeid(Service)));
         }
@@ -618,8 +626,8 @@ sharded<Service>::start(Args&&... args) noexcept {
     return sharded_parallel_for_each(
         [this, args = std::make_tuple(std::forward<Args>(args)...)] (unsigned c) mutable {
             return smp::submit_to(c, [this, args] () mutable {
-                _instances[this_shard_id()].service = std::apply([this] (Args... args) {
-                    return create_local_service(internal::unwrap_sharded_arg(std::forward<Args>(args))...);
+                _instances[this_shard_id()] = std::apply([this] (Args... args) {
+                    return create_local_instance(internal::unwrap_sharded_arg(std::forward<Args>(args))...);
                 }, args);
             });
     }).then_wrapped([this] (future<> f) {
@@ -645,8 +653,8 @@ sharded<Service>::start_single(Args&&... args) noexcept {
     assert(_instances.empty());
     _instances.resize(1);
     return smp::submit_to(0, [this, args = std::make_tuple(std::forward<Args>(args)...)] () mutable {
-        _instances[0].service = std::apply([this] (Args... args) {
-            return create_local_service(internal::unwrap_sharded_arg(std::forward<Args>(args))...);
+        _instances[0] = std::apply([this] (Args... args) {
+            return create_local_instance(internal::unwrap_sharded_arg(std::forward<Args>(args))...);
         }, args);
     }).then_wrapped([this] (future<> f) {
         try {
@@ -687,29 +695,29 @@ struct sharded_has_stop {
 template <bool stop_exists>
 struct sharded_call_stop {
     template <typename Service>
-    static future<> call(Service& instance);
+    static future<> call(shared_ptr<Service>&& instance);
 };
 
 template <>
 template <typename Service>
 inline
-future<> sharded_call_stop<true>::call(Service& instance) {
-    return instance.stop();
+future<> sharded_call_stop<true>::call(shared_ptr<Service>&& instance) {
+    return instance->stop().then([i = std::move(instance)] {});
 }
 
 template <>
 template <typename Service>
 inline
-future<> sharded_call_stop<false>::call(Service&) {
+future<> sharded_call_stop<false>::call(shared_ptr<Service>&& instance) {
     return make_ready_future<>();
 }
 
 template <typename Service>
 inline
 future<>
-stop_sharded_instance(Service& instance) {
+stop_sharded_instance(shared_ptr<Service> instance) {
     constexpr bool has_stop = internal::sharded_has_stop::check<Service>(0);
-    return internal::sharded_call_stop<has_stop>::call(instance);
+    return internal::sharded_call_stop<has_stop>::call(std::move(instance));
 }
 
 }
@@ -720,24 +728,25 @@ sharded<Service>::stop() noexcept {
   try {
     return sharded_parallel_for_each([this] (unsigned c) mutable {
         return smp::submit_to(c, [this] () mutable {
-            auto inst = _instances[this_shard_id()].service;
+            auto inst = _instances[this_shard_id()].get();
             if (!inst) {
                 return make_ready_future<>();
             }
-            return internal::stop_sharded_instance(*inst);
+            return internal::stop_sharded_instance(inst->service);
         });
     }).then_wrapped([this] (future<> fut) {
         return sharded_parallel_for_each([this] (unsigned c) {
             return smp::submit_to(c, [this] {
-                if (_instances[this_shard_id()].service == nullptr) {
-                    return make_ready_future<>();
+                if (auto inst = std::exchange(_instances[this_shard_id()], nullptr)) {
+                    inst->service = nullptr;
+                    auto f = inst->freed.get_future();
+                    return f.then([inst = std::move(inst)] {});
                 }
-                _instances[this_shard_id()].service = nullptr;
-                return _instances[this_shard_id()].freed.get_future();
+                return make_ready_future<>();
             });
         }).finally([this, fut = std::move(fut)] () mutable {
             _instances.clear();
-            _instances = std::vector<sharded<Service>::entry>();
+            _instances = std::vector<std::unique_ptr<sharded<Service>::entry>>();
             return std::move(fut);
         });
     });
@@ -799,25 +808,25 @@ sharded<Service>::invoke_on_others(smp_submit_to_options options, Func func, Arg
 template <typename Service>
 const Service& sharded<Service>::local() const noexcept {
     assert(local_is_initialized());
-    return *_instances[this_shard_id()].service;
+    return *_instances[this_shard_id()]->service;
 }
 
 template <typename Service>
 Service& sharded<Service>::local() noexcept {
     assert(local_is_initialized());
-    return *_instances[this_shard_id()].service;
+    return *_instances[this_shard_id()]->service;
 }
 
 template <typename Service>
 shared_ptr<Service> sharded<Service>::local_shared() noexcept {
     assert(local_is_initialized());
-    return _instances[this_shard_id()].service;
+    return _instances[this_shard_id()]->service;
 }
 
 template <typename Service>
 inline bool sharded<Service>::local_is_initialized() const noexcept {
     return _instances.size() > this_shard_id() &&
-           _instances[this_shard_id()].service;
+           _instances[this_shard_id()] && _instances[this_shard_id()]->service;
 }
 
 SEASTAR_MODULE_EXPORT_BEGIN
