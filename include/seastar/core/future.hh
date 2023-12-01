@@ -36,6 +36,7 @@
 #include <seastar/core/task.hh>
 #include <seastar/core/thread_impl.hh>
 #include <seastar/core/function_traits.hh>
+#include <seastar/core/shard_id.hh>
 #include <seastar/util/critical_alloc_section.hh>
 #include <seastar/util/concepts.hh>
 #include <seastar/util/noncopyable_function.hh>
@@ -490,11 +491,25 @@ struct future_state_base {
         state st;
         std::exception_ptr ex;
     } _u;
+#ifdef SEASTAR_DEBUG_PROMISE
+    shard_id _owner_shard = this_shard_id();
+
+    void foreign_access_error() const noexcept;
+    void assert_shard_owner() const noexcept {
+        if (_owner_shard != this_shard_id()) {
+            foreign_access_error();
+        }
+    }
+#else
+    void assert_shard_owner() const noexcept { }
+#endif
 
     future_state_base() noexcept = default;
     future_state_base(state st) noexcept : _u(st) { }
     future_state_base(std::exception_ptr&& ex) noexcept : _u(std::move(ex)) { }
-    future_state_base(future_state_base&& x) noexcept : _u(std::move(x._u)) { }
+    future_state_base(future_state_base&& x) noexcept : _u(std::move(x._u)) {
+        x.assert_shard_owner();
+    }
 
     // We never need to destruct this polymorphicly, so we can make it
     // protected instead of virtual.
@@ -504,7 +519,9 @@ protected:
     struct nested_exception_marker {};
     future_state_base(nested_exception_marker, future_state_base&& old) noexcept;
     future_state_base(nested_exception_marker, future_state_base&& n, future_state_base&& old) noexcept;
-    ~future_state_base() noexcept = default;
+    ~future_state_base() noexcept {
+        assert_shard_owner();
+    }
 
     void rethrow_exception() &&;
     void rethrow_exception() const&;
@@ -518,20 +535,31 @@ public:
     void ignore() noexcept;
 
     void set_exception(std::exception_ptr&& ex) noexcept {
+        assert_shard_owner();
         assert(_u.st == state::future);
         _u.set_exception(std::move(ex));
     }
-    future_state_base& operator=(future_state_base&& x) noexcept = default;
+    future_state_base& operator=(future_state_base&& x) noexcept {
+        if (this != &x) {
+            assert_shard_owner();
+            x.assert_shard_owner();
+            _u = std::move(x._u);
+        }
+        return *this;
+    }
     void set_exception(future_state_base&& state) noexcept {
+        assert_shard_owner();
         assert(_u.st == state::future);
         *this = std::move(state);
     }
     std::exception_ptr get_exception() && noexcept {
+        assert_shard_owner();
         assert(_u.st >= state::exception_min);
         // Move ex out so future::~future() knows we've handled it
         return _u.take_exception();
     }
     const std::exception_ptr& get_exception() const& noexcept {
+        assert_shard_owner();
         assert(_u.st >= state::exception_min);
         return _u.ex;
     }
@@ -619,6 +647,7 @@ struct future_state :  public future_state_base, private internal::uninitialized
     }
     template <typename... A>
     void set(A&&... a) noexcept {
+        assert_shard_owner();
         assert(_u.st == state::future);
         new (this) future_state(ready_future_marker(), std::forward<A>(a)...);
     }
@@ -628,20 +657,24 @@ struct future_state :  public future_state_base, private internal::uninitialized
     future_state(nested_exception_marker m, future_state_base&& old) noexcept : future_state_base(m, std::move(old)) { }
     future_state(nested_exception_marker m, future_state_base&& n, future_state_base&& old) noexcept : future_state_base(m, std::move(n), std::move(old)) { }
     T&& get_value() && noexcept {
+        assert_shard_owner();
         assert(_u.st == state::result);
         return static_cast<T&&>(this->uninitialized_get());
     }
     T&& take_value() && noexcept {
+        assert_shard_owner();
         assert(_u.st == state::result);
         _u.st = state::result_unavailable;
         return static_cast<T&&>(this->uninitialized_get());
     }
     template<typename U = T>
     const std::enable_if_t<std::is_copy_constructible_v<U>, U>& get_value() const& noexcept(copy_noexcept) {
+        assert_shard_owner();
         assert(_u.st == state::result);
         return this->uninitialized_get();
     }
     T&& take() && {
+        assert_shard_owner();
         assert(available());
         if (_u.st >= state::exception_min) {
             std::move(*this).rethrow_exception();
@@ -650,6 +683,7 @@ struct future_state :  public future_state_base, private internal::uninitialized
         return static_cast<T&&>(this->uninitialized_get());
     }
     T&& get() && {
+        assert_shard_owner();
         assert(available());
         if (_u.st >= state::exception_min) {
             std::move(*this).rethrow_exception();
@@ -657,6 +691,7 @@ struct future_state :  public future_state_base, private internal::uninitialized
         return static_cast<T&&>(this->uninitialized_get());
     }
     const T& get() const& {
+        assert_shard_owner();
         assert(available());
         if (_u.st >= state::exception_min) {
             rethrow_exception();

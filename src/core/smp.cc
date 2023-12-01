@@ -48,6 +48,13 @@ shard_id* internal::this_shard_id_ptr() noexcept {
 }
 #endif
 
+#ifdef SEASTAR_DEBUG_PROMISE
+void future_state_base::foreign_access_error() const noexcept {
+    auto msg = format("future_state was created on shard {}, but accessed on shard {}", _owner_shard, this_shard_id());
+    on_fatal_internal_error(seastar_logger, msg);
+}
+#endif
+
 void smp_message_queue::work_item::process() {
     schedule(this);
 }

@@ -181,6 +181,8 @@ class sharded {
         shared_ptr<Service> service;
         promise<> freed;
 
+        explicit entry(shared_ptr<Service> s) noexcept : service(std::move(s)) { }
+
         void service_deleted() noexcept {
             freed.set_value();
         }

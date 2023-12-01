@@ -42,8 +42,14 @@ namespace seastar {
 static_assert(std::is_nothrow_move_constructible_v<future_state<std::tuple<int>>>,
               "future_state's move constructor must not throw");
 
-static_assert(sizeof(future_state<std::tuple<>>) <= 8, "future_state<std::tuple<>> is too large");
-static_assert(sizeof(future_state<std::tuple<long>>) <= 16, "future_state<std::tuple<long>> is too large");
+#ifdef SEASTAR_DEBUG_PROMISE
+static constexpr size_t future_state_debug_overhead = 8;
+#else
+static constexpr size_t future_state_debug_overhead = 0;
+#endif
+
+static_assert(sizeof(future_state<std::tuple<>>) <= 8 + future_state_debug_overhead, "future_state<std::tuple<>> is too large");
+static_assert(sizeof(future_state<std::tuple<long>>) <= 16 + future_state_debug_overhead, "future_state<std::tuple<long>> is too large");
 static_assert(future_state<std::tuple<>>::has_trivial_move_and_destroy, "future_state<std::tuple<>> not trivial");
 static_assert(future_state<long>::has_trivial_move_and_destroy, "future_state<long> not trivial");
 
