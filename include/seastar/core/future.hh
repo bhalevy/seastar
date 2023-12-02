@@ -521,7 +521,11 @@ public:
         assert(_u.st == state::future);
         _u.set_exception(std::move(ex));
     }
-    future_state_base& operator=(future_state_base&& x) noexcept = default;
+    future_state_base& operator=(future_state_base&& x) noexcept {
+        // Let any move-assignment operator handle self-move
+        _u = std::move(x._u);
+        return *this;
+    }
     void set_exception(future_state_base&& state) noexcept {
         assert(_u.st == state::future);
         *this = std::move(state);
