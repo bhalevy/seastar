@@ -22,6 +22,7 @@
 #pragma once
 
 #ifndef SEASTAR_MODULE
+#include <cstdint>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <type_traits>
@@ -157,6 +158,18 @@ inline constexpr file_permissions operator|(file_permissions a, file_permissions
 inline constexpr file_permissions operator&(file_permissions a, file_permissions b) {
     return file_permissions(std::underlying_type_t<file_permissions>(a) & std::underlying_type_t<file_permissions>(b));
 }
+
+/// seastar::space_info is equivalent to std::filesystem::space_info
+/// with renamed members, to prevent a conflict with future::available()
+struct space_info {
+    std::uintmax_t capacity;
+    std::uintmax_t free_space;
+    std::uintmax_t available_space;
+
+    bool operator==(const space_info& o) const noexcept {
+        return capacity == o.capacity && free_space == o.free_space && available_space == o.available_space;
+    }
+};
 
 /// @}
 

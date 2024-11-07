@@ -2263,6 +2263,26 @@ reactor::fstatfs(int fd) noexcept {
     });
 }
 
+future<space_info>
+reactor::file_system_space(std::string_view pathname) noexcept {
+    // Allocating memory for a filesystem::path can throw, hence the futurize_invoke
+    return futurize_invoke([this, pathname] {
+        return _thread_pool->submit<syscall_result_extra<std::filesystem::space_info>>([path = std::filesystem::path(pathname)] {
+            std::error_code ec;
+            auto si = std::filesystem::space(path, ec);
+            return wrap_syscall(ec.value(), si);
+        }).then([pathname = sstring(pathname)] (syscall_result_extra<std::filesystem::space_info> sr) {
+            sr.throw_fs_exception_if_error("file_system_space failed", pathname);
+            auto& fs_si = sr.extra;
+            return space_info{
+                .capacity = fs_si.capacity,
+                .free_space = fs_si.free,
+                .available_space = fs_si.available
+            };
+        });
+    });
+}
+
 future<struct statvfs>
 reactor::statvfs(std::string_view pathname) noexcept {
     // Allocating memory for a sstring can throw, hence the futurize_invoke
