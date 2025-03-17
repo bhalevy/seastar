@@ -103,3 +103,47 @@ SEASTAR_TEST_CASE(gate_closed_test) {
     co_await check_gate_closed_exception([&] () -> future<> { co_await with_gate(g, [] { return make_ready_future(); }); });
     co_await check_gate_closed_exception([&] () -> future<> { co_await try_with_gate(g, [] { return make_ready_future(); }); });
 }
+
+SEASTAR_TEST_CASE(named_gate_closed_test) {
+    sstring name = "foo";
+    gate g(name);
+
+    BOOST_REQUIRE(!g.is_closed());
+    BOOST_REQUIRE_NO_THROW(g.check());
+    BOOST_REQUIRE_NO_THROW(g.enter());
+    auto gh0 = g.try_hold();
+    BOOST_REQUIRE(gh0.has_value());
+    auto gh1 = g.hold();
+    BOOST_REQUIRE(!g.is_closed());
+    auto f = g.close();
+    BOOST_REQUIRE(!f.available());
+    g.leave();
+    gh0->release();
+    gh1.release();
+    BOOST_REQUIRE_NO_THROW(co_await std::move(f));
+    BOOST_REQUIRE(g.is_closed());
+
+    BOOST_REQUIRE(!g.try_hold().has_value());
+
+    co_await check_gate_closed_exception([&] { g.check(); }, name);
+    co_await check_gate_closed_exception([&] { g.enter(); }, name);
+    co_await check_gate_closed_exception([&] { g.hold(); }, name);
+    co_await check_gate_closed_exception([&] () -> future<> { co_await with_gate(g, [] { return make_ready_future(); }); }, name);
+    co_await check_gate_closed_exception([&] () -> future<> { co_await try_with_gate(g, [] { return make_ready_future(); }); }, name);
+}
+
+SEASTAR_TEST_CASE(named_gate_properties) {
+    gate unnamed;
+    BOOST_REQUIRE_EQUAL(unnamed.name(), "");
+    sstring foo = "foo";
+    auto g0 = gate(foo);
+    BOOST_REQUIRE_EQUAL(g0.name(), foo);
+    auto g1 = std::move(g0);
+    BOOST_REQUIRE_EQUAL(g1.name(), foo);
+    sstring bar = "bar";
+    g0 = gate(bar);
+    BOOST_REQUIRE_EQUAL(g0.name(), bar);
+    g1 = std::move(g0);
+    BOOST_REQUIRE_EQUAL(g1.name(), bar);
+    return make_ready_future();
+}
