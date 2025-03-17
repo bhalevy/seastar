@@ -25,6 +25,8 @@
 #include <boost/intrusive/list.hpp>
 
 #include <seastar/core/future.hh>
+#include <seastar/core/format.hh>
+#include <seastar/core/sstring.hh>
 #include <seastar/util/assert.hh>
 #include <seastar/util/std-compat.hh>
 #include <seastar/util/modules.hh>
@@ -47,9 +49,25 @@ namespace seastar {
 /// by the \ref gate::close() method.
 SEASTAR_MODULE_EXPORT
 class gate_closed_exception : public std::exception {
+    static constexpr const char* _default_desc = "gate closed";
+    static constexpr const char* _default_named_desc = "named gate closed";
+protected:
+    sstring _what;
 public:
+    gate_closed_exception() noexcept : _what(_default_desc) {};
+    gate_closed_exception(gate_closed_exception&&) = default;
+    gate_closed_exception(const gate_closed_exception&) = default;
+    explicit gate_closed_exception(const sstring& name) noexcept {
+        try {
+            _what = format("{} gate closed", name);
+        } catch (...) {
+            _what = _default_named_desc;
+        }
+    }
+    gate_closed_exception& operator=(gate_closed_exception&&) = default;
+    gate_closed_exception& operator=(const gate_closed_exception&) = default;
     virtual const char* what() const noexcept override {
-        return "gate closed";
+        return _what.c_str();
     }
 };
 
@@ -62,6 +80,7 @@ SEASTAR_MODULE_EXPORT
 class gate {
     size_t _count = 0;
     std::optional<promise<>> _stopped;
+    gate_closed_exception _exception;
 
 #ifdef SEASTAR_GATE_HOLDER_DEBUG
     void assert_not_held_when_moved() const noexcept;
@@ -74,9 +93,15 @@ class gate {
 public:
     // Implemented to force noexcept due to boost:intrusive::list
     gate() noexcept {};
+
+    /// Construct a gate with a specialized exception.
+    explicit gate(gate_closed_exception ex) noexcept : _exception(std::move(ex)) {}
+
     gate(const gate&) = delete;
     gate(gate&& x) noexcept
-        : _count(std::exchange(x._count, 0)), _stopped(std::exchange(x._stopped, std::nullopt)) {
+        : _count(std::exchange(x._count, 0)), _stopped(std::exchange(x._stopped, std::nullopt))
+        , _exception(std::move(x._exception))
+    {
         x.assert_not_held_when_moved();
     }
     gate& operator=(gate&& x) noexcept {
@@ -85,6 +110,7 @@ public:
             x.assert_not_held_when_moved();
             _count = std::exchange(x._count, 0);
             _stopped = std::exchange(x._stopped, std::nullopt);
+            _exception = std::move(x._exception);
         }
         return *this;
     }
@@ -109,7 +135,7 @@ public:
     /// a \ref gate_closed_exception is thrown.
     void enter() {
         if (!try_enter()) {
-            throw gate_closed_exception();
+            throw closed_exception();
         }
     }
     /// Unregisters an in-progress request.
@@ -133,7 +159,7 @@ public:
     /// bail out of the long-running code if the gate is closed.
     void check() const {
         if (_stopped) {
-            throw gate_closed_exception();
+            throw closed_exception();
         }
     }
     /// Closes the gate.
@@ -158,6 +184,10 @@ public:
     /// Returns whether the gate is closed.
     bool is_closed() const noexcept {
         return bool(_stopped);
+    }
+
+    const gate_closed_exception& closed_exception() const noexcept {
+        return _exception;
     }
 
     /// Facility to hold a gate opened using RAII.
@@ -298,6 +328,16 @@ private:
 #endif  // SEASTAR_GATE_HOLDER_DEBUG
 };
 
+class named_gate : public gate {
+public:
+    named_gate() noexcept
+        : gate(gate_closed_exception("named"))
+    {}
+    explicit named_gate(sstring name) noexcept
+        : gate(gate_closed_exception(name.empty() ? "named" : std::move(name)))
+    {}
+};
+
 #ifdef SEASTAR_GATE_HOLDER_DEBUG
 SEASTAR_MODULE_EXPORT
 inline void gate::assert_not_held_when_moved() const noexcept {
@@ -313,8 +353,8 @@ namespace internal {
 template <typename Func>
 inline
 auto
-invoke_func_with_gate(gate::holder&& gh, Func&& func) noexcept {
-    return futurize_invoke(std::forward<Func>(func)).finally([gh = std::forward<gate::holder>(gh)] {});
+invoke_func_with_gate(typename gate::holder&& gh, Func&& func) noexcept {
+    return futurize_invoke(std::forward<Func>(func)).finally([gh = std::forward<typename gate::holder>(gh)] {});
 }
 
 } // namespace internal
@@ -353,7 +393,7 @@ auto
 try_with_gate(gate& g, Func&& func) noexcept {
     if (g.is_closed()) {
         using futurator = futurize<std::invoke_result_t<Func>>;
-        return futurator::make_exception_future(gate_closed_exception());
+        return futurator::make_exception_future(g.closed_exception());
     }
     return internal::invoke_func_with_gate(g.hold(), std::forward<Func>(func));
 }
