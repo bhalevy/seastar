@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <memory>
 #include <seastar/core/shared_ptr_debug_helper.hh>
 #include <seastar/util/is_smart_ptr.hh>
 #include <seastar/util/indirect.hh>
@@ -71,13 +72,13 @@ using shared_ptr_counter_type = debug_shared_ptr_counter_type;
 template <typename T>
 class lw_shared_ptr;
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 class shared_ptr;
 
 template <typename T>
 class enable_lw_shared_from_this;
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 class enable_shared_from_this;
 
 template <typename T, typename... A>
@@ -89,20 +90,20 @@ lw_shared_ptr<T> make_lw_shared(T&& a);
 template <typename T>
 lw_shared_ptr<T> make_lw_shared(T& a);
 
-template <typename T, typename... A>
-shared_ptr<T> make_shared(A&&... a);
+template <typename T, typename Allocator, typename Deleter, typename... A>
+shared_ptr<T, Allocator, Deleter> make_shared(A&&... a);
 
-template <typename T>
-shared_ptr<T> make_shared(T&& a);
+template <typename T, typename Allocator, typename Deleter>
+shared_ptr<T, Allocator, Deleter> make_shared(T&& a);
 
-template <typename T, typename U>
-shared_ptr<T> static_pointer_cast(const shared_ptr<U>& p);
+template <typename T, typename U, typename Allocator, typename Deleter>
+shared_ptr<T, Allocator, Deleter> static_pointer_cast(const shared_ptr<U, Allocator, Deleter>& p);
 
-template <typename T, typename U>
-shared_ptr<T> dynamic_pointer_cast(const shared_ptr<U>& p);
+template <typename T, typename U, typename Allocator, typename Deleter>
+shared_ptr<T, Allocator, Deleter> dynamic_pointer_cast(const shared_ptr<U, Allocator, Deleter>& p);
 
-template <typename T, typename U>
-shared_ptr<T> const_pointer_cast(const shared_ptr<U>& p);
+template <typename T, typename U, typename Allocator, typename Deleter>
+shared_ptr<T, Allocator, Deleter> const_pointer_cast(const shared_ptr<U, Allocator, Deleter>& p);
 
 struct lw_shared_ptr_counter_base {
     shared_ptr_counter_type _count = 0;
@@ -489,21 +490,21 @@ struct shared_ptr_count_for : shared_ptr_count_base {
 };
 
 SEASTAR_MODULE_EXPORT_BEGIN
-template <typename T>
+template <typename T, typename Allocator = std::allocator<T>, typename Deleter = std::default_delete<T>>
 class enable_shared_from_this : private shared_ptr_count_base {
 public:
-    shared_ptr<T> shared_from_this() noexcept;
-    shared_ptr<const T> shared_from_this() const noexcept;
+    shared_ptr<T, Allocator, Deleter> shared_from_this() noexcept;
+    shared_ptr<const T, Allocator, Deleter> shared_from_this() const noexcept;
     long use_count() const noexcept { return count; }
 
-    template <typename U>
+    template <typename U, typename A, typename D>
     friend class shared_ptr;
 
-    template <typename U, bool esft>
+    template <typename U, typename A, typename D, bool esft>
     friend struct shared_ptr_make_helper;
 };
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 class shared_ptr {
     mutable shared_ptr_count_base* _b = nullptr;
     mutable T* _p = nullptr;
@@ -516,7 +517,7 @@ private:
             ++_b->count;
         }
     }
-    explicit shared_ptr(enable_shared_from_this<std::remove_const_t<T>>* p) noexcept : _b(p), _p(static_cast<T*>(p)) {
+    explicit shared_ptr(enable_shared_from_this<std::remove_const_t<T>, Allocator, Deleter>* p) noexcept : _b(p), _p(static_cast<T*>(p)) {
         if (_b) {
             ++_b->count;
         }
@@ -539,16 +540,16 @@ public:
         x._b = nullptr;
         x._p = nullptr;
     }
-    template <typename U, typename = std::enable_if_t<std::is_base_of_v<T, U>>>
-    shared_ptr(const shared_ptr<U>& x) noexcept
+    template <typename U, typename A, typename D, typename = std::enable_if_t<std::is_base_of_v<T, U>>>
+    shared_ptr(const shared_ptr<U, A, D>& x) noexcept
             : _b(x._b)
             , _p(x._p) {
         if (_b) {
             ++_b->count;
         }
     }
-    template <typename U, typename = std::enable_if_t<std::is_base_of_v<T, U>>>
-    shared_ptr(shared_ptr<U>&& x) noexcept
+    template <typename U, typename A, typename D, typename = std::enable_if_t<std::is_base_of_v<T, U>>>
+    shared_ptr(shared_ptr<U, A, D>&& x) noexcept
             : _b(x._b)
             , _p(x._p) {
         x._b = nullptr;
@@ -560,7 +561,7 @@ public:
 #pragma GCC diagnostic ignored "-Wuse-after-free"
 #endif
         if (_b && !--_b->count) {
-            delete _b;
+            Deleter()(_b);
         }
 #pragma GCC diagnostic pop
     }
@@ -581,16 +582,16 @@ public:
     shared_ptr& operator=(std::nullptr_t) noexcept {
         return *this = shared_ptr();
     }
-    template <typename U, typename = std::enable_if_t<std::is_base_of_v<T, U>>>
-    shared_ptr& operator=(const shared_ptr<U>& x) noexcept {
+    template <typename U, typename A, typename D, typename = std::enable_if_t<std::is_base_of_v<T, U>>>
+    shared_ptr& operator=(const shared_ptr<U, A, D>& x) noexcept {
         if (*this != x) {
             this->~shared_ptr();
             new (this) shared_ptr(x);
         }
         return *this;
     }
-    template <typename U, typename = std::enable_if_t<std::is_base_of_v<T, U>>>
-    shared_ptr& operator=(shared_ptr<U>&& x) noexcept {
+    template <typename U, typename A, typename D, typename = std::enable_if_t<std::is_base_of_v<T, U>>>
+    shared_ptr& operator=(shared_ptr<U, A, D>&& x) noexcept {
         if (*this != x) {
             this->~shared_ptr();
             new (this) shared_ptr(std::move(x));
@@ -621,130 +622,148 @@ public:
     struct make_helper;
 
     template <typename U, typename... A>
-    friend shared_ptr<U> make_shared(A&&... a);
+    friend shared_ptr<U, Allocator, Deleter> make_shared(A&&... a);
 
     template <typename U>
-    friend shared_ptr<U> make_shared(U&& a);
+    friend shared_ptr<U, Allocator, Deleter> make_shared(U&& a);
 
     template <typename V, typename U>
-    friend shared_ptr<V> static_pointer_cast(const shared_ptr<U>& p);
+    friend shared_ptr<V, Allocator, Deleter> static_pointer_cast(const shared_ptr<U, Allocator, Deleter>& p);
 
     template <typename V, typename U>
-    friend shared_ptr<V> dynamic_pointer_cast(const shared_ptr<U>& p);
+    friend shared_ptr<V, Allocator, Deleter> dynamic_pointer_cast(const shared_ptr<U, Allocator, Deleter>& p);
 
     template <typename V, typename U>
-    friend shared_ptr<V> const_pointer_cast(const shared_ptr<U>& p);
+    friend shared_ptr<V, Allocator, Deleter> const_pointer_cast(const shared_ptr<U, Allocator, Deleter>& p);
 
     template <bool esft, typename... A>
     static shared_ptr make(A&&... a);
 
-    template <typename U>
+    template <typename U, typename A, typename D>
     friend class enable_shared_from_this;
 
-    template <typename U, bool esft>
+    template <typename U, typename A, typename D, bool esft>
     friend struct shared_ptr_make_helper;
 
-    template <typename U>
+    template <typename U, typename A, typename D>
     friend class shared_ptr;
 };
 SEASTAR_MODULE_EXPORT_END
 
-template <typename U, bool esft>
+template <typename U, typename Allocator, typename Deleter, bool esft>
 struct shared_ptr_make_helper;
 
-template <typename T>
-struct shared_ptr_make_helper<T, false> {
+template <typename T, typename Allocator, typename Deleter>
+struct shared_ptr_make_helper<T, Allocator, Deleter, false> {
     template <typename... A>
-    static shared_ptr<T> make(A&&... a) {
-        return shared_ptr<T>(new shared_ptr_count_for<T>(std::forward<A>(a)...));
+    static shared_ptr<T, Allocator, Deleter> make(A&&... a) {
+        auto p = Allocator().allocate(1);
+        if (!p) {
+            throw std::bad_alloc{};
+        }
+        return shared_ptr<T, Allocator, Deleter>(new (p) shared_ptr_count_for<T>(std::forward<A>(a)...));
     }
 };
 
-template <typename T>
-struct shared_ptr_make_helper<T, true> {
+template <typename T, typename Allocator, typename Deleter>
+struct shared_ptr_make_helper<T, Allocator, Deleter, true> {
     template <typename... A>
-    static shared_ptr<T> make(A&&... a) {
-        auto p = new T(std::forward<A>(a)...);
-        return shared_ptr<T>(p, p);
+    static shared_ptr<T, Allocator, Deleter> make(A&&... a) {
+        auto p = Allocator().alloc(1);
+        if (!p) {
+            throw std::bad_alloc{};
+        }
+        new (p) T(std::forward<A>(a)...);
+        return shared_ptr<T, Allocator, Deleter>(p, p);
     }
 };
 
 SEASTAR_MODULE_EXPORT_BEGIN
-template <typename T, typename... A>
+template <typename T, typename Allocator = std::allocator<T>, typename Deleter = std::default_delete<T>, typename... A>
+requires std::is_base_of_v<shared_ptr_count_base, T>
 inline
-shared_ptr<T>
+shared_ptr<T, Allocator, Deleter>
 make_shared(A&&... a) {
-    using helper = shared_ptr_make_helper<T, std::is_base_of_v<shared_ptr_count_base, T>>;
+    using helper = shared_ptr_make_helper<T, Allocator, Deleter, true>;
     return helper::make(std::forward<A>(a)...);
 }
 
-template <typename T>
+template <typename T, typename Allocator = std::allocator<shared_ptr_count_base<T>>, typename Deleter = std::default_delete<shared_ptr_count_base<T>>, typename... A>
+requires (!std::is_base_of_v<shared_ptr_count_base, T>)
 inline
-shared_ptr<T>
+shared_ptr<T, Allocator, Deleter>
+make_shared(A&&... a) {
+    using helper = shared_ptr_make_helper<T, Allocator, Deleter, false>;
+    return helper::make(std::forward<A>(a)...);
+}
+
+template <typename T, typename Allocator, typename Deleter>
+inline
+shared_ptr<T, Allocator, Deleter>
 make_shared(T&& a) {
-    using helper = shared_ptr_make_helper<T, std::is_base_of_v<shared_ptr_count_base, T>>;
+    using helper = shared_ptr_make_helper<T, Allocator, Deleter, std::is_base_of_v<shared_ptr_count_base, T>>;
     return helper::make(std::forward<T>(a));
 }
 
-template <typename T, typename U>
+template <typename T, typename U, typename Allocator, typename Deleter>
 inline
-shared_ptr<T>
-static_pointer_cast(const shared_ptr<U>& p) {
-    return shared_ptr<T>(p._b, static_cast<T*>(p._p));
+shared_ptr<T, Allocator, Deleter>
+static_pointer_cast(const shared_ptr<U, Allocator, Deleter>& p) {
+    return shared_ptr<T, Allocator, Deleter>(p._b, static_cast<T*>(p._p));
 }
 
-template <typename T, typename U>
+template <typename T, typename U, typename Allocator, typename Deleter>
 inline
-shared_ptr<T>
-dynamic_pointer_cast(const shared_ptr<U>& p) {
+shared_ptr<T, Allocator, Deleter>
+dynamic_pointer_cast(const shared_ptr<U, Allocator, Deleter>& p) {
     auto q = dynamic_cast<T*>(p._p);
-    return shared_ptr<T>(q ? p._b : nullptr, q);
+    return shared_ptr<T, Allocator, Deleter>(q ? p._b : nullptr, q);
 }
 
-template <typename T, typename U>
+template <typename T, typename U, typename Allocator, typename Deleter>
 inline
-shared_ptr<T>
-const_pointer_cast(const shared_ptr<U>& p) {
-    return shared_ptr<T>(p._b, const_cast<T*>(p._p));
+shared_ptr<T, Allocator, Deleter>
+const_pointer_cast(const shared_ptr<U, Allocator, Deleter>& p) {
+    return shared_ptr<T, Allocator, Deleter>(p._b, const_cast<T*>(p._p));
 }
 SEASTAR_MODULE_EXPORT_END
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
-shared_ptr<T>
-enable_shared_from_this<T>::shared_from_this() noexcept {
-    auto unconst = reinterpret_cast<enable_shared_from_this<std::remove_const_t<T>>*>(this);
-    return shared_ptr<T>(unconst);
+shared_ptr<T, Allocator, Deleter>
+enable_shared_from_this<T, Allocator, Deleter>::shared_from_this() noexcept {
+    auto unconst = reinterpret_cast<enable_shared_from_this<std::remove_const_t<T>, Allocator, Deleter>*>(this);
+    return shared_ptr<T, Allocator, Deleter>(unconst);
 }
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
-shared_ptr<const T>
-enable_shared_from_this<T>::shared_from_this() const noexcept {
+shared_ptr<const T, Allocator, Deleter>
+enable_shared_from_this<T, Allocator, Deleter>::shared_from_this() const noexcept {
     auto esft = const_cast<enable_shared_from_this*>(this);
     auto unconst = reinterpret_cast<enable_shared_from_this<std::remove_const_t<T>>*>(esft);
-    return shared_ptr<const T>(unconst);
+    return shared_ptr<const T, Allocator, Deleter>(unconst);
 }
 
 SEASTAR_MODULE_EXPORT_BEGIN
-template <typename T, typename U>
+template <typename T, typename U, typename Allocator, typename Deleter>
 inline
 bool
-operator==(const shared_ptr<T>& x, const shared_ptr<U>& y) {
+operator==(const shared_ptr<T, Allocator, Deleter>& x, const shared_ptr<U, Allocator, Deleter>& y) {
     return x.get() == y.get();
 }
 
-template <typename T>
+template <typename T, typename U, typename Allocator, typename Deleter>
 inline
 bool
-operator==(const shared_ptr<T>& x, std::nullptr_t) {
+operator==(const shared_ptr<T, Allocator, Deleter>& x, std::nullptr_t) {
     return x.get() == nullptr;
 }
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
 bool
-operator==(std::nullptr_t, const shared_ptr<T>& y) {
+operator==(std::nullptr_t, const shared_ptr<T, Allocator, Deleter>& y) {
     return nullptr == y.get();
 }
 
@@ -762,24 +781,24 @@ operator==(std::nullptr_t, const lw_shared_ptr<T>& y) {
     return nullptr == y.get();
 }
 
-template <typename T, typename U>
+template <typename T, typename U, typename Allocator, typename Deleter>
 inline
 bool
-operator!=(const shared_ptr<T>& x, const shared_ptr<U>& y) {
+operator!=(const shared_ptr<T, Allocator, Deleter>& x, const shared_ptr<U, Allocator, Deleter>& y) {
     return x.get() != y.get();
 }
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
 bool
-operator!=(const shared_ptr<T>& x, std::nullptr_t) {
+operator!=(const shared_ptr<T, Allocator, Deleter>& x, std::nullptr_t) {
     return x.get() != nullptr;
 }
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
 bool
-operator!=(std::nullptr_t, const shared_ptr<T>& y) {
+operator!=(std::nullptr_t, const shared_ptr<T, Allocator, Deleter>& y) {
     return nullptr != y.get();
 }
 
@@ -797,104 +816,104 @@ operator!=(std::nullptr_t, const lw_shared_ptr<T>& y) {
     return nullptr != y.get();
 }
 
-template <typename T, typename U>
+template <typename T, typename U, typename Allocator, typename Deleter>
 inline
 bool
-operator<(const shared_ptr<T>& x, const shared_ptr<U>& y) {
+operator<(const shared_ptr<T, Allocator, Deleter>& x, const shared_ptr<U, Allocator, Deleter>& y) {
     return x.get() < y.get();
 }
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
 bool
-operator<(const shared_ptr<T>& x, std::nullptr_t) {
+operator<(const shared_ptr<T, Allocator, Deleter>& x, std::nullptr_t) {
     return x.get() < nullptr;
 }
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
 bool
-operator<(std::nullptr_t, const shared_ptr<T>& y) {
+operator<(std::nullptr_t, const shared_ptr<T, Allocator, Deleter>& y) {
     return nullptr < y.get();
 }
 
-template <typename T, typename U>
+template <typename T, typename U, typename Allocator, typename Deleter>
 inline
 bool
-operator<=(const shared_ptr<T>& x, const shared_ptr<U>& y) {
+operator<=(const shared_ptr<T, Allocator, Deleter>& x, const shared_ptr<U, Allocator, Deleter>& y) {
     return x.get() <= y.get();
 }
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
 bool
-operator<=(const shared_ptr<T>& x, std::nullptr_t) {
+operator<=(const shared_ptr<T, Allocator, Deleter>& x, std::nullptr_t) {
     return x.get() <= nullptr;
 }
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
 bool
-operator<=(std::nullptr_t, const shared_ptr<T>& y) {
+operator<=(std::nullptr_t, const shared_ptr<T, Allocator, Deleter>& y) {
     return nullptr <= y.get();
 }
 
-template <typename T, typename U>
+template <typename T, typename U, typename Allocator, typename Deleter>
 inline
 bool
-operator>(const shared_ptr<T>& x, const shared_ptr<U>& y) {
+operator>(const shared_ptr<T, Allocator, Deleter>& x, const shared_ptr<U, Allocator, Deleter>& y) {
     return x.get() > y.get();
 }
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
 bool
-operator>(const shared_ptr<T>& x, std::nullptr_t) {
+operator>(const shared_ptr<T, Allocator, Deleter>& x, std::nullptr_t) {
     return x.get() > nullptr;
 }
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
 bool
-operator>(std::nullptr_t, const shared_ptr<T>& y) {
+operator>(std::nullptr_t, const shared_ptr<T, Allocator, Deleter>& y) {
     return nullptr > y.get();
 }
 
-template <typename T, typename U>
+template <typename T, typename U, typename Allocator, typename Deleter>
 inline
 bool
-operator>=(const shared_ptr<T>& x, const shared_ptr<U>& y) {
+operator>=(const shared_ptr<T, Allocator, Deleter>& x, const shared_ptr<U, Allocator, Deleter>& y) {
     return x.get() >= y.get();
 }
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
 bool
-operator>=(const shared_ptr<T>& x, std::nullptr_t) {
+operator>=(const shared_ptr<T, Allocator, Deleter>& x, std::nullptr_t) {
     return x.get() >= nullptr;
 }
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
 bool
-operator>=(std::nullptr_t, const shared_ptr<T>& y) {
+operator>=(std::nullptr_t, const shared_ptr<T, Allocator, Deleter>& y) {
     return nullptr >= y.get();
 }
 
-template <typename T>
+template <typename T, typename Allocator, typename Deleter>
 inline
-std::ostream& operator<<(std::ostream& out, const shared_ptr<T>& p) {
+std::ostream& operator<<(std::ostream& out, const shared_ptr<T, Allocator, Deleter>& p) {
     if (!p) {
         return out << "null";
     }
     return out << *p;
 }
 
-template<typename T>
-using shared_ptr_equal_by_value = indirect_equal_to<shared_ptr<T>>;
+template<typename T, typename Allocator, typename Deleter>
+using shared_ptr_equal_by_value = indirect_equal_to<shared_ptr<T, Allocator, Deleter>>;
 
-template<typename T>
-using shared_ptr_value_hash = indirect_hash<shared_ptr<T>>;
+template<typename T, typename Allocator, typename Deleter>
+using shared_ptr_value_hash = indirect_hash<shared_ptr<T, Allocator, Deleter>>;
 
 SEASTAR_MODULE_EXPORT_END
 }
@@ -910,9 +929,9 @@ struct hash<seastar::lw_shared_ptr<T>> : private hash<T*> {
 };
 
 SEASTAR_MODULE_EXPORT
-template <typename T>
-struct hash<seastar::shared_ptr<T>> : private hash<T*> {
-    size_t operator()(const seastar::shared_ptr<T>& p) const {
+template <typename T, typename Allocator, typename Deleter>
+struct hash<seastar::shared_ptr<T, Allocator, Deleter>> : private hash<T*> {
+    size_t operator()(const seastar::shared_ptr<T, Allocator, Deleter>& p) const {
         return hash<T*>::operator()(p.get());
     }
 };
@@ -927,15 +946,15 @@ const void* ptr(const seastar::lw_shared_ptr<T>& p) {
     return p.get();
 }
 
-template<typename T>
-const void* ptr(const seastar::shared_ptr<T>& p) {
+template<typename T, typename Allocator, typename Deleter>
+const void* ptr(const seastar::shared_ptr<T, Allocator, Deleter>& p) {
     return p.get();
 }
 
-template <typename T>
-struct formatter<seastar::shared_ptr<T>> {
+template <typename T, typename Allocator, typename Deleter>
+struct formatter<seastar::shared_ptr<T, Allocator, Deleter>> {
     constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-    auto format(const seastar::shared_ptr<T>& p, fmt::format_context& ctx) const {
+    auto format(const seastar::shared_ptr<T, Allocator, Deleter>& p, fmt::format_context& ctx) const {
         if (!p) {
             return fmt::format_to(ctx.out(), "null");
         }
@@ -958,8 +977,8 @@ struct formatter<seastar::lw_shared_ptr<T>> {
 namespace seastar {
 
 SEASTAR_MODULE_EXPORT
-template<typename T>
-struct is_smart_ptr<shared_ptr<T>> : std::true_type {};
+template<typename T, typename Allocator, typename Deleter>
+struct is_smart_ptr<shared_ptr<T, Allocator, Deleter>> : std::true_type {};
 
 SEASTAR_MODULE_EXPORT
 template<typename T>
