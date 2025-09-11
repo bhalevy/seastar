@@ -824,28 +824,31 @@ std::optional<protocol_base::handler_with_holder> protocol<Serializer, MsgType>:
 }
 
 template<typename Serializer, typename... Out>
-sink_impl<Serializer, Out...>::snd_buf_deleter_impl::snd_buf_deleter_impl(remote_state& state, foreign_ptr<std::unique_ptr<snd_buf>> obj)
+sink_impl<Serializer, Out...>::snd_buf_deleter_impl::snd_buf_deleter_impl(remote_state& state, std::unique_ptr<snd_buf> obj, shard_id owner_shard)
     : impl(deleter())
-    , _obj(std::move(obj))
     , _state(state)
+    , _obj(std::move(obj))
+    , _owner_shard(owner_shard)
 {}
 
 template<typename Serializer, typename... Out>
 sink_impl<Serializer, Out...>::snd_buf_deleter_impl::~snd_buf_deleter_impl() {
+    if (_owner_shard == this_shard_id()) {
+        // Fast path: we are on the owner shard.
+        _obj.reset();
+        return;
+    }
     // We cannot delete the buffer directly, since it may be
     // accessed by the remote shard. Instead, we enqueue it
     // for deletion on the remote shard.
-    auto owner_shard = _obj.get_owner_shard();
-    auto& lst = _state.per_shard_snd_bufs_to_destroy[owner_shard];
-    auto& fut = _state.per_shard_snd_bufs_destroy_futures[owner_shard];
-    lst.push_back(*_obj.unsafe_release().release());
-    if (fut.available()) {
+    _state.snd_bufs_to_destroy.push_back(*_obj.release());
+    if (_state.destroyer_fut.available()) {
         // It's possible that more buffers would get queued
         // while we are destroying the current batch on the owner_shard.
         // They would be processed as a batch in the next iteration.
-        fut = do_until([&lst] { return lst.empty(); }, [owner_shard, &lst] () mutable {
+        _state.destroyer_fut = do_until([this] { return _state.snd_bufs_to_destroy.empty(); }, [this] () mutable {
             // We need to destroy the buffers on their owner shard.
-            return smp::submit_to(owner_shard, [lst = std::move(lst)] () mutable {
+            return smp::submit_to(_owner_shard, [lst = std::move(_state.snd_bufs_to_destroy)] () mutable {
                 return do_until([&lst] { return lst.empty(); }, [&lst] {
                     auto* buf_ptr = &lst.front();
                     // Destroy the snd_buf (this will call its destructor).
@@ -855,31 +858,36 @@ sink_impl<Serializer, Out...>::snd_buf_deleter_impl::~snd_buf_deleter_impl() {
                     return make_ready_future();
                 });
             });
+        }).handle_exception([] (std::exception_ptr eptr) {
+            // We cannot do much about exceptions thrown in the destroyer,
+            // just log them.
+            seastar_logger.warn("snd_buf destroyer failed: {}.  Ignored", eptr);
         });
     }
 }
 
-template<typename T> T make_shard_local_buffer_copy(foreign_ptr<std::unique_ptr<T>> org, std::function<deleter(foreign_ptr<std::unique_ptr<T>> org)> make_deleter);
+template<typename T> T make_shard_local_buffer_copy(std::unique_ptr<T> org, shard_id owner_shard, std::function<deleter(std::unique_ptr<T> org, shard_id owner_shard)> make_deleter);
 
 template<typename Serializer, typename... Out>
 future<> sink_impl<Serializer, Out...>::operator()(const Out&... args) {
     // note that we use remote serializer pointer, so if serailizer needs a state
     // it should have per-cpu one
-    snd_buf data = marshall(this->_con->get()->template serializer<Serializer>(), 4, args...);
+    assert(_shard == this_shard_id());
+    auto data = std::make_unique<snd_buf>(marshall(this->_con->get()->template serializer<Serializer>(), 4, args...));
     static_assert(snd_buf::chunk_size >= 4, "send buffer chunk size is too small");
-    auto p = data.front().get_write();
-    write_le<uint32_t>(p, data.size - 4);
+    auto p = data->front().get_write();
+    write_le<uint32_t>(p, data->size - 4);
     // we do not want to dead lock on huge packets, so let them in
     // but only one at a time
-    auto size = std::min(size_t(data.size), max_stream_buffers_memory);
+    auto size = std::min(size_t(data->size), max_stream_buffers_memory);
     const auto seq_num = _next_seq_num++;
-    return get_units(this->_sem, size).then([this, data = make_foreign(std::make_unique<snd_buf>(std::move(data))), seq_num] (semaphore_units<> su) mutable {
+    return get_units(this->_sem, size).then([this, data = std::move(data), owner_shard = this_shard_id(), seq_num] (semaphore_units<> su) mutable {
         if (this->_ex) {
             return make_exception_future(this->_ex);
         }
         // It is OK to discard this future. The user is required to
         // wait for it when closing.
-        (void)smp::submit_to(this->_con->get_owner_shard(), [this, data = std::move(data), seq_num] () mutable {
+        (void)smp::submit_to(this->_con->get_owner_shard(), [this, data = std::move(data), owner_shard, seq_num] () mutable {
             connection* con = this->_con->get();
             if (con->error()) {
                 return make_exception_future(closed_error());
@@ -891,10 +899,10 @@ future<> sink_impl<Serializer, Out...>::operator()(const Out&... args) {
             auto& last_seq_num = _remote_state.last_seq_num;
             auto& out_of_order_bufs = _remote_state.out_of_order_bufs;
 
-            std::function<deleter(foreign_ptr<std::unique_ptr<snd_buf>> org)> make_deleter = [this] (foreign_ptr<std::unique_ptr<snd_buf>> org) {
-                return deleter(new snd_buf_deleter_impl(_remote_state, std::move(org)));
+            std::function<deleter(std::unique_ptr<snd_buf> org, shard_id)> make_deleter = [this] (std::unique_ptr<snd_buf> org, shard_id owner_shard) {
+                return deleter(new snd_buf_deleter_impl(_remote_state, std::move(org), owner_shard));
             };
-            auto local_data = make_shard_local_buffer_copy(std::move(data), make_deleter);
+            auto local_data = make_shard_local_buffer_copy(std::move(data), owner_shard, make_deleter);
             const auto seq_num_diff = seq_num - last_seq_num;
             if (seq_num_diff > 1) {
                 auto [it, _] = out_of_order_bufs.emplace(seq_num, deferred_snd_buf{promise<>{}, std::move(local_data)});
@@ -953,7 +961,7 @@ future<> sink_impl<Serializer, Out...>::close() {
             }
             return f.finally([this, con] {
                 return con->close_sink().finally([this] {
-                    return when_all(_remote_state.per_shard_snd_bufs_destroy_futures.begin(), _remote_state.per_shard_snd_bufs_destroy_futures.end());
+                    return std::exchange(_remote_state.destroyer_fut, make_ready_future());
                 });
             });
         });
@@ -970,15 +978,16 @@ sink_impl<Serializer, Out...>::~sink_impl() {
 template<typename Serializer, typename... In>
 future<std::optional<std::tuple<In...>>> source_impl<Serializer, In...>::operator()() {
     auto process_one_buffer = [this] {
-        foreign_ptr<std::unique_ptr<rcv_buf>> buf = std::move(this->_bufs.front());
+        assert(this->_owner_shard == this_shard_id());
+        std::unique_ptr<rcv_buf> buf = std::move(this->_bufs.front());
         this->_bufs.pop_front();
-        std::function<deleter(foreign_ptr<std::unique_ptr<rcv_buf>> org)> make_deleter = [] (foreign_ptr<std::unique_ptr<rcv_buf>> org) {
+        std::function<deleter(std::unique_ptr<rcv_buf> org, shard_id)> make_deleter = [] (std::unique_ptr<rcv_buf> org, shard_id) {
             return make_object_deleter(std::move(org));
         };
         return std::apply([] (In&&... args) {
             auto ret = std::make_optional(std::make_tuple(std::move(args)...));
             return make_ready_future<std::optional<std::tuple<In...>>>(std::move(ret));
-        }, unmarshall<Serializer, In...>(*this->_con->get(), make_shard_local_buffer_copy(std::move(buf), make_deleter)));
+        }, unmarshall<Serializer, In...>(*this->_con->get(), make_shard_local_buffer_copy(std::move(buf), this->_owner_shard, make_deleter)));
     };
 
     if (!this->_bufs.empty()) {
@@ -991,7 +1000,7 @@ future<std::optional<std::tuple<In...>>> source_impl<Serializer, In...>::operato
         if (con->_source_closed) {
             return make_exception_future<>(stream_closed());
         }
-        return con->stream_receive(this->_bufs).then_wrapped([this, con] (future<>&& f) {
+        return con->stream_receive(this->_bufs, this->_owner_shard).then_wrapped([this, con] (future<>&& f) {
             if (f.failed()) {
                 return con->close_source().then_wrapped([ex = f.get_exception()] (future<> f){
                     f.ignore_ready_future();

@@ -359,7 +359,8 @@ public:
     class impl {
     protected:
         xshard_connection_ptr _con;
-        circular_buffer<foreign_ptr<std::unique_ptr<rcv_buf>>> _bufs;
+        circular_buffer<std::unique_ptr<rcv_buf>> _bufs;
+        shard_id _owner_shard;
         impl(xshard_connection_ptr con) : _con(std::move(con)) {
             _bufs.reserve(max_queued_stream_buffers);
         }

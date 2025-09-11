@@ -77,20 +77,20 @@ temporary_buffer<char>& snd_buf::front() {
 // Make a copy of a remote buffer. No data is actually copied, only pointers and
 // a deleter of a new buffer takes care of deleting the original buffer
 template<typename T> // T is either snd_buf or rcv_buf
-T make_shard_local_buffer_copy(foreign_ptr<std::unique_ptr<T>> org, std::function<deleter(foreign_ptr<std::unique_ptr<T>> org)> make_deleter) {
-    if (org.get_owner_shard() == this_shard_id()) {
+T make_shard_local_buffer_copy(std::unique_ptr<T> org, shard_id owner_shard, std::function<deleter(std::unique_ptr<T> org, shard_id owner_shard)> make_deleter) {
+    if (owner_shard == this_shard_id()) {
         return std::move(*org);
     }
     T buf(org->size);
     auto* one = std::get_if<temporary_buffer<char>>(&org->bufs);
 
     if (one) {
-        buf.bufs = temporary_buffer<char>(one->get_write(), one->size(), make_deleter(std::move(org)));
+        buf.bufs = temporary_buffer<char>(one->get_write(), one->size(), make_deleter(std::move(org), owner_shard));
     } else {
         auto& orgbufs = std::get<std::vector<temporary_buffer<char>>>(org->bufs);
         std::vector<temporary_buffer<char>> newbufs;
         newbufs.reserve(orgbufs.size());
-        deleter d = make_deleter(std::move(org));
+        deleter d = make_deleter(std::move(org), owner_shard);
         for (auto&& b : orgbufs) {
             newbufs.emplace_back(b.get_write(), b.size(), d.share());
         }
@@ -100,8 +100,8 @@ T make_shard_local_buffer_copy(foreign_ptr<std::unique_ptr<T>> org, std::functio
     return buf;
 }
 
-template snd_buf make_shard_local_buffer_copy(foreign_ptr<std::unique_ptr<snd_buf>>, std::function<deleter(foreign_ptr<std::unique_ptr<snd_buf>> org)> make_deleter);
-template rcv_buf make_shard_local_buffer_copy(foreign_ptr<std::unique_ptr<rcv_buf>>, std::function<deleter(foreign_ptr<std::unique_ptr<rcv_buf>> org)> make_deleter);
+template snd_buf make_shard_local_buffer_copy(std::unique_ptr<snd_buf>, shard_id, std::function<deleter(std::unique_ptr<snd_buf> org, shard_id)> make_deleter);
+template rcv_buf make_shard_local_buffer_copy(std::unique_ptr<rcv_buf>, shard_id, std::function<deleter(std::unique_ptr<rcv_buf> org, shard_id)> make_deleter);
 
 static void log_exception(connection& c, log_level level, const char* log, std::exception_ptr eptr) {
     const char* s;
@@ -564,13 +564,14 @@ future<> connection::handle_stream_frame() {
     });
 }
 
-future<> connection::stream_receive(circular_buffer<foreign_ptr<std::unique_ptr<rcv_buf>>>& bufs) {
+future<> connection::stream_receive(circular_buffer<std::unique_ptr<rcv_buf>>& bufs, shard_id owner_shard) {
+    assert(owner_shard == this_shard_id());
     return _stream_queue.not_empty().then([this, &bufs] {
         bool eof = !_stream_queue.consume([&bufs] (rcv_buf&& b) {
             if (b.size == -1U) { // max fragment length marks an end of a stream
                 return false;
             } else {
-                bufs.push_back(make_foreign(std::make_unique<rcv_buf>(std::move(b))));
+                bufs.push_back(std::make_unique<rcv_buf>(std::move(b)));
                 return true;
             }
         });
