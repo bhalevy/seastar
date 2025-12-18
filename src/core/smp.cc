@@ -67,7 +67,7 @@ struct smp_service_group_impl {
 #endif
 };
 
-static thread_local smp_service_group_semaphore smp_service_group_management_sem{1, named_semaphore_exception_factory{"smp_service_group_management_sem"}};
+static thread_local std::optional<smp_service_group_semaphore> smp_service_group_management_sem;
 static thread_local std::vector<smp_service_group_impl> smp_service_groups;
 
 static named_semaphore_exception_factory make_service_group_semaphore_exception_factory(unsigned id, shard_id client_cpu, shard_id this_cpu, std::optional<sstring> smp_group_name) {
@@ -89,7 +89,10 @@ static_assert(std::is_nothrow_move_constructible_v<smp_submit_to_options>);
 future<smp_service_group> create_smp_service_group(smp_service_group_config ssgc) noexcept {
     ssgc.max_nonlocal_requests = std::max(ssgc.max_nonlocal_requests, smp::count - 1);
     return smp::submit_to(0, [ssgc] {
-        return with_semaphore(smp_service_group_management_sem, 1, [ssgc] {
+        if (!smp_service_group_management_sem) {
+            smp_service_group_management_sem.emplace(1, named_semaphore_exception_factory{"smp_service_group_management_sem"});
+        }
+        return with_semaphore(*smp_service_group_management_sem, 1, [ssgc] {
             auto it = boost::range::find_if(smp_service_groups, [&] (smp_service_group_impl& ssgi) { return ssgi.clients.empty(); });
             size_t id = it - smp_service_groups.begin();
             return parallel_for_each(smp::all_cpus(), [ssgc, id] (unsigned cpu) {
@@ -125,7 +128,7 @@ future<smp_service_group> create_smp_service_group(smp_service_group_config ssgc
 
 future<> destroy_smp_service_group(smp_service_group ssg) noexcept {
     return smp::submit_to(0, [ssg] {
-        return with_semaphore(smp_service_group_management_sem, 1, [ssg] {
+        return with_semaphore(*smp_service_group_management_sem, 1, [ssg] {
             auto id = internal::smp_service_group_id(ssg);
             if (id >= smp_service_groups.size()) {
                 on_fatal_internal_error(seastar_logger, format("destroy_smp_service_group id={}: out of range", id));
