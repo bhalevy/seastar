@@ -43,9 +43,16 @@
 #include <seastar/util/assert.hh>
 #include <seastar/util/std-compat.hh>
 #include <seastar/core/temporary_buffer.hh>
+#include <seastar/core/shard_id.hh>
+#include <seastar/core/on_internal_error.hh>
+
+#ifdef SEASTAR_DEBUG_SHARED_PTR
+#define SEASTAR_DEBUG_SSTRING
+#endif
 
 namespace seastar {
 
+extern logger seastar_logger;
 
 template <typename char_type, typename Size, Size max_size, bool NulTerminate = true>
 class basic_sstring;
@@ -78,6 +85,9 @@ class basic_sstring {
         struct external_type {
             char_type* str;
             Size size;
+#ifdef SEASTAR_DEBUG_SSTRING
+            uint8_t shard;
+#endif
             int8_t pad;
         } external;
         struct internal_type {
@@ -98,6 +108,25 @@ class basic_sstring {
     }
     char_type* str() noexcept {
         return is_internal() ? u.internal.str : u.external.str;
+    }
+
+    void alloc_external(size_t size) {
+        u.internal.size = -1;
+        u.external.str = reinterpret_cast<char_type*>(std::malloc(size + padding()));
+        if (!u.external.str) {
+            internal::throw_bad_alloc();
+        }
+        u.external.size = size;
+#ifdef SEASTAR_DEBUG_SSTRING
+        u.external.shard = this_shard_id() % 256;
+#endif
+    }
+    void check_current_shard() {
+#ifdef SEASTAR_DEBUG_SSTRING
+        if (!is_internal() && u.external.shard != this_shard_id() % 256) {
+            on_internal_error(seastar_logger, fmt::format("sstring accessed on non-owner cpu: allocated on shard {} (modulo 256)", u.external.shard));
+        }
+#endif
     }
 
 public:
@@ -128,13 +157,8 @@ public:
         if (x.is_internal()) {
             u.internal = x.u.internal;
         } else {
-            u.internal.size = -1;
-            u.external.str = reinterpret_cast<char_type*>(std::malloc(x.u.external.size + padding()));
-            if (!u.external.str) {
-                internal::throw_bad_alloc();
-            }
+            alloc_external(x.u.external.size);
             std::copy(x.u.external.str, x.u.external.str + x.u.external.size + padding(), u.external.str);
-            u.external.size = x.u.external.size;
         }
     }
     basic_sstring(basic_sstring&& x) noexcept {
@@ -147,6 +171,7 @@ public:
 #pragma GCC diagnostic pop
         x.u.internal.size = 0;
         x.u.internal.str[0] = '\0';
+        check_current_shard();
     }
     basic_sstring(initialized_later, size_t size) {
         if (size_type(size) != size) {
@@ -158,12 +183,7 @@ public:
             }
             u.internal.size = size;
         } else {
-            u.internal.size = -1;
-            u.external.str = reinterpret_cast<char_type*>(std::malloc(size + padding()));
-            if (!u.external.str) {
-                internal::throw_bad_alloc();
-            }
-            u.external.size = size;
+            alloc_external(size);
             if (NulTerminate) {
                 u.external.str[size] = '\0';
             }
@@ -180,12 +200,7 @@ public:
             }
             u.internal.size = size;
         } else {
-            u.internal.size = -1;
-            u.external.str = reinterpret_cast<char_type*>(std::malloc(size + padding()));
-            if (!u.external.str) {
-                internal::throw_bad_alloc();
-            }
-            u.external.size = size;
+            alloc_external(size);
             std::copy(x, x + size, u.external.str);
             if (NulTerminate) {
                 u.external.str[size] = '\0';
@@ -213,6 +228,7 @@ public:
     }
     ~basic_sstring() noexcept {
         if (is_external()) {
+            check_current_shard();
             std::free(u.external.str);
         }
     }
