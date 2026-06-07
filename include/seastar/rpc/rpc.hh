@@ -490,8 +490,18 @@ private:
 // receive data In...
 template<typename Serializer, typename... In>
 class source_impl : public source<In...>::impl {
+    // Processed rcv_buf foreign_ptrs awaiting batch destruction on the connection shard.
+    // After processing a cross-shard buffer, the foreign_ptr is saved here instead
+    // of being destroyed individually (which would generate a fire-and-forget
+    // cross-shard task per buffer via foreign_ptr::destroy_on).
+    // They are batch-destroyed on the connection shard during the next refill,
+    // where foreign_ptr destructor deletes directly without cross-shard tasks.
+    circular_buffer<foreign_ptr<std::unique_ptr<rcv_buf>>> _processed_bufs;
 public:
-    source_impl(xshard_connection_ptr con) : source<In...>::impl(std::move(con)) { this->_con->get()->_source_closed = false; }
+    source_impl(xshard_connection_ptr con) : source<In...>::impl(std::move(con)) {
+        this->_con->get()->_source_closed = false;
+        _processed_bufs.reserve(max_queued_stream_buffers);
+    }
     future<std::optional<std::tuple<In...>>> operator()() override;
 };
 

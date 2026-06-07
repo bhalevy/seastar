@@ -107,6 +107,8 @@ inline sstring read(serializer, Input& in, rpc::type<sstring>) {
 using test_rpc_proto = rpc::protocol<serializer>;
 using make_socket_fn = std::function<seastar::socket ()>;
 
+static seastar::logger tst_log("test");
+
 class rpc_loopback_error_injector : public loopback_error_injector {
 public:
     struct config {
@@ -1838,7 +1840,7 @@ SEASTAR_TEST_CASE(test_timeout_cancel) {
 }
 
 SEASTAR_THREAD_TEST_CASE(test_rpc_stream_backpressure_across_shards) {
-    static seastar::logger log("test");
+    auto& log = tst_log;
     rpc::server_options so;
     so.streaming_domain = rpc::streaming_domain_type(1);
     rpc_test_config cfg;
@@ -1924,6 +1926,107 @@ SEASTAR_THREAD_TEST_CASE(test_rpc_stream_backpressure_across_shards) {
                 log.info("cl_rep_loop: received {} messages", count);
                 if (count != msgs_per_shard) {
                     auto msg = format("cl_rep_loop: expected {}, got {}", msgs_per_shard, count);
+                    log.error("{}", msg);
+                    throw std::runtime_error(msg);
+                }
+            });
+        }).get();
+    }).get();
+}
+
+// Test that cross-shard rcv_buf destruction doesn't cause too-long task queues.
+//
+// When a source_impl on the consumer shard reads from a cross-shard connection,
+// each rcv_buf is wrapped in foreign_ptr<unique_ptr<rcv_buf>>.
+// make_shard_local_buffer_copy moves the foreign_ptr into a deleter.
+// After unmarshalling, the local copy is destroyed, triggering foreign_ptr::~foreign_ptr()
+// which does a fire-and-forget smp::submit_to to the connection shard.
+// With up to max_queued_stream_buffers (50) buffers processed in a tight loop,
+// this generates 50 individual cross-shard deletion tasks per batch that
+// accumulate on the connection shard's task queue.
+SEASTAR_THREAD_TEST_CASE(test_rpc_stream_rcv_buf_backpressure_across_shards) {
+    auto& log = tst_log;
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    rpc_test_env<>::do_with_thread(cfg, [] (rpc_test_env<>& env) {
+        auto long_task_queue_state = reactor::test::get_long_task_queue_state();
+        auto restore_long_task_queue_state = deferred_action([&long_task_queue_state] () noexcept {
+            reactor::test::restore_long_task_queue_state(long_task_queue_state).get();
+        });
+        smp::invoke_on_all([&] {
+            reactor::test::set_abort_on_too_long_task_queue(true);
+            reactor::test::set_max_task_backlog(500);
+        }).get();
+
+        constexpr int msg_id = 1;
+        // Handler sends many small messages back to the client via sink.
+        // The client reads them from source (cross-shard), exercising
+        // the rcv_buf foreign_ptr destruction path.
+        env.register_handler(msg_id, [] (shard_id sending_shard, size_t msgs_to_send, rpc::source<sstring> source) {
+            auto sink = source.make_sink<serializer, sstring>();
+
+            // It is safe to drop the future since the caller awaits for the stream to get closed.
+            (void)seastar::async([sending_shard, msgs_to_send, source, sink] () mutable {
+                auto close_sink = deferred_close(sink);
+                log.info("Handler: send {} messages to shard {}: starting", msgs_to_send, sending_shard);
+                // Use small messages to maximize the number of rcv_buf
+                // objects and thus the number of foreign_ptr destructions.
+                sstring data("x");
+                for (size_t i = 0; i < msgs_to_send; ++i) {
+                    sink(data).get();
+                }
+                sink.flush().get();
+                close_sink.close_now();
+                log.info("Handler: send {} messages to shard {}: done", msgs_to_send, sending_shard);
+            });
+
+            return sink;
+        }).get();
+
+        size_t msgs_per_shard = 1000000;
+#ifdef SEASTAR_DEBUG
+        msgs_per_shard = 50000;
+#endif
+        env.invoke_on_all([&] (rpc_test_env<>::rpc_test_service& s) {
+            return async([&] {
+                test_rpc_proto::client cl(env.proto(), {}, env.make_socket(), ipv4_addr());
+                auto stop_cl = deferred_stop(cl);
+                auto sink = cl.make_stream_sink<serializer, sstring>(env.make_socket()).get();
+                auto close_sink = deferred_close(sink);
+                auto call = env.proto().make_client<rpc::source<sstring> (shard_id, size_t, rpc::sink<sstring>)>(msg_id);
+                auto source = call(cl, this_shard_id(), msgs_per_shard, sink).get();
+
+                size_t count = 0;
+                bool end_of_stream = false;
+                try {
+                    for (;;) {
+                        if (auto data = source().get()) {
+                            if (count && !(count % 100000)) {
+                                log.debug("rcv_buf test: received {} messages...", count);
+                            }
+                            count++;
+                        } else {
+                            if (std::exchange(end_of_stream, true)) {
+                                auto msg = "rcv_buf test: received second end-of-stream";
+                                log.error("{}", msg);
+                                throw std::runtime_error(msg);
+                            }
+                            log.debug("rcv_buf test: got end-of-stream");
+                            continue;
+                        }
+                    }
+                } catch (const rpc::stream_closed&) {
+                    log.debug("rcv_buf test: stream closed");
+                } catch (...) {
+                    auto msg = format("rcv_buf test: unexpected exception: {}", std::current_exception());
+                    log.error("{}", msg);
+                    throw std::runtime_error(msg);
+                }
+                log.info("rcv_buf test: received {} messages", count);
+                if (count != msgs_per_shard) {
+                    auto msg = format("rcv_buf test: expected {}, got {}", msgs_per_shard, count);
                     log.error("{}", msg);
                     throw std::runtime_error(msg);
                 }
