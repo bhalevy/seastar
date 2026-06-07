@@ -73,55 +73,6 @@ temporary_buffer<char>& snd_buf::front() {
     }
 }
 
-namespace internal {
-
-// Make a copy of a remote buffer. No data is actually copied, only pointers and
-// a deleter of a new buffer takes care of deleting the original buffer
-snd_buf make_shard_local_buffer_copy(snd_buf* org, std::function<deleter(snd_buf*)> make_deleter) {
-    snd_buf buf(org->size);
-    auto* one = std::get_if<temporary_buffer<char>>(&org->bufs);
-
-    if (one) {
-        buf.bufs = temporary_buffer<char>(one->get_write(), one->size(), make_deleter(org));
-    } else {
-        auto& orgbufs = std::get<std::vector<temporary_buffer<char>>>(org->bufs);
-        std::vector<temporary_buffer<char>> newbufs;
-        newbufs.reserve(orgbufs.size());
-        auto d = make_deleter(org);
-        for (auto&& b : orgbufs) {
-            newbufs.emplace_back(b.get_write(), b.size(), d.share());
-        }
-        buf.bufs = std::move(newbufs);
-    }
-
-    return buf;
-}
-
-// Make a shard-local alias of a remote rcv_buf.
-// No data is actually copied, only pointers.
-// The make_deleter callback takes ownership of the original buffer.
-rcv_buf make_shard_local_buffer_copy(rcv_buf* org, std::function<deleter(rcv_buf*)> make_deleter) {
-    rcv_buf buf(org->size);
-    auto* one = std::get_if<temporary_buffer<char>>(&org->bufs);
-
-    if (one) {
-        buf.bufs = temporary_buffer<char>(one->get_write(), one->size(), make_deleter(org));
-    } else {
-        auto& orgbufs = std::get<std::vector<temporary_buffer<char>>>(org->bufs);
-        std::vector<temporary_buffer<char>> newbufs;
-        newbufs.reserve(orgbufs.size());
-        auto d = make_deleter(org);
-        for (auto&& b : orgbufs) {
-            newbufs.emplace_back(b.get_write(), b.size(), d.share());
-        }
-        buf.bufs = std::move(newbufs);
-    }
-
-    return buf;
-}
-
-} // namespace internal
-
 static void log_exception(connection& c, log_level level, const char* log, std::exception_ptr eptr) {
     const char* s;
     try {
