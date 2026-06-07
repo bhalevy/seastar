@@ -935,47 +935,35 @@ sink_impl<Serializer, Out...>::~sink_impl() {
     SEASTAR_ASSERT(this->_con->get()->sink_closed());
 }
 
-rcv_buf make_shard_local_buffer_copy(foreign_ptr<std::unique_ptr<rcv_buf>> org);
+rcv_buf make_shard_local_buffer_copy(rcv_buf* org, std::function<deleter(rcv_buf*)> make_deleter);
+
+template<typename Serializer, typename... In>
+source_impl<Serializer, In...>::source_impl(xshard_connection_ptr con)
+    : source<In...>::impl(std::move(con))
+    , _delete_queue([] (rcv_buf* buf) { delete buf; return make_ready_future<>(); }, this->_con->get_owner_shard())
+{
+    this->_con->get()->_source_closed = false;
+}
+
+template<typename Serializer, typename... In>
+source_impl<Serializer, In...>::~source_impl() {
+    // _delete_queue must have been stopped by operator() when the
+    // stream ended (eof or error).  Its destructor asserts that
+    // _process_fut is available.
+}
 
 template<typename Serializer, typename... In>
 future<std::optional<std::tuple<In...>>> source_impl<Serializer, In...>::operator()() {
     auto process_one_buffer = [this] {
-        foreign_ptr<std::unique_ptr<rcv_buf>> buf = std::move(this->_bufs.front());
+        rcv_buf* buf = this->_bufs.front();
         this->_bufs.pop_front();
-
-        rcv_buf local_buf;
-        if (buf.get_owner_shard() == this_shard_id()) {
-            local_buf = std::move(*buf);
-        } else {
-            // Create a shard-local alias of the buffer without moving the
-            // foreign_ptr into a deleter.  The temporary_buffers have empty
-            // deleters -- the underlying memory stays alive via the original
-            // foreign_ptr saved in _processed_bufs below.
-            // This avoids the fire-and-forget smp::submit_to that
-            // foreign_ptr::~foreign_ptr would otherwise generate for each
-            // individual buffer, batching the destruction instead.
-            local_buf.size = buf->size;
-            auto* one = std::get_if<temporary_buffer<char>>(&buf->bufs);
-            if (one) {
-                local_buf.bufs = temporary_buffer<char>(one->get_write(), one->size(), deleter());
-            } else {
-                auto& orgbufs = std::get<std::vector<temporary_buffer<char>>>(buf->bufs);
-                std::vector<temporary_buffer<char>> newbufs;
-                newbufs.reserve(orgbufs.size());
-                for (auto&& b : orgbufs) {
-                    newbufs.emplace_back(b.get_write(), b.size(), deleter());
-                }
-                local_buf.bufs = std::move(newbufs);
-            }
-            // Save the foreign_ptr for batch destruction on the connection
-            // shard during the next refill submit_to.
-            _processed_bufs.push_back(std::move(buf));
-        }
 
         return std::apply([] (In&&... args) {
             auto ret = std::make_optional(std::make_tuple(std::move(args)...));
             return make_ready_future<std::optional<std::tuple<In...>>>(std::move(ret));
-        }, unmarshall<Serializer, In...>(*this->_con->get(), std::move(local_buf)));
+        }, unmarshall<Serializer, In...>(*this->_con->get(), make_shard_local_buffer_copy(buf, [this] (rcv_buf* org) {
+            return deleter(new rcv_buf_deleter_impl(org, _delete_queue));
+        })));
     };
 
     if (!this->_bufs.empty()) {
@@ -984,11 +972,6 @@ future<std::optional<std::tuple<In...>>> source_impl<Serializer, In...>::operato
 
     // refill buffers from remote cpu
     return smp::submit_to(this->_con->get_owner_shard(), [this] () -> future<> {
-        // Batch destroy processed rcv_buf foreign_ptrs on the connection shard.
-        // Since we're on the owner shard, foreign_ptr destructor deletes the
-        // rcv_buf directly without generating individual cross-shard tasks.
-        this->_processed_bufs.clear();
-
         connection* con = this->_con->get();
         if (con->_source_closed) {
             return make_exception_future<>(stream_closed());
@@ -1008,9 +991,16 @@ future<std::optional<std::tuple<In...>>> source_impl<Serializer, In...>::operato
             }
             return make_ready_future<>();
         });
-    }).then([this, process_one_buffer] () {
+    }).then_wrapped([this, process_one_buffer] (future<>&& f) {
+        if (f.failed()) {
+            return _delete_queue.stop().then([ex = f.get_exception()] () mutable {
+                return make_exception_future<std::optional<std::tuple<In...>>>(std::move(ex));
+            });
+        }
         if (this->_bufs.empty()) {
-            return make_ready_future<std::optional<std::tuple<In...>>>(std::nullopt);
+            return _delete_queue.stop().then([] {
+                return make_ready_future<std::optional<std::tuple<In...>>>(std::nullopt);
+            });
         } else {
             return process_one_buffer();
         }

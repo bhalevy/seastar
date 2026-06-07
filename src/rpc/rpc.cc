@@ -97,22 +97,20 @@ snd_buf make_shard_local_buffer_copy(snd_buf* org, std::function<deleter(snd_buf
     return buf;
 }
 
-// Make a copy of a remote buffer. No data is actually copied, only pointers and
-// a deleter of a new buffer takes care of deleting the original buffer
-rcv_buf make_shard_local_buffer_copy(foreign_ptr<std::unique_ptr<rcv_buf>> org) {
-    if (org.get_owner_shard() == this_shard_id()) {
-        return std::move(*org);
-    }
+// Make a shard-local alias of a remote rcv_buf.
+// No data is actually copied, only pointers.
+// The make_deleter callback takes ownership of the original buffer.
+rcv_buf make_shard_local_buffer_copy(rcv_buf* org, std::function<deleter(rcv_buf*)> make_deleter) {
     rcv_buf buf(org->size);
     auto* one = std::get_if<temporary_buffer<char>>(&org->bufs);
 
     if (one) {
-        buf.bufs = temporary_buffer<char>(one->get_write(), one->size(), make_object_deleter(std::move(org)));
+        buf.bufs = temporary_buffer<char>(one->get_write(), one->size(), make_deleter(org));
     } else {
         auto& orgbufs = std::get<std::vector<temporary_buffer<char>>>(org->bufs);
         std::vector<temporary_buffer<char>> newbufs;
         newbufs.reserve(orgbufs.size());
-        deleter d = make_object_deleter(std::move(org));
+        auto d = make_deleter(org);
         for (auto&& b : orgbufs) {
             newbufs.emplace_back(b.get_write(), b.size(), d.share());
         }
@@ -578,13 +576,13 @@ future<> connection::handle_stream_frame() {
     });
 }
 
-future<> connection::stream_receive(circular_buffer<foreign_ptr<std::unique_ptr<rcv_buf>>>& bufs) {
+future<> connection::stream_receive(circular_buffer<rcv_buf*>& bufs) {
     return _stream_queue.not_empty().then([this, &bufs] {
         bool eof = !_stream_queue.consume([&bufs] (rcv_buf&& b) {
             if (b.size == -1U) { // max fragment length marks an end of a stream
                 return false;
             } else {
-                bufs.push_back(make_foreign(std::make_unique<rcv_buf>(std::move(b))));
+                bufs.push_back(new rcv_buf(std::move(b)));
                 return true;
             }
         });

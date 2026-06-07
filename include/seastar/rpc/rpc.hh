@@ -342,7 +342,7 @@ public:
     future<> stop() noexcept;
 
 private:
-    future<> stream_receive(circular_buffer<foreign_ptr<std::unique_ptr<rcv_buf>>>& bufs);
+    future<> stream_receive(circular_buffer<rcv_buf*>& bufs);
     future<> close_sink() {
         _sink_closed = true;
         if (stream_check_twoway_closed()) {
@@ -487,21 +487,39 @@ private:
     future<> send_buffer(snd_buf* buf);
 };
 
+// Safely delete the original rcv_buf on the connection shard.
+// When deleted after being consumed on the source shard, we queue
+// up the buffer pointers to be destroyed and deleted as a batch
+// back on the connection shard.
+class rcv_buf_deleter_impl final : public deleter::impl {
+    rcv_buf* _obj_ptr;
+    batched_queue<rcv_buf>& _delete_queue;
+
+public:
+    rcv_buf_deleter_impl(rcv_buf* obj_ptr, batched_queue<rcv_buf>& delete_queue)
+        : impl(deleter())
+        , _obj_ptr(obj_ptr)
+        , _delete_queue(delete_queue)
+    {}
+
+    virtual ~rcv_buf_deleter_impl() override {
+        _delete_queue.enqueue(_obj_ptr);
+    }
+};
+
 // receive data In...
 template<typename Serializer, typename... In>
 class source_impl : public source<In...>::impl {
-    // Processed rcv_buf foreign_ptrs awaiting batch destruction on the connection shard.
-    // After processing a cross-shard buffer, the foreign_ptr is saved here instead
-    // of being destroyed individually (which would generate a fire-and-forget
-    // cross-shard task per buffer via foreign_ptr::destroy_on).
-    // They are batch-destroyed on the connection shard during the next refill,
-    // where foreign_ptr destructor deletes directly without cross-shard tasks.
-    circular_buffer<foreign_ptr<std::unique_ptr<rcv_buf>>> _processed_bufs;
+    // Batched queue for deleting consumed rcv_buf:s on the connection shard.
+    // When a cross-shard buffer is consumed, its rcv_buf_deleter_impl enqueues
+    // the raw rcv_buf pointer here.  The queue batches deletions via a single
+    // smp::submit_to to the connection shard, avoiding individual cross-shard
+    // tasks from foreign_ptr destruction.
+    batched_queue<rcv_buf> _delete_queue;
+
 public:
-    source_impl(xshard_connection_ptr con) : source<In...>::impl(std::move(con)) {
-        this->_con->get()->_source_closed = false;
-        _processed_bufs.reserve(max_queued_stream_buffers);
-    }
+    source_impl(xshard_connection_ptr con);
+    ~source_impl() override;
     future<std::optional<std::tuple<In...>>> operator()() override;
 };
 

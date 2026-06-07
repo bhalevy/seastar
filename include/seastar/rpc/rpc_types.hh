@@ -238,7 +238,7 @@ struct cancellable {
     }
 };
 
-struct rcv_buf {
+struct rcv_buf : public boost::intrusive::slist_base_hook<> {
     uint32_t size = 0;
     std::optional<semaphore_units<>> su;
     std::variant<std::vector<temporary_buffer<char>>, temporary_buffer<char>> bufs;
@@ -364,7 +364,7 @@ public:
     class impl {
     protected:
         xshard_connection_ptr _con;
-        circular_buffer<foreign_ptr<std::unique_ptr<rcv_buf>>> _bufs;
+        circular_buffer<rcv_buf*> _bufs;
         impl(xshard_connection_ptr con) : _con(std::move(con)) {
             _bufs.reserve(max_queued_stream_buffers);
         }
