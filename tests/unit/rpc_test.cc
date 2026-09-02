@@ -741,6 +741,808 @@ SEASTAR_TEST_CASE(test_stream_negotiation_error) {
     });
 }
 
+// Reproduces a use-after-free of an rpc stream connection that is destroyed
+// while it is still running.
+//
+// The application below closes its sink but never reads its source, which is
+// all it can do: rpc::source has no close(), and the only places that mark a
+// source closed are inside source_impl::operator(), on eof or on a failed
+// read.  connection::_source_closed therefore stays false, so close_sink()
+// does not see the stream as two-way closed and connection::stream_close() --
+// which stops the connection -- is never called.  The stream connection is
+// left referenced only by the parent client's _streams map.
+//
+// Without the fix, client::abort_all_streams() then erases that reference
+// while the connection's receive loop is still running and its output stream
+// was never closed, and this test aborts either in the destroyed connection's
+// receive loop:
+//
+//   __cxa_pure_virtual ()
+//   seastar::rpc::log_exception (seastar::rpc::connection&, ...)
+//   seastar::rpc::client::loop (...)
+//
+// or, when a batched flush is still outstanding at destruction time, in
+//
+//   seastar::internal::assert_fail (...)          "Was this stream properly closed?"
+//   seastar::output_stream<char>::~output_stream (...)
+//   seastar::rpc::connection::socket_and_buffers::~socket_and_buffers (...)
+//   seastar::rpc::connection::~connection (...)
+//   seastar::rpc::client::~client (...)
+//
+// The latter is what is seen in the field, where the application drops the
+// last reference to the stream connection itself rather than the parent
+// client's _streams map doing it.
+SEASTAR_TEST_CASE(test_stream_drop_unclosed_source) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    return rpc_test_env<>::do_with_thread(cfg, [] (rpc_test_env<>& env) {
+        test_rpc_proto::client c(env.proto(), {}, env.make_socket(), ipv4_addr());
+
+        future<> server_done = make_ready_future<>();
+        env.register_handler(1, [&] (int i, rpc::source<int> source) {
+            BOOST_REQUIRE_EQUAL(i, 666);
+            auto sink = source.make_sink<serializer, sstring>();
+            // Drain the peer's stream and close this side of it, so that the
+            // server end of the stream is torn down cleanly whatever the
+            // client does with its own end.
+            server_done = seastar::async([source, sink] () mutable {
+                try {
+                    while (source().get()) {}
+                } catch (...) {
+                    // the client side may be gone already
+                }
+                try {
+                    sink.close().get();
+                } catch (...) {
+                    // ditto
+                }
+            });
+            return sink;
+        }).get();
+        auto call = env.proto().make_client<rpc::source<sstring> (int, rpc::sink<int>)>(1);
+
+        {
+            auto sink = c.make_stream_sink<serializer, int>(env.make_socket()).get();
+            auto source = call(c, 666, sink).get();
+            sink(1).get();
+            // The application is done with the stream.  It closes its sink,
+            // but never reads its source, so the source is not closed and the
+            // stream connection is not stopped.
+            sink.close().get();
+            // sink and source are dropped here.
+        }
+
+        // The stream connection is still referenced by c's _streams map.
+        // Stopping c calls abort_all_streams(), which erases that reference;
+        // without the fix that destroys the stream connection while its loop
+        // is still running.
+        c.stop().get();
+
+        server_done.get();
+    });
+}
+
+// Aborting a stream connection has to make its loop end, even when the loop is
+// parked on the backpressure of an application that stopped reading its
+// source: connection::abort() only shuts the input down, which does not wake a
+// loop waiting on _stream_sem or _stream_queue.  A client waits for its stream
+// connections to stop before it stops itself, so a loop that never ends hangs
+// client::stop() forever.
+SEASTAR_TEST_CASE(test_stream_stop_client_with_unread_source) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    return rpc_test_env<>::do_with_thread(cfg, [] (rpc_test_env<>& env) {
+        test_rpc_proto::client c(env.proto(), {}, env.make_socket(), ipv4_addr());
+
+        // The server floods the client with more than it can buffer.
+        int sent = 0;
+        future<> server_done = make_ready_future<>();
+        env.register_handler(1, [&] (int i, rpc::source<int> source) {
+            auto sink = source.make_sink<serializer, sstring>();
+            server_done = seastar::async([sink, &sent] () mutable {
+                try {
+                    for (int j = 0; j < 500; j++) {
+                        sent++;
+                        sink(sstring(4096, 'x')).get();
+                    }
+                } catch (...) {
+                    // the client side is gone
+                }
+                try {
+                    sink.close().get();
+                } catch (...) {
+                    // ditto
+                }
+            });
+            return sink;
+        }).get();
+        auto call = env.proto().make_client<rpc::source<sstring> (int, rpc::sink<int>)>(1);
+
+        {
+            auto sink = c.make_stream_sink<serializer, int>(env.make_socket()).get();
+            auto source = call(c, 666, sink).get();
+            sink(1).get();
+            // Wait until the peer has handed the sink more than this side can
+            // buffer (max_queued_stream_buffers frames, max_stream_buffers_memory
+            // bytes), so that the stream connection's loop is parked on its own
+            // backpressure.  The source is never read.
+            while (sent < 64) {
+                sleep(std::chrono::milliseconds(1)).get();
+            }
+            sink.close().get();
+            // sink and source are dropped here.
+        }
+
+        // Without abort() breaking the stream backpressure this never returns.
+        c.stop().get();
+
+        server_done.get();
+    });
+}
+
+// Faithful model of streaming::tablet_stream_files with N targets, which is the
+// shape the CUSTOMER-678 backtrace shows:
+//
+//   #30 sink_and_source::~sink_and_source        stream_blob.cc:419
+//   #35 std::vector<sink_and_source>::~vector
+//   #36 tablet_stream_files [clone .resume]      stream_blob.cc:622   <- end of the
+//                                                                       per-file loop
+//   #38 coroutine::all<future<void>,future<void>>::awaiter::process<2u>
+//   #39 coroutine::all<...>::intermediate_task<1ul>::run_and_dispose
+//
+// i.e. the *drain* fiber (branch 1) finished last, resumed the coroutine, and the
+// vector of sink/source pairs was destroyed in that same task, on the success
+// path, with every sink already closed by the send fiber (branch 0).
+//
+// One parent client owns N stream connections.  Branch 0 sends to every target
+// and then closes every sink; branch 1 drains every source until eof or error.
+// Both honour the contract and both are awaited before the pairs are dropped.
+// The peers are staggered so the drains complete in a different order from the
+// closes, which is what makes branch 1 finish last.
+static future<> test_stream_multi_target_teardown(unsigned n_targets, bool stagger) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    return rpc_test_env<>::do_with_thread(cfg, [n_targets, stagger] (rpc_test_env<>& env) {
+        test_rpc_proto::client c(env.proto(), {}, env.make_socket(), ipv4_addr());
+
+        std::vector<future<>> server_done;
+        env.register_handler(1, [&, stagger] (int idx, rpc::source<int> source) {
+            auto sink = source.make_sink<serializer, sstring>();
+            server_done.push_back(seastar::async([source, sink, idx, stagger] () mutable {
+                // The follower drains what the master sends...
+                try {
+                    while (source().get()) {}
+                } catch (...) {}
+                // ...then, staggered, sends its status and closes its half, the
+                // way stream_blob_handler does.
+                if (stagger) {
+                    sleep(std::chrono::milliseconds(1 + (idx % 4))).get();
+                }
+                try { sink(sstring("ok")).get(); } catch (...) {}
+                try { sink.close().get(); } catch (...) {}
+            }));
+            return sink;
+        }).get();
+        auto call = env.proto().make_client<rpc::source<sstring> (int, rpc::sink<int>)>(1);
+
+        {
+            struct stream_pair {
+                rpc::sink<int> sink;
+                rpc::source<sstring> source;
+                bool sink_closed = false;
+            };
+            std::vector<stream_pair> ss;
+            for (unsigned i = 0; i < n_targets; i++) {
+                auto sink = c.make_stream_sink<serializer, int>(env.make_socket()).get();
+                auto source = call(c, int(i), sink).get();
+                ss.push_back(stream_pair{std::move(sink), std::move(source)});
+            }
+
+            // send_data_to_peer: stream to every target, then end-of-stream and
+            // close every sink.  Not wrapped in try/catch, like the original.
+            auto send_data_to_peer = [&ss] {
+                for (int round = 0; round < 8; round++) {
+                    for (auto& s : ss) {
+                        s.sink(round).get();
+                    }
+                }
+                for (auto& s : ss) {
+                    s.sink(-1).get();
+                    s.sink.close().get();
+                    s.sink_closed = true;
+                }
+            };
+            // get_status_code_from_peer: drain every source until eof or error.
+            auto get_status_code_from_peer = [&ss] {
+                std::vector<future<>> fs;
+                for (auto& s : ss) {
+                    fs.push_back(seastar::async([&s] {
+                        try {
+                            while (s.source().get()) {}
+                        } catch (...) {}
+                    }));
+                }
+                when_all(fs.begin(), fs.end()).get();
+            };
+
+            auto f0 = seastar::async(send_data_to_peer);
+            auto f1 = seastar::async(get_status_code_from_peer);
+            when_all(std::move(f0), std::move(f1)).get();
+            // ss, and with it every sink and source, is dropped here.
+        }
+
+        c.stop().get();
+        when_all(server_done.begin(), server_done.end()).get();
+    });
+}
+
+SEASTAR_TEST_CASE(test_stream_multi_target_teardown_1) {
+    return test_stream_multi_target_teardown(1, false);
+}
+
+SEASTAR_TEST_CASE(test_stream_multi_target_teardown_3) {
+    return test_stream_multi_target_teardown(3, false);
+}
+
+SEASTAR_TEST_CASE(test_stream_multi_target_teardown_3_staggered) {
+    return test_stream_multi_target_teardown(3, true);
+}
+
+SEASTAR_TEST_CASE(test_stream_multi_target_teardown_8_staggered) {
+    return test_stream_multi_target_teardown(8, true);
+}
+
+// Two source_impl objects on ONE stream connection.
+//
+// rpc_impl.hh's rpc::source deserializer builds a source_impl from
+// c.get_stream(id) every time a message carrying a stream connection id is
+// unmarshalled, and source_impl's constructor resets _source_closed = false.
+// Sending the same rpc::sink in two rpc calls therefore gives the peer two
+// source_impls on one connection: the second one re-opens a half that the
+// first one already closed, so the next close_sink()/close_source() sees the
+// stream as two-way closed a second time and calls stream_close() -- and hence
+// connection::stop(), and hence _stopped.get_future() -- again.
+SEASTAR_TEST_CASE(test_stream_two_sources_on_one_connection) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    return rpc_test_env<>::do_with_thread(cfg, [] (rpc_test_env<>& env) {
+        test_rpc_proto::client c(env.proto(), {}, env.make_socket(), ipv4_addr());
+
+        std::vector<future<>> server_done;
+        env.register_handler(1, [&] (int idx, rpc::source<int> source) {
+            server_done.push_back(seastar::async([source] () mutable {
+                try {
+                    while (source().get()) {}
+                } catch (...) {}
+            }));
+            return make_ready_future<>();
+        }).get();
+        auto call = env.proto().make_client<future<> (int, rpc::sink<int>)>(1);
+
+        {
+            auto sink = c.make_stream_sink<serializer, int>(env.make_socket()).get();
+            // The same sink is handed to the peer twice.
+            call(c, 1, sink).get();
+            call(c, 2, sink).get();
+            sink(1).get();
+            sink.close().get();
+        }
+
+        c.stop().get();
+        when_all(server_done.begin(), server_done.end()).get();
+    });
+}
+
+// Two sink_impl objects on ONE stream connection, via source::make_sink()
+// being called twice -- the sink_impl constructor likewise resets
+// _sink_closed = false.
+SEASTAR_TEST_CASE(test_stream_two_sinks_on_one_connection) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    return rpc_test_env<>::do_with_thread(cfg, [] (rpc_test_env<>& env) {
+        test_rpc_proto::client c(env.proto(), {}, env.make_socket(), ipv4_addr());
+
+        std::vector<future<>> server_done;
+        env.register_handler(1, [&] (int i, rpc::source<int> source) {
+            auto sink1 = source.make_sink<serializer, sstring>();
+            auto sink2 = source.make_sink<serializer, sstring>();
+            server_done.push_back(seastar::async([source, sink1, sink2] () mutable {
+                try {
+                    while (source().get()) {}
+                } catch (...) {}
+                try { sink1.close().get(); } catch (...) {}
+                try { sink2.close().get(); } catch (...) {}
+            }));
+            return sink1;
+        }).get();
+        auto call = env.proto().make_client<rpc::source<sstring> (int, rpc::sink<int>)>(1);
+
+        {
+            auto sink = c.make_stream_sink<serializer, int>(env.make_socket()).get();
+            auto source = call(c, 666, sink).get();
+            sink(1).get();
+            sink.close().get();
+            try {
+                while (source().get()) {}
+            } catch (...) {}
+        }
+
+        c.stop().get();
+        when_all(server_done.begin(), server_done.end()).get();
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Contract-abiding stream teardown.
+//
+// The application in the tests below does exactly what the (undocumented) rpc
+// stream contract asks of it: it closes its sink and it reads its source until
+// eof or error, and it awaits both.  It only drops its handles afterwards.
+//
+// What differs from a plain shutdown is that the *parent* client is torn down
+// while the stream is still live -- which is what
+// messaging_service::remove_error_rpc_client() does on any transport error, for
+// any of the ~30 verbs that share STREAM_BLOB's client index.  The parent's
+// loop then runs client::abort_all_streams(), which aborts the stream
+// connection and erases the parent's reference to it immediately, leaving the
+// application's sink and source as the only owners of a connection whose loop
+// may still be unwinding.
+// ---------------------------------------------------------------------------
+
+// The peer drains and closes, so the client's source reaches eof normally.
+// No concurrent teardown.  This is the control: it must always pass.
+SEASTAR_TEST_CASE(test_stream_contract_abiding_control) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    return rpc_test_env<>::do_with_thread(cfg, [] (rpc_test_env<>& env) {
+        test_rpc_proto::client c(env.proto(), {}, env.make_socket(), ipv4_addr());
+
+        future<> server_done = make_ready_future<>();
+        env.register_handler(1, [&] (int i, rpc::source<int> source) {
+            auto sink = source.make_sink<serializer, sstring>();
+            server_done = seastar::async([source, sink] () mutable {
+                try { while (source().get()) {} } catch (...) {}
+                try { sink.close().get(); } catch (...) {}
+            });
+            return sink;
+        }).get();
+        auto call = env.proto().make_client<rpc::source<sstring> (int, rpc::sink<int>)>(1);
+
+        {
+            auto sink = c.make_stream_sink<serializer, int>(env.make_socket()).get();
+            auto source = call(c, 666, sink).get();
+            sink(1).get();
+            sink.close().get();
+            while (source().get()) {}
+        }
+
+        c.stop().get();
+        server_done.get();
+    });
+}
+
+// The parent is stopped while the stream is live, then the application cleans
+// up in the order streaming::tablet_stream_files uses: close the sink, then
+// drain the source.
+SEASTAR_TEST_CASE(test_stream_parent_stop_then_close_sink_then_drain) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    return rpc_test_env<>::do_with_thread(cfg, [] (rpc_test_env<>& env) {
+        test_rpc_proto::client c(env.proto(), {}, env.make_socket(), ipv4_addr());
+
+        future<> server_done = make_ready_future<>();
+        env.register_handler(1, [&] (int i, rpc::source<int> source) {
+            auto sink = source.make_sink<serializer, sstring>();
+            // The peer keeps its half open, so the client's source never sees
+            // eof on its own; the client drains it to *error* instead, which
+            // the contract explicitly allows.
+            server_done = seastar::async([source, sink] () mutable {
+                try { while (source().get()) {} } catch (...) {}
+                try { sink.close().get(); } catch (...) {}
+            });
+            return sink;
+        }).get();
+        auto call = env.proto().make_client<rpc::source<sstring> (int, rpc::sink<int>)>(1);
+
+        future<> parent_stopped = make_ready_future<>();
+        {
+            auto sink = c.make_stream_sink<serializer, int>(env.make_socket()).get();
+            auto source = call(c, 666, sink).get();
+            sink(1).get();
+
+            parent_stopped = c.stop();
+
+            try { sink.close().get(); } catch (...) {}
+            try { while (source().get()) {} } catch (...) {}
+            // sink and source dropped here.
+        }
+        parent_stopped.get();
+        server_done.get();
+    });
+}
+
+// Same, but the application drains first and closes its sink second.
+SEASTAR_TEST_CASE(test_stream_parent_stop_then_drain_then_close_sink) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    return rpc_test_env<>::do_with_thread(cfg, [] (rpc_test_env<>& env) {
+        test_rpc_proto::client c(env.proto(), {}, env.make_socket(), ipv4_addr());
+
+        future<> server_done = make_ready_future<>();
+        env.register_handler(1, [&] (int i, rpc::source<int> source) {
+            auto sink = source.make_sink<serializer, sstring>();
+            server_done = seastar::async([source, sink] () mutable {
+                try { while (source().get()) {} } catch (...) {}
+                try { sink.close().get(); } catch (...) {}
+            });
+            return sink;
+        }).get();
+        auto call = env.proto().make_client<rpc::source<sstring> (int, rpc::sink<int>)>(1);
+
+        future<> parent_stopped = make_ready_future<>();
+        {
+            auto sink = c.make_stream_sink<serializer, int>(env.make_socket()).get();
+            auto source = call(c, 666, sink).get();
+            sink(1).get();
+
+            parent_stopped = c.stop();
+
+            try { while (source().get()) {} } catch (...) {}
+            try { sink.close().get(); } catch (...) {}
+            // sink and source dropped here.
+        }
+        parent_stopped.get();
+        server_done.get();
+    });
+}
+
+// Same, but the application retries a close that failed -- which is what
+// tablet_stream_files does, since it only records sink_closed = true after a
+// close that returned without throwing.  The retry short-circuits on the
+// broken semaphore inside sink_impl::close() and returns without waiting for
+// anything.
+SEASTAR_TEST_CASE(test_stream_parent_stop_close_sink_retry) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    return rpc_test_env<>::do_with_thread(cfg, [] (rpc_test_env<>& env) {
+        test_rpc_proto::client c(env.proto(), {}, env.make_socket(), ipv4_addr());
+
+        future<> server_done = make_ready_future<>();
+        env.register_handler(1, [&] (int i, rpc::source<int> source) {
+            auto sink = source.make_sink<serializer, sstring>();
+            server_done = seastar::async([source, sink] () mutable {
+                try { while (source().get()) {} } catch (...) {}
+                try { sink.close().get(); } catch (...) {}
+            });
+            return sink;
+        }).get();
+        auto call = env.proto().make_client<rpc::source<sstring> (int, rpc::sink<int>)>(1);
+
+        future<> parent_stopped = make_ready_future<>();
+        {
+            auto sink = c.make_stream_sink<serializer, int>(env.make_socket()).get();
+            auto source = call(c, 666, sink).get();
+            sink(1).get();
+
+            parent_stopped = c.stop();
+
+            bool sink_closed = false;
+            try { sink.close().get(); sink_closed = true; } catch (...) {}
+            if (!sink_closed) {
+                try { sink.close().get(); sink_closed = true; } catch (...) {}
+            }
+            try { while (source().get()) {} } catch (...) {}
+            // sink and source dropped here.
+        }
+        parent_stopped.get();
+        server_done.get();
+    });
+}
+
+// #3657: the application stops the client and, once stop() has returned,
+// destroys it -- while a make_stream_sink() it started is still negotiating.
+// make_stream_sink()'s continuation then reads _error and calls
+// register_stream() through a dangling parent.  No source exists yet, so no
+// amount of draining can help.
+SEASTAR_TEST_CASE(test_stream_make_stream_sink_outlives_client) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    return rpc_test_env<>::do_with_thread(cfg, [] (rpc_test_env<>& env) {
+        auto c = std::make_unique<test_rpc_proto::client>(env.proto(), rpc::client_options{}, env.make_socket(), ipv4_addr());
+        c->await_connection().get();
+
+        auto sink_f = c->make_stream_sink<serializer, int>(env.make_socket());
+        c->stop().get();
+        c.reset();
+
+        try { sink_f.get(); } catch (...) {}
+    });
+}
+
+// The faithful streaming::tablet_stream_files shape: the send/close half and
+// the drain half run as *concurrent* fibers, the way
+// coroutine::all(send_data_to_peer, get_status_code_from_peer) runs them, over
+// several streams on one parent client, with the parent torn down mid-flight.
+// Both halves honour the contract and both are awaited before the handles go.
+SEASTAR_TEST_CASE(test_stream_concurrent_close_and_drain_parent_stop) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    return rpc_test_env<>::do_with_thread(cfg, [] (rpc_test_env<>& env) {
+        test_rpc_proto::client c(env.proto(), {}, env.make_socket(), ipv4_addr());
+
+        std::vector<future<>> server_done;
+        env.register_handler(1, [&] (int i, rpc::source<int> source) {
+            auto sink = source.make_sink<serializer, sstring>();
+            server_done.push_back(seastar::async([source, sink] () mutable {
+                try {
+                    for (int j = 0; j < 100; j++) {
+                        sink(sstring(1024, 'x')).get();
+                    }
+                } catch (...) {}
+                try { while (source().get()) {} } catch (...) {}
+                try { sink.close().get(); } catch (...) {}
+            }));
+            return sink;
+        }).get();
+        auto call = env.proto().make_client<rpc::source<sstring> (int, rpc::sink<int>)>(1);
+
+        future<> parent_stopped = make_ready_future<>();
+        {
+            struct stream_pair {
+                rpc::sink<int> sink;
+                rpc::source<sstring> source;
+            };
+            std::vector<stream_pair> ss;
+            for (int n = 0; n < 3; n++) {
+                auto sink = c.make_stream_sink<serializer, int>(env.make_socket()).get();
+                auto source = call(c, 666, sink).get();
+                ss.push_back(stream_pair{std::move(sink), std::move(source)});
+            }
+            for (auto& s : ss) {
+                s.sink(1).get();
+            }
+
+            parent_stopped = c.stop();
+
+            std::vector<future<>> fibers;
+            for (auto& s : ss) {
+                fibers.push_back(seastar::async([&s] {
+                    // send_data_to_peer: keep sending, then close the sink.
+                    try {
+                        for (int j = 0; j < 100; j++) {
+                            s.sink(j).get();
+                        }
+                    } catch (...) {}
+                    try { s.sink.close().get(); } catch (...) {}
+                }));
+                fibers.push_back(seastar::async([&s] {
+                    // get_status_code_from_peer: drain to eof or error.
+                    try { while (s.source().get()) {} } catch (...) {}
+                }));
+            }
+            when_all(fibers.begin(), fibers.end()).get();
+            // ss, and with it every sink and source, is dropped here.
+        }
+        parent_stopped.get();
+        when_all(server_done.begin(), server_done.end()).get();
+    });
+}
+
+// Control for test_stream_make_stream_sink_outlives_client: the same teardown
+// (await stop(), then destroy the client) with no stream involved at all.
+SEASTAR_TEST_CASE(test_client_stop_then_destroy_no_stream_control) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    return rpc_test_env<>::do_with_thread(cfg, [] (rpc_test_env<>& env) {
+        auto c = std::make_unique<test_rpc_proto::client>(env.proto(), rpc::client_options{}, env.make_socket(), ipv4_addr());
+        c->await_connection().get();
+        c->stop().get();
+        c.reset();
+    });
+}
+
+// tablet_stream_files creates one sink_and_source per target inside a try
+// block, and a failure part-way through that loop drops straight into the
+// error handler, which cleans up the pairs that were already created.  Those
+// pairs are in a state none of the tests above produce: their source has never
+// been read, so when the handler closes their sink, close_sink() sees
+// _source_closed == false, does *not* call stream_close(), and returns without
+// waiting for anything.  Everything then rests on the drain that follows.
+//
+// Variant A: the peer answers the error command and closes, so the drain
+// reaches eof and close_source() finally stops the connection.
+//
+// Variant B: the peer is gone, so the earlier stream's connection is already in
+// error by the time the handler runs.
+static future<> test_stream_creation_fails_midway(bool peer_responds) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    return rpc_test_env<>::do_with_thread(cfg, [peer_responds] (rpc_test_env<>& env) {
+        test_rpc_proto::client c(env.proto(), {}, env.make_socket(), ipv4_addr());
+
+        std::vector<future<>> server_done;
+        // The unresponsive peer parks here until the client is done, so that it
+        // is merely slow rather than in breach of the contract itself.
+        promise<> peer_release;
+        shared_future<> peer_released(peer_release.get_future());
+        // verb 1: the good target.
+        env.register_handler(1, [&, peer_responds] (int i, rpc::source<int> source) {
+            auto sink = source.make_sink<serializer, sstring>();
+            server_done.push_back(seastar::async([source, sink, peer_responds, peer_released] () mutable {
+                if (!peer_responds) {
+                    // Hold both halves open while the client runs its cleanup,
+                    // then close them properly.
+                    peer_released.get_future().get();
+                }
+                try { while (source().get()) {} } catch (...) {}
+                try { sink.close().get(); } catch (...) {}
+            }));
+            return sink;
+        }).get();
+        // verb 2: the target whose creation fails, the way an rpc handler error
+        // makes make_sink_and_source_for_stream_blob throw.
+        env.register_handler(2, [] (int i, rpc::source<int> source) -> future<rpc::sink<sstring>> {
+            return make_exception_future<rpc::sink<sstring>>(std::runtime_error("creation failed"));
+        }).get();
+
+        auto call1 = env.proto().make_client<rpc::source<sstring> (int, rpc::sink<int>)>(1);
+        auto call2 = env.proto().make_client<rpc::source<sstring> (int, rpc::sink<int>)>(2);
+
+        {
+            struct stream_pair {
+                rpc::sink<int> sink;
+                rpc::source<sstring> source;
+                bool sink_closed = false;
+                bool status_sent = false;
+            };
+            std::vector<stream_pair> ss;
+
+            std::exception_ptr error;
+            try {
+                // target #1 comes up.
+                auto sink = c.make_stream_sink<serializer, int>(env.make_socket()).get();
+                auto source = call1(c, 666, sink).get();
+                ss.push_back(stream_pair{std::move(sink), std::move(source)});
+
+                // target #2 fails.  This models make_sink_and_source_for_stream_blob:
+                // the sink is created, the rpc call fails, the sink is closed and
+                // the error is rethrown.
+                auto sink2 = c.make_stream_sink<serializer, int>(env.make_socket()).get();
+                std::exception_ptr ex;
+                try {
+                    auto source2 = call2(c, 666, sink2).get();
+                    ss.push_back(stream_pair{std::move(sink2), std::move(source2)});
+                } catch (...) {
+                    ex = std::current_exception();
+                }
+                if (ex) {
+                    sink2.close().get();
+                    std::rethrow_exception(ex);
+                }
+            } catch (...) {
+                error = std::current_exception();
+            }
+            BOOST_REQUIRE(error != nullptr);
+            BOOST_REQUIRE_EQUAL(ss.size(), 1u);
+
+            // The tablet_stream_files error handler, verbatim in structure:
+            // every step best-effort, each bookkeeping flag set only after a
+            // call that returned without throwing.
+            for (auto& s : ss) {
+                try {
+                    if (!s.status_sent && !s.sink_closed) {
+                        s.sink(-1).get();
+                        s.status_sent = true;
+                    }
+                } catch (...) {}
+                try {
+                    if (!s.sink_closed) {
+                        s.sink.close().get();
+                        s.sink_closed = true;
+                    }
+                } catch (...) {}
+                try {
+                    for (;;) {
+                        if (!s.source().get()) { break; }
+                    }
+                } catch (...) {}
+            }
+            // ss is dropped here, at the end of the per-file loop body.
+        }
+
+        peer_release.set_value();
+        c.stop().get();
+        when_all(server_done.begin(), server_done.end()).get();
+    });
+}
+
+SEASTAR_TEST_CASE(test_stream_creation_fails_midway_peer_responds) {
+    return test_stream_creation_fails_midway(true);
+}
+
+
+// make_stream_sink()'s *inner* await_connection() -- the one on the freshly
+// created stream client -- resolving exceptionally.
+//
+// That future is completed by stop_send_loop() (rpc.cc:1041), which runs
+// *inside* client::loop(), before deregister_this_stream(), before
+// _compressor->close() and before _stopped.set_value().  So the waiter wakes
+// while the stream connection's loop is still unwinding.  handle_exception()
+// then calls c->stop(), which takes _stopped.get_future() and waits for that
+// loop -- holding c across the wait.
+//
+// Variant A: the parent stays alive.
+// Variant B: the parent is stopped and destroyed while the stream connection
+// is still negotiating, so the continuation's captured `this` is dangling by
+// the time it runs (#3657).
+static future<> test_stream_await_connection_fails(bool destroy_parent) {
+    rpc::server_options so;
+    so.streaming_domain = rpc::streaming_domain_type(1);
+    rpc_test_config cfg;
+    cfg.server_options = so;
+    rpc_loopback_error_injector::config ecfg;
+    ecfg.server_rcv.limit = 1;
+    ecfg.server_rcv.kind = loopback_error_injector::error::abort;
+    cfg.inject_error = ecfg;
+    return rpc_test_env<>::do_with_thread(cfg, [destroy_parent] (rpc_test_env<>& env) {
+        auto c = std::make_unique<test_rpc_proto::client>(env.proto(), rpc::client_options{}, env.make_socket(), ipv4_addr());
+        try {
+            c->await_connection().get();
+        } catch (...) {
+            // The parent itself did not come up; nothing to test here.
+            try { c->stop().get(); } catch (...) {}
+            return;
+        }
+
+        auto f = c->make_stream_sink<serializer, int>(env.make_socket());
+        if (destroy_parent) {
+            // The owner stops the parent and, once stop() has returned,
+            // destroys it -- while the stream is still coming up.
+            try { c->stop().get(); } catch (...) {}
+            c.reset();
+            try { f.get(); } catch (...) {}
+        } else {
+            try { f.get(); } catch (...) {}
+            try { c->stop().get(); } catch (...) {}
+            c.reset();
+        }
+    });
+}
+
+SEASTAR_TEST_CASE(test_stream_await_connection_fails_parent_alive) {
+    return test_stream_await_connection_fails(false);
+}
+
+SEASTAR_TEST_CASE(test_stream_await_connection_fails_parent_destroyed) {
+    return test_stream_await_connection_fails(true);
+}
+
 static future<> test_rpc_connection_send_glitch(bool on_client) {
     struct context {
         int limit;
