@@ -334,6 +334,14 @@ constexpr size_t max_stream_buffers_memory = 100 * 1024;
 /// \addtogroup rpc
 /// @{
 
+/// \brief The sending end of an rpc stream.
+///
+/// close() must be called, and its future waited for, before the last
+/// reference to a sink goes away; the destructor asserts that it was.  Closing
+/// only marks this half of the stream closed -- the stream's connection is
+/// shut down once the peer-facing source has been drained as well, see
+/// \ref source.  Failures are expected on a broken stream and do not excuse
+/// skipping the call: it is what marks the half closed.
 // send data Out...
 template<typename... Out>
 class sink {
@@ -375,6 +383,16 @@ public:
     connection_id get_id() const;
 };
 
+/// \brief The receiving end of an rpc stream.
+///
+/// There is deliberately no close().  A source is released by reading it until
+/// it yields an unengaged optional (end of stream) or throws; that is what
+/// marks this half of the stream closed, and there is no other way to do it.
+/// Dropping a source that has not been read to eof or error leaves the
+/// stream's connection running with nothing waiting for it -- unlike \ref
+/// sink, nothing asserts, so it fails silently.  An application that no longer
+/// wants the data should say so at the application level and then drain what
+/// is still in flight.
 // receive data In...
 template<typename... In>
 class source {

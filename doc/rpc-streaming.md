@@ -43,11 +43,39 @@ To receive:
       }
 ```
 
+### Closing a stream
+
+Both ends of a stream must be shut down explicitly, and both halves matter:
+
+* **Close the sink**, and wait for the returned future. `rpc::sink::close()`
+  sends the end-of-stream marker and marks that half closed. This is not
+  optional -- `~sink_impl` asserts that the sink was closed, because a sink
+  dropped mid-flight can leave continuations running on a destroyed
+  connection.
+* **Read the source until eof or error.** `rpc::source` deliberately has no
+  `close()`: reading it until it yields an unengaged optional (eof), or until
+  it throws, is what marks that half closed. There is no other way to release
+  it. If you no longer want the data, tell the peer at the application level
+  and then drain what is still in flight -- do not simply stop reading.
+
+Only when *both* halves are closed does the stream shut its connection down
+and wait for it to stop. Closing one half alone does not, so an application
+that closes its sink but abandons its source leaves the connection running
+with nothing waiting for it, and whoever drops the last reference next
+destroys a connection that is still in use.
+
+Note that neither half is closed for you on error. A stream whose connection
+has failed still has to be closed the same way; the calls will fail, and the
+failures are expected, but they are what marks the halves closed.
+
 ### Creating a stream
 
 To open an RPC stream one needs RPC client to be created already. The stream
-will be associated with the client and will be aborted if the client is closed
-before streaming is. Given RPC client `rc`, and a `serializer` class that models the Serializer concept (as explained in the rpc::protocol class), one creates `rpc::sink` as follows
+will be associated with the client, and closing the client aborts any stream
+still open on it. Note that aborting a stream this way is not a substitute for
+closing it: the application still owes the stream the shutdown described in
+[Closing a stream](#closing-a-stream) below, and dropping an unclosed
+`rpc::sink` asserts. Given RPC client `rc`, and a `serializer` class that models the Serializer concept (as explained in the rpc::protocol class), one creates `rpc::sink` as follows
 (again assuming `seastar::async` context):
 
 ```cpp
