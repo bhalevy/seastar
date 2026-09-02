@@ -304,6 +304,8 @@ protected:
     std::unordered_map<connection_id, xshard_connection_ptr> _streams;
     queue<rcv_buf> _stream_queue = queue<rcv_buf>(max_queued_stream_buffers);
     semaphore _stream_sem = semaphore(max_stream_buffers_memory);
+    bool _loop_done = false;
+    unsigned _nstops = 0;
     bool _sink_closed = true;
     bool _source_closed = true;
     // the future holds if sink is already closed
@@ -335,7 +337,12 @@ public:
         set_socket(std::move(fd));
     }
     connection(const logger& l, void* s, connection_id id = invalid_connection_id) : _logger(l), _serializer(s), _id(id) {}
-    virtual ~connection() {}
+    virtual ~connection() {
+        if (!_loop_done) {
+            fmt::print(stderr, "RPCDIAG dtor conn={} id={} is_stream={} loop_done=0 error={} sink_closed={} source_closed={}\n",
+                    fmt::ptr(this), _id.id(), _is_stream, _error, _sink_closed, _source_closed);
+        }
+    }
     size_t outgoing_queue_length() const noexcept {
         return _outgoing_queue_size;
     }
@@ -349,7 +356,9 @@ private:
     future<> stream_receive(circular_buffer<foreign_ptr<std::unique_ptr<rcv_buf>>>& bufs);
     future<> close_sink() {
         _sink_closed = true;
-        if (stream_check_twoway_closed()) {
+        bool both = stream_check_twoway_closed();
+        fmt::print(stderr, "RPCDIAG close_sink conn={} id={} stream={} source_closed={} -> stream_close={}\n", fmt::ptr(this), _id.id(), _is_stream, _source_closed, both);
+        if (both) {
             return stream_close();
         }
         return make_ready_future();
@@ -359,7 +368,9 @@ private:
     }
     future<> close_source() {
         _source_closed = true;
-        if (stream_check_twoway_closed()) {
+        bool both = stream_check_twoway_closed();
+        fmt::print(stderr, "RPCDIAG close_source conn={} id={} stream={} sink_closed={} -> stream_close={}\n", fmt::ptr(this), _id.id(), _is_stream, _sink_closed, both);
+        if (both) {
             return stream_close();
         }
         return make_ready_future();

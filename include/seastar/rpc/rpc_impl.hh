@@ -909,6 +909,7 @@ future<> sink_impl<Serializer, Out...>::close() noexcept {
                 return _delete_queue.stop().finally([this] {
                     connection* con = this->_con->get();
                     if (con->sink_closed()) { // double close, should not happen!
+                        fmt::print(stderr, "RPCDIAG sink_impl::close EARLY-RETURN (already closed) conn={} id={}\n", fmt::ptr(con), con->get_connection_id().id());
                         return make_exception_future(stream_closed());
                     }
                     future<> f = make_ready_future<>();
@@ -956,6 +957,7 @@ future<std::optional<std::tuple<In...>>> source_impl<Serializer, In...>::operato
     return smp::submit_to(this->_con->get_owner_shard(), [this] () -> future<> {
         connection* con = this->_con->get();
         if (con->_source_closed) {
+            fmt::print(stderr, "RPCDIAG source_impl::op() EARLY-RETURN (already closed) conn={} id={}\n", fmt::ptr(con), con->get_connection_id().id());
             return make_exception_future<>(stream_closed());
         }
         return con->stream_receive(this->_bufs).then_wrapped([this, con] (future<>&& f) {

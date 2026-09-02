@@ -359,6 +359,7 @@ void connection::abort() {
 }
 
 future<> connection::stop() noexcept {
+    fmt::print(stderr, "RPCDIAG connection::stop conn={} id={} stream={} nstops={}\n", fmt::ptr(this), _id.id(), _is_stream, ++_nstops);
     try {
         abort();
     } catch (...) {
@@ -829,6 +830,7 @@ void client::wait_timed_out(id_type id) {
 }
 
 future<> client::stop() noexcept {
+    fmt::print(stderr, "RPCDIAG client::stop conn={} id={} stream={} nstops={}\n", fmt::ptr(this), _id.id(), _is_stream, ++_nstops);
     _error = true;
     try {
         _socket.shutdown();
@@ -1074,6 +1076,7 @@ future<> client::loop(client_options ops, const socket_address& addr, const sock
     if (_compressor) {
         co_await _compressor->close();
     }
+    _loop_done = true;
     _stopped.set_value();
 }
 
@@ -1297,6 +1300,7 @@ future<> server::connection::process() {
     if (_compressor) {
         co_await _compressor->close();
     }
+    _loop_done = true;
     _stopped.set_value();
 }
 
